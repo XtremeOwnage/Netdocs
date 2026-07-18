@@ -119,12 +119,25 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
     private static string Truncate(string s, int max) =>
         s.Length <= max ? s : s[..max].TrimEnd() + "…";
 
-    private static FontFamily? ResolveFontFamily()
+    private FontFamily? ResolveFontFamily()
     {
-        foreach (var name in new[] { "Open Sans", "Segoe UI", "Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans" })
+        foreach (var name in new[] { "Open Sans", "Roboto", "Segoe UI", "Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans" })
             if (SystemFonts.TryGet(name, out var family))
                 return family;
-        return SystemFonts.Families.FirstOrDefault();
+
+        // SystemFonts.Families.FirstOrDefault() returns a *default* FontFamily struct
+        // (not null) when no fonts are installed -- e.g. inside a minimal container.
+        // Calling CreateFont on that default throws "Cannot use the default value type
+        // instance to create a font" and fails the whole build. Only return a family
+        // when one genuinely exists, so callers can skip card generation instead.
+        var first = SystemFonts.Families.FirstOrDefault();
+        if (first != default)
+        {
+            _log.LogInformation("social: using fallback system font '{Font}'", first.Name);
+            return first;
+        }
+
+        return null;
     }
 
     private static Color PrimaryColor(string? name) => (name ?? "grey").ToLowerInvariant() switch

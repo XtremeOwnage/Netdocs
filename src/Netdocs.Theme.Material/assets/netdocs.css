@@ -28,6 +28,83 @@ body {
   fill: currentColor;
 }
 
+/* ----------------------------------------------------------------------------
+   Single-row header: top-level navigation is rendered inline in the header
+   (`.nd-header-nav`) on the left, with social links, palette toggle and search
+   pushed to the right. There is NO separate `.md-tabs` second row.
+   ---------------------------------------------------------------------------- */
+
+/* Keep social links tight and vertically centred within the header row. */
+.md-header__social {
+  display: flex;
+  align-items: center;
+  gap: .1rem;
+}
+
+/* Hidden by default (mobile/tablet): the hamburger drawer provides navigation
+   on narrow viewports, matching Material's behaviour. */
+.nd-header-nav {
+  display: none;
+}
+
+@media screen and (min-width: 76.25em) {
+  /* On desktop the logo already conveys site identity, so hide the redundant
+     site-name / page-title block and let the inline nav occupy that space. */
+  .md-header .md-header__title {
+    display: none;
+  }
+
+  .nd-header-nav {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    gap: .2rem;
+    margin-left: .6rem;
+    height: 100%;
+  }
+
+  .nd-header-nav__link {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 .6rem;
+    color: var(--md-primary-bg-color);
+    font-size: .76rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    text-decoration: none;
+    opacity: .7;
+    transition: opacity .25s;
+  }
+
+  .nd-header-nav__link:hover,
+  .nd-header-nav__link:focus {
+    opacity: 1;
+  }
+
+  .nd-header-nav__link--active {
+    opacity: 1;
+    box-shadow: 0 -2px 0 var(--md-primary-bg-color) inset;
+  }
+
+  /* Safety net: if a `.md-tabs` bar is ever emitted, keep it hidden — the
+     header row is the single source of top-level navigation. */
+  .md-tabs {
+    display: none;
+  }
+
+  /* The header search box (`.md-search__inner`) is floated with a fixed width,
+     which leaves its flex parent (`.md-search`) with no intrinsic width and
+     collapses the box. Give the flex item an explicit width so the search box
+     stays visible on the right of the single-row header. */
+  .md-header__inner > .md-search {
+    flex: 0 0 auto;
+    width: 11.7rem;
+    margin-left: .4rem;
+  }
+}
+
 /* Breadcrumbs (`.md-path`) are emitted inside the `.md-typeset` article, where the
    generic `.md-typeset ul { list-style: disc }` rule would otherwise paint a bullet
    in front of the first crumb. Reassert the breadcrumb's own list reset with higher

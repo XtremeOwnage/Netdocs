@@ -22,6 +22,9 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     private readonly List<BlogPost> _posts = [];
     private readonly Dictionary<string, Author> _authors = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<BlogPost>> _authorPosts = new(StringComparer.OrdinalIgnoreCase);
+    // Maps a normalized source path (e.g. "blog/posts/2026/foo.md") to its root-relative output
+    // URL, so excerpt `.md` links (relative to the post, not the listing page) can be resolved.
+    private readonly Dictionary<string, string> _pageUrls = new(StringComparer.OrdinalIgnoreCase);
     private List<Dictionary<string, object?>> _archivesNav = [];
     private List<Dictionary<string, object?>> _categoriesNav = [];
     private List<Dictionary<string, object?>> _authorsNav = [];
@@ -79,6 +82,12 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
         _posts.Sort((a, b) => b.Date.CompareTo(a.Date));
         site.State["blog_posts"] = _posts;
+
+        // Snapshot every page's source path -> output URL now that post URLs are assigned, so
+        // excerpt links that point at other pages (.md) resolve to the correct published URL.
+        _pageUrls.Clear();
+        foreach (var page in site.Pages)
+            _pageUrls[NormalizeRel(page.RelativePath.Replace('\\', '/'))] = "/" + page.Url.TrimStart('/');
 
         // Group posts by author (respecting front-matter order + single-author fallback).
         foreach (var post in _posts)
@@ -375,9 +384,11 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
     private static string Normalize(string dir) => dir.Trim('/').Length == 0 ? "" : dir.Trim('/') + "/";
 
-    /// <summary>Rewrites relative image/file links in an excerpt to absolute source-based paths,
-    /// since the excerpt is embedded in the generated list page (a different directory).</summary>
-    private static string RewriteExcerptLinks(string markdown, string postRelativePath)
+    /// <summary>Rewrites relative links in an excerpt so they resolve from the generated listing
+    /// page: <c>.md</c> page links become the target's published URL (via the page map), and
+    /// relative image/file links become absolute source-based paths (the excerpt is embedded in a
+    /// different directory than the post it came from).</summary>
+    private string RewriteExcerptLinks(string markdown, string postRelativePath)
     {
         var dir = Path.GetDirectoryName(postRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
         return System.Text.RegularExpressions.Regex.Replace(markdown, @"(!?\[[^\]]*\]\()([^)\s]+)(\))", match =>
@@ -388,14 +399,28 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
                 url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
                 return match.Value;
-            if (url.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) return match.Value;
+
+            var hash = url.IndexOf('#');
+            var anchor = hash >= 0 ? url[hash..] : "";
+            var path = hash >= 0 ? url[..hash] : url;
+
+            // A link to another page (.md): resolve it relative to the post's directory and map it
+            // to the published URL. Leave it untouched if the target isn't a known page.
+            if (path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
+            {
+                var combinedMd = dir.Length == 0 ? path : dir + "/" + path;
+                return _pageUrls.TryGetValue(NormalizeRel(combinedMd), out var target)
+                    ? pre + target + anchor + post
+                    : match.Value;
+            }
 
             var isImage = pre.StartsWith('!');
-            var lastSegment = url.Split('/')[^1];
+            var lastSegment = path.Split('/')[^1];
             if (!isImage && !lastSegment.Contains('.')) return match.Value;
 
-            var combined = dir.Length == 0 ? url : dir + "/" + url;
-            return pre + "/" + NormalizeRel(combined) + post;
+            var combined = dir.Length == 0 ? path : dir + "/" + path;
+            return pre + "/" + NormalizeRel(combined) + anchor + post;
         });
     }
 

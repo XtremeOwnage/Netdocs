@@ -207,6 +207,8 @@ Templates are [Scriban](https://github.com/scriban/scriban) (`.html`) in
 ## Status
 
 Core engine works end-to-end and powers a real 200+ page blog —
-[static.xtremeownage.com/blog](https://static.xtremeownage.com/blog) — building in
-seconds. See the [documentation site](https://xtremeownage.github.io/Netdocs/) for the
-full reference, plugin guides, and the build lifecycle.
+[static.xtremeownage.com/blog](https://static.xtremeownage.com/blog) — building 243 pages
+and ~1,880 images in about 6 seconds (see
+[benchmarks](https://xtremeownage.github.io/Netdocs/about/benchmarks/)). See the
+[documentation site](https://xtremeownage.github.io/Netdocs/) for the full reference,
+plugin guides, and the build lifecycle.

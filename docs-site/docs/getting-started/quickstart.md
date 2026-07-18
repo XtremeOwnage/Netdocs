@@ -80,6 +80,10 @@ Netdocs starts a Kestrel dev server, watches the `docs/` directory, and reloads 
 browser over a WebSocket whenever a file changes. It automatically picks a free port if
 the requested one is taken.
 
+!!! tip "Set up a smoother authoring loop"
+    See the **[Authoring environment](authoring-environment.md)** guide for editor setup, putting
+    `netdocs` on your `PATH`, and pre-commit checks.
+
 ## Next steps
 
 - Explore the **[CLI reference](../reference/cli.md)**.

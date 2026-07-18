@@ -5,11 +5,13 @@ title: Getting started
 # Getting started
 
 Netdocs turns a folder of Markdown into a Material-styled static website. This section
-walks you through installing the CLI, scaffolding a project, and running your first
-build.
+walks you through installing the CLI, setting up an authoring environment, scaffolding a
+project, and running your first build.
 
 1. **[Installation](installation.md)** — build from source or install a packaged CLI.
-2. **[Quick start](quickstart.md)** — create `appsettings.json`, add content, build and serve.
+2. **[Authoring environment](authoring-environment.md)** — editor setup, the CLI on your `PATH`,
+   and the live-preview loop.
+3. **[Quick start](quickstart.md)** — create `appsettings.json`, add content, build and serve.
 
 Already have a Material for MkDocs site? Skip the scaffolding and
 **[migrate from MkDocs](../setup/migrating-from-mkdocs.md)** instead — the `netdocs import`

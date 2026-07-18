@@ -129,6 +129,31 @@ main working tree is never touched:
 netdocs deploy --config appsettings.json
 ```
 
+### AWS S3
+
+Sync the output to an S3 bucket for an AWS-hosted static site. This shells out to the
+[AWS CLI](https://docs.aws.amazon.com/cli/) (`aws s3 sync`), so credentials and region are
+resolved the standard AWS way (environment variables, `~/.aws/config`, or an instance role):
+
+```json
+{
+  "Netdocs": {
+    "deploy": {
+      "target": "s3",
+      "bucket": "my-docs-bucket",
+      "prefix": "docs",
+      "region": "us-east-1",
+      "clean": true
+    }
+  }
+}
+```
+
+- `bucket` is required; `prefix` (optional) publishes under a sub-path of the bucket.
+- `clean: true` passes `--delete` so objects no longer produced by the build are removed.
+- `region` is optional — omit it to use the AWS CLI's configured default.
+- Requires the AWS CLI (`aws`) on `PATH`.
+
 ## Optimization
 
 Enable HTML minification to shrink emitted pages (whitespace collapse + comment removal,

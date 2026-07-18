@@ -1,8 +1,29 @@
 {{ if features | array.contains "content.code.annotate" }}{{ end }}
 <script type="module">
-  const hasMermaid = document.querySelector("pre.mermaid");
-  if (hasMermaid) {
-    const mod = await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-    mod.default.initialize({ startOnLoad: true });
+  // Lazy-load mermaid only when a diagram is present, and re-render on every page
+  // load — including Material's instant-navigation swaps (via the `document$` observable).
+  let mermaidMod = null;
+
+  async function renderMermaid() {
+    const nodes = document.querySelectorAll("pre.mermaid:not([data-processed]), .mermaid:not([data-processed])");
+    if (!nodes.length) return;
+    if (!mermaidMod) {
+      mermaidMod = (await import("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs")).default;
+      mermaidMod.initialize({ startOnLoad: false });
+    }
+    try { await mermaidMod.run({ nodes }); } catch (e) { /* invalid diagram */ }
+  }
+
+  if (window.__netdocsMermaidBound) {
+    // already bound
+  } else {
+    window.__netdocsMermaidBound = true;
+    if (window.document$ && typeof window.document$.subscribe === "function") {
+      window.document$.subscribe(() => { renderMermaid(); });
+    } else if (document.readyState !== "loading") {
+      renderMermaid();
+    } else {
+      document.addEventListener("DOMContentLoaded", renderMermaid);
+    }
   }
 </script>

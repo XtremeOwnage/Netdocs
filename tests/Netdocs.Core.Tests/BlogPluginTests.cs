@@ -25,14 +25,19 @@ public class BlogPluginTests
         public void AddAsset(string sourcePath, string destRelative) { }
     }
 
-    private static Page Post(string relativePath, string date, string markdown) => new()
+    private static Page Post(string relativePath, string date, string markdown, string? category = null)
     {
-        SourcePath = relativePath,
-        RelativePath = relativePath,
-        RawMarkdown = markdown,
-        Title = Path.GetFileNameWithoutExtension(relativePath),
-        FrontMatter = new Dictionary<string, object?> { ["date"] = date },
-    };
+        var fm = new Dictionary<string, object?> { ["date"] = date };
+        if (category is not null) fm["categories"] = new List<object?> { category };
+        return new Page
+        {
+            SourcePath = relativePath,
+            RelativePath = relativePath,
+            RawMarkdown = markdown,
+            Title = Path.GetFileNameWithoutExtension(relativePath),
+            FrontMatter = fm,
+        };
+    }
 
     [Fact]
     public async Task ExcerptMdLink_ResolvesToTargetUrl()
@@ -84,5 +89,42 @@ public class BlogPluginTests
         await plugin.OnBuildStartAsync(site, CancellationToken.None);
 
         Assert.Contains("https://github.com/x/y/blob/main/README.md", index.RawMarkdown);
+    }
+
+    [Fact]
+    public async Task Posts_CarryPopulatedArchiveAndCategoryNav()
+    {
+        // Regression: the shared Archive/Categories nav must be attached to posts AFTER it is
+        // computed. A prior bug assigned it inside the discovery loop, capturing empty initial
+        // lists, so posts rendered an empty blog nav while the index (assigned later) did not.
+        var plugin = new BlogPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>()));
+
+        var index = new Page { SourcePath = "", RelativePath = "blog/index.md", Url = "blog/", Title = "Blog" };
+        var foo = Post("blog/posts/2026/foo.md", "2026-05-01",
+            "# Foo\n\nIntro.\n\n<!-- more -->\n\nBody.", "Homelab");
+        var bar = Post("blog/posts/2025/bar.md", "2025-04-01",
+            "# Bar\n\nBar intro.\n\n<!-- more -->\n\nBody.", "Networking");
+
+        var site = new SiteContext
+        {
+            Config = new SiteConfig { ProjectRoot = Path.GetTempPath() },
+            Options = new BuildOptions(),
+            LoggerFactory = NullLoggerFactory.Instance,
+        };
+        site.Pages.Add(index);
+        site.Pages.Add(foo);
+        site.Pages.Add(bar);
+
+        await plugin.OnBuildStartAsync(site, CancellationToken.None);
+
+        foreach (var post in new[] { foo, bar })
+        {
+            Assert.True(post.Meta.ContainsKey("is_post"));
+            var archives = Assert.IsAssignableFrom<System.Collections.IEnumerable>(post.Meta["blog_archives"]);
+            Assert.NotEmpty(archives.Cast<object?>());
+            var categories = Assert.IsAssignableFrom<System.Collections.IEnumerable>(post.Meta["blog_categories"]);
+            Assert.NotEmpty(categories.Cast<object?>());
+        }
     }
 }

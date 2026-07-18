@@ -127,6 +127,17 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                 }).ToList()
             : [];
 
+        // Attach the shared blog navigation (Archive/Categories/Authors) to every post now that
+        // it is fully computed. This must run AFTER the lists above are built: `ApplyPostMeta`
+        // runs in the discovery loop above, before these lists exist, so assigning there would
+        // capture the empty initial lists (the references are replaced, not mutated, below).
+        foreach (var post in _posts)
+        {
+            post.Page.Meta["blog_archives"] = _archivesNav;
+            post.Page.Meta["blog_categories"] = _categoriesNav;
+            post.Page.Meta["blog_authors"] = _authorsNav;
+        }
+
         // Turn the existing blog index into page 1 of the paginated list.
         var index = site.Pages.FirstOrDefault(p =>
             p.RelativePath.Equals(_blogDir + "index.md", StringComparison.OrdinalIgnoreCase));

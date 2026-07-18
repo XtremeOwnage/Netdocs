@@ -54,7 +54,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                 a.Get("name").AsString() ?? id,
                 a.Get("description").AsString() ?? "",
                 a.Get("avatar").AsString() ?? "",
-                $"/{_blogDir}author/{Slug.Make(id)}/");
+                $"/{_blogDir}author/{Slug.Make(id, _config.Slugify)}/");
         }
     }
 
@@ -66,7 +66,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             if (!page.RelativePath.StartsWith(postsPrefix, StringComparison.OrdinalIgnoreCase)) continue;
 
             var date = ReadDate(page);
-            var slug = Slug.Make(Path.GetFileNameWithoutExtension(page.RelativePath));
+            var slug = Slug.Make(Path.GetFileNameWithoutExtension(page.RelativePath), _config.Slugify);
             var url = $"{_blogDir}{date.ToString(_urlDateFormat, CultureInfo.InvariantCulture)}/{slug}/";
             page.Url = url;
             page.OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url));
@@ -113,7 +113,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                 .Select(g => new Dictionary<string, object?>
                 {
                     ["name"] = g.Key,
-                    ["url"] = $"/{_blogDir}category/{Slug.Make(g.Key)}/",
+                    ["url"] = $"/{_blogDir}category/{Slug.Make(g.Key, _config.Slugify)}/",
                     ["count"] = g.Count(),
                 }).ToList()
             : [];
@@ -152,6 +152,11 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         page.Meta["post_date"] = date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
         page.Meta["post_readtime"] = minutes;
         page.Meta["post_categories"] = categories;
+        page.Meta["post_categories_links"] = categories.Select(c => new Dictionary<string, object?>
+        {
+            ["name"] = c,
+            ["url"] = $"/{_blogDir}category/{Slug.Make(c, _config.Slugify)}/",
+        }).ToList();
         page.Meta["post_tags"] = ReadList(page, "tags");
         page.Meta["blog_index_url"] = "/" + _blogDir;
 
@@ -207,7 +212,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                 .SelectMany(post => post.Categories.Select(cat => (cat, post)))
                 .GroupBy(x => x.cat, StringComparer.OrdinalIgnoreCase))
             {
-                var slug = Slug.Make(group.Key);
+                var slug = Slug.Make(group.Key, _config.Slugify);
                 var url = $"{_blogDir}category/{slug}/";
                 yield return Listing(Generated(site, url, group.Key,
                     RenderList($"Category: {group.Key}", group.Select(x => x.post).ToList(), null)));

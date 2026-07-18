@@ -39,8 +39,16 @@ public static class JsonConfigLoader
             ExtraJavaScript = StringList(root.Get("extraJavaScript")),
             Exclude = StringList(root.Get("exclude")),
             Extra = root.Get("extra").AsMap(),
+            Slugify = ParseSlugify(root.Get("slugify").AsMap()),
         };
     }
+
+    private static SlugifyConfig ParseSlugify(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Case = m.Get("case").AsString() ?? "lower",
+        Separator = m.Get("separator").AsString() ?? "-",
+        Ascii = m.Get("ascii").AsBool(false),
+    };
 
     private static ThemeConfig ParseTheme(IReadOnlyDictionary<string, object?> m) => new()
     {

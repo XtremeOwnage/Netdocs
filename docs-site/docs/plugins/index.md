@@ -32,6 +32,7 @@ Netdocs has a first-class C# plugin system. Plugins are enabled and configured i
 | [rss](rss.md) | RSS feed of blog posts. |
 | [file-filter](file-filter.md) | Env-driven label include/exclude. |
 | [macros](macros.md) | `fileuri()` / `button()` Markdown macros (mkdocs-macros subset). |
+| [b64](b64.md) | Embed local images as inline `data:` URIs (pymdownx.b64). |
 
 ## How plugins hook into the build
 

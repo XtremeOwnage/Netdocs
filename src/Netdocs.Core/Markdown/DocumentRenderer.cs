@@ -19,7 +19,7 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
         var document = Markdig.Markdown.Parse(page.ProcessedMarkdown, pipeline);
 
         if (linkMap is not null)
-            RewriteMarkdownLinks(document, page.RelativePath);
+            RewriteMarkdownLinks(document, page.RelativePath, page.Url);
 
         var sb = new StringBuilder();
         using (var writer = new StringWriter(sb))
@@ -41,9 +41,14 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
 
     /// <summary>Rewrites relative <c>*.md</c> links to output URLs and relative resource links
     /// (images, files) to their actual source-based output paths — needed because blog posts
-    /// get their URL rewritten while their co-located assets keep the source path.</summary>
-    private void RewriteMarkdownLinks(MarkdownDocument document, string currentRelativePath)
+    /// get their URL rewritten while their co-located assets keep the source path.
+    /// Rewritten links are made relative to the current page (via a <c>../</c> prefix back to the
+    /// site root) so they resolve correctly when the site is served under a base path
+    /// (e.g. GitHub project Pages at <c>/Repo/</c>).</summary>
+    private void RewriteMarkdownLinks(MarkdownDocument document, string currentRelativePath, string currentUrl)
     {
+        var basePrefix = PageRenderer.BaseUrl(currentUrl);
+
         foreach (var link in document.Descendants<LinkInline>())
         {
             if (string.IsNullOrEmpty(link.Url)) continue;
@@ -51,15 +56,16 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
             if (!link.IsImage)
             {
                 var md = ResolveMarkdownLink(currentRelativePath, link.Url, linkMap!);
-                if (md is not null) { link.Url = md; continue; }
+                if (md is not null) { link.Url = basePrefix + md; continue; }
             }
 
             var resource = ResolveResourceLink(currentRelativePath, link.Url, link.IsImage);
-            if (resource is not null) link.Url = resource;
+            if (resource is not null) link.Url = basePrefix + resource;
         }
     }
 
-    /// <summary>Resolves a relative image/file link to an absolute, source-based output path.</summary>
+    /// <summary>Resolves a relative image/file link to a root-relative, source-based output path
+    /// (no leading slash; callers prepend a base-relative prefix).</summary>
     internal static string? ResolveResourceLink(string currentRelativePath, string url, bool isImage)
     {
         if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
@@ -83,7 +89,7 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
 
         var currentDir = Path.GetDirectoryName(currentRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
         var combined = currentDir.Length == 0 ? path : currentDir + "/" + path;
-        return "/" + NormalizeRelative(combined) + suffix;
+        return NormalizeRelative(combined) + suffix;
     }
 
     internal static string? ResolveMarkdownLink(string currentRelativePath, string url, IReadOnlyDictionary<string, string> map)
@@ -104,7 +110,7 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
         var combined = currentDir.Length == 0 ? path : currentDir + "/" + path;
         var normalized = NormalizeRelative(combined);
 
-        return map.TryGetValue(normalized, out var targetUrl) ? "/" + targetUrl + anchor : null;
+        return map.TryGetValue(normalized, out var targetUrl) ? targetUrl + anchor : null;
     }
 
     private static string NormalizeRelative(string path)

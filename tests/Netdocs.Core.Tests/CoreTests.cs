@@ -242,4 +242,38 @@ public class MarkdownTests
         new DocumentRenderer(pipeline).Render(page);
         Assert.Equal("Hello World", page.Title);
     }
+
+    [Fact]
+    public void MarkdownLinks_AreRewrittenRelativeToPage_ForBasePathSafety()
+    {
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var pipeline = MarkdownPipelineFactory.Build(site, []);
+        var linkMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["index.md"] = "",
+            ["getting-started/index.md"] = "getting-started/",
+            ["getting-started/quickstart.md"] = "getting-started/quickstart/",
+            ["reference/cli.md"] = "reference/cli/",
+        };
+
+        // From the home page (root), links stay relative to root.
+        var home = new Page { SourcePath = "index.md", RelativePath = "index.md", Url = "", ProcessedMarkdown = "See [start](getting-started/index.md)." };
+        new DocumentRenderer(pipeline, linkMap).Render(home);
+        Assert.Contains("href=\"getting-started/\"", home.HtmlContent);
+        Assert.DoesNotContain("href=\"/getting-started/\"", home.HtmlContent);
+
+        // From a nested page, links are prefixed with ../ back to the site root so they work
+        // under a base path (e.g. GitHub project Pages served at /Repo/).
+        var nested = new Page
+        {
+            SourcePath = "getting-started/index.md",
+            RelativePath = "getting-started/index.md",
+            Url = "getting-started/",
+            ProcessedMarkdown = "See [cli](../reference/cli.md) and [qs](quickstart.md).",
+        };
+        new DocumentRenderer(pipeline, linkMap).Render(nested);
+        Assert.Contains("href=\"../reference/cli/\"", nested.HtmlContent);
+        Assert.Contains("href=\"../getting-started/quickstart/\"", nested.HtmlContent);
+        Assert.DoesNotContain("href=\"/reference/cli/\"", nested.HtmlContent);
+    }
 }

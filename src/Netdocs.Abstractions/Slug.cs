@@ -10,8 +10,12 @@ public static class Slug
     public static string Make(string text, string separator = "-") =>
         Make(text, new SlugifyConfig { Separator = separator });
 
-    /// <summary>Slugify honoring a <see cref="SlugifyConfig"/> (case, separator, ASCII folding).</summary>
-    public static string Make(string text, SlugifyConfig config)
+    /// <summary>Slugify honoring a <see cref="SlugifyConfig"/> (case, separator, ASCII folding).
+    /// Characters listed in <paramref name="keep"/> are preserved verbatim instead of being
+    /// dropped — used by URL slugification to retain URL-safe punctuation such as <c>.</c>
+    /// (so e.g. a <c>2025.05.05</c> date segment stays intact rather than becoming
+    /// <c>20250505</c>).</summary>
+    public static string Make(string text, SlugifyConfig config, string keep = "")
     {
         var normalized = text.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(normalized.Length);
@@ -24,6 +28,10 @@ public static class Slug
             {
                 if (config.Ascii && c > 127) continue; // drop non-ASCII letters/digits when ASCII-only
                 sb.Append(ApplyCase(c, config.Case));
+            }
+            else if (keep.Length > 0 && keep.IndexOf(c) >= 0)
+            {
+                sb.Append(c);
             }
             else if (char.IsWhiteSpace(c) || c is '-' or '_' or '/')
             {

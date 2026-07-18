@@ -84,7 +84,7 @@ public sealed class ContentDiscovery(SiteConfig config, BuildOptions options, IL
 
         var urlSegments = isIndex ? segments[..^1] : segments;
         if (slugify is not null)
-            urlSegments = [.. urlSegments.Select(s => Slug.Make(s, slugify))];
+            urlSegments = [.. urlSegments.Select(s => Slug.Make(s, slugify, "."))];
 
         var dir = string.Join('/', urlSegments);
         return dir.Length == 0 ? "" : dir + "/";

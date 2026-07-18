@@ -3,7 +3,8 @@ name: Docker
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    # Full semver tags only; the moving `v1` alias tag should not rebuild images.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
 permissions:

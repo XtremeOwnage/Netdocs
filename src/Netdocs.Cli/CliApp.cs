@@ -230,6 +230,7 @@ public static class CliApp
         .Register<SocialPlugin>("social")
         .Register<TypesetPlugin>("typeset")
         .Register<TableReaderPlugin>("table-reader")
+        .Register<AffiliateLinksPlugin>("affiliate-links")
         .Register<Base64EmbedPlugin>("b64", "pymdownx.b64")
         .Register<ArithmatexPlugin>("arithmatex", "pymdownx.arithmatex")
         .Register<MacrosPlugin>("macros");

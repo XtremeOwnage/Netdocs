@@ -242,6 +242,27 @@ body {
   border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
 }
 
+/* Download button variant emitted by the `download()` macro. Prepend a small download glyph
+   so it reads as a file-download action rather than a generic call-to-action button. */
+.md-typeset .md-button--download::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.4em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  -webkit-mask-image: var(--nd-download-icon);
+  mask-image: var(--nd-download-icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+:root {
+  --nd-download-icon: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 20h14v-2H5v2M19 9h-4V3H9v6H5l7 7 7-7Z"/></svg>');
+}
+
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a
    back-link, the author profile, a "Metadata" heading, and a stacked date / category /
    reading-time list. Self-contained `.nd-post-*` markup (not Material's drawer classes)

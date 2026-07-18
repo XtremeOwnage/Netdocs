@@ -59,6 +59,46 @@ public class MacrosPluginTests
     }
 
     [Fact]
+    public async Task Download_RendersDownloadLink_WithDefaultText()
+    {
+        var target = new Page { SourcePath = "a", RelativePath = "files/setup.md", Url = "files/setup/" };
+        var page = new Page { SourcePath = "b", RelativePath = "files/index.md", Url = "files/" };
+        var site = Site(target, page);
+
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ download(\"setup.md\") }}", site, default);
+
+        Assert.Contains("class=\"md-button md-button--download\"", result);
+        Assert.Contains("download=\"setup.md\"", result);
+        Assert.Contains(">Download setup.md</a>", result);
+        Assert.DoesNotContain("download(", result);
+    }
+
+    [Fact]
+    public async Task Download_UsesCustomText_AndRelativeMode()
+    {
+        var target = new Page { SourcePath = "a", RelativePath = "files/setup.md", Url = "files/setup/" };
+        var page = new Page { SourcePath = "b", RelativePath = "guides/index.md", Url = "guides/" };
+        var site = Site(target, page);
+
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ download(\"setup.md\", \"Grab the script\", \"relative\") }}", site, default);
+
+        Assert.Contains(">Grab the script</a>", result);
+        Assert.Contains("href=\"../files/setup/\"", result);
+    }
+
+    [Fact]
+    public async Task Download_MissingFile_EmitsComment()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ download(\"nope.sh\") }}", Site(page), default);
+
+        Assert.Contains("macros: download('nope.sh') not found", result);
+    }
+
+    [Fact]
     public async Task IgnoreMacros_LeavesMarkdownUntouched()
     {
         var page = new Page

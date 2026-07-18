@@ -29,6 +29,7 @@ public static class JsonConfigLoader
             Copyright = root.Get("copyright").AsString(),
             RepoUrl = root.Get("repoUrl").AsString(),
             RepoName = root.Get("repoName").AsString(),
+            EditUri = root.Get("editUri").AsString(),
             DocsDir = root.Get("docsDir").AsString() ?? "docs",
             SiteDir = root.Get("siteDir").AsString() ?? "site",
             Theme = ParseTheme(root.Get("theme").AsMap()),

@@ -21,6 +21,7 @@ public static class ConfigLoader
             Copyright = root.Get("copyright").AsString(),
             RepoUrl = root.Get("repo_url").AsString(),
             RepoName = root.Get("repo_name").AsString(),
+            EditUri = root.Get("edit_uri").AsString(),
             DocsDir = root.Get("docs_dir").AsString() ?? "docs",
             SiteDir = root.Get("site_dir").AsString() ?? "site",
             Theme = ParseTheme(root.Get("theme")),

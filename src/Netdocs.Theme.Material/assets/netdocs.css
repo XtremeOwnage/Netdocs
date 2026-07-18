@@ -46,3 +46,74 @@ body {
   content: none;
 }
 
+/* Blog post header (`.nd-post-header`) emitted above the article: a back-link, the
+   author profile, and a date / category / reading-time meta row. Self-contained so it
+   flows as a normal block at every width (Material's `.md-sidebar--post` drawer layout
+   is only wired up below its mobile breakpoint and otherwise overlaps the title). */
+.nd-post-header {
+  margin-bottom: 1.2rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+.nd-post-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-post-back svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: currentColor;
+}
+
+.nd-post-author {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0;
+}
+
+.nd-post-avatar {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.nd-post-author-name strong {
+  display: block;
+  line-height: 1.2;
+}
+
+.nd-post-author-role {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+}
+
+.nd-post-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-post-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.nd-post-meta-item svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: currentColor;
+}
+

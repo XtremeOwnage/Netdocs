@@ -1,0 +1,20 @@
+<style>
+  /* Let highlight.js color tokens, but keep Material's code container styling. */
+  .md-typeset .highlight code.hljs { background: transparent; padding: 0; }
+</style>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+<script>
+  (function () {
+    if (!window.hljs) return;
+    var observer = new MutationObserver(run);
+    function run() {
+      observer.disconnect();
+      document.querySelectorAll("pre code:not(.hljs)").forEach(function (el) {
+        try { hljs.highlightElement(el); } catch (e) { /* unknown language */ }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+    if (document.readyState !== "loading") run();
+    else document.addEventListener("DOMContentLoaded", run);
+  })();
+</script>

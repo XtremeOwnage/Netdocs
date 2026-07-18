@@ -1,0 +1,36 @@
+name: TMP Deploy Test
+
+# Temporary: mirrors the Web dev.yaml chain (action build -> peaceiris deploy to an
+# orphan branch) in this observable repo to validate the full pipeline. Delete after.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/_tmp-deploy-test.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  tmp-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build via Netdocs action
+        uses: ./
+        with:
+          command: build
+          config: docs-site/appsettings.json
+
+      - name: Deploy to throwaway branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs-site/site
+          publish_branch: _selftest-pages
+          force_orphan: true

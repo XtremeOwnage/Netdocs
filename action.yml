@@ -111,10 +111,15 @@ runs:
         if [ -z "${download_ok}" ]; then
           tmp="${dest}.partial"
           rm -f "${tmp}"
-          curl --fail --location --show-error --silent \
+          if ! curl --fail --location --show-error --silent \
                --retry 5 --retry-delay 3 --retry-all-errors \
                --connect-timeout 30 \
-               -o "${tmp}" "${url}"
+               -o "${tmp}" "${url}"; then
+            echo "::error::Failed to download ${url}." >&2
+            echo "Partial file size:"; ls -l "${tmp}" 2>/dev/null || true
+            echo "Filesystem usage (all mounts):"; df -h || true
+            exit 1
+          fi
           mv -f "${tmp}" "${dest}"
         fi
 
@@ -123,7 +128,7 @@ runs:
         # Guard against a zero-byte / truncated download slipping through.
         if [ ! -s "${dest}" ]; then
           echo "::error::Downloaded Netdocs binary is missing or empty: ${dest}" >&2
-          df -h "${dest_dir}" || true
+          echo "Filesystem usage (all mounts):"; df -h || true
           exit 1
         fi
 

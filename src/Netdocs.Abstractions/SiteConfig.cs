@@ -128,6 +128,12 @@ public sealed class OptimizeConfig
 {
     /// <summary>Collapse insignificant whitespace/comments in emitted HTML.</summary>
     public bool MinifyHtml { get; set; }
+
+    /// <summary>Collapse whitespace/comments in emitted CSS assets.</summary>
+    public bool MinifyCss { get; set; }
+
+    /// <summary>Collapse whitespace/comments in emitted JavaScript assets.</summary>
+    public bool MinifyJs { get; set; }
 }
 
 /// <summary>An authored navigation entry: either a link to a page or a titled section.</summary>

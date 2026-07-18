@@ -59,6 +59,8 @@ public static class JsonConfigLoader
     private static OptimizeConfig ParseOptimize(IReadOnlyDictionary<string, object?> m) => new()
     {
         MinifyHtml = m.Get("minifyHtml").AsBool(false),
+        MinifyCss = m.Get("minifyCss").AsBool(false),
+        MinifyJs = m.Get("minifyJs").AsBool(false),
     };
 
     private static SlugifyConfig ParseSlugify(IReadOnlyDictionary<string, object?> m) => new()

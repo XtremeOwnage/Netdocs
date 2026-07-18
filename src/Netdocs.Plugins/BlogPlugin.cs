@@ -152,6 +152,11 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         page.Meta["post_date"] = date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
         page.Meta["post_readtime"] = minutes;
         page.Meta["post_categories"] = categories;
+        page.Meta["post_categories_links"] = categories.Select(c => new Dictionary<string, object?>
+        {
+            ["name"] = c,
+            ["url"] = $"/{_blogDir}category/{Slug.Make(c, _config.Slugify)}/",
+        }).ToList();
         page.Meta["post_tags"] = ReadList(page, "tags");
         page.Meta["blog_index_url"] = "/" + _blogDir;
 

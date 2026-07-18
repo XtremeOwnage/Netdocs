@@ -19,6 +19,47 @@
   .md-typeset .hljs-ln tr.hl-line { background: var(--md-code-hl-color, rgba(255, 235, 59, .18)); }
   /* Inline code highlighting is colored by hljs like block code. */
   .md-typeset code.hljs { padding: 0 .2941176471em; }
+
+  /* Map highlight.js token classes onto Material's scheme-aware code colors so
+     syntax highlighting stays legible in both light and dark palettes (the
+     stock hljs themes are single-scheme and wash out on the opposite one). */
+  .md-typeset .hljs { color: var(--md-code-fg-color); }
+  .md-typeset .hljs-comment,
+  .md-typeset .hljs-quote { color: var(--md-code-hl-comment-color); font-style: italic; }
+  .md-typeset .hljs-keyword,
+  .md-typeset .hljs-selector-tag,
+  .md-typeset .hljs-literal,
+  .md-typeset .hljs-section,
+  .md-typeset .hljs-doctag { color: var(--md-code-hl-keyword-color); }
+  .md-typeset .hljs-string,
+  .md-typeset .hljs-regexp,
+  .md-typeset .hljs-addition,
+  .md-typeset .hljs-meta .hljs-string { color: var(--md-code-hl-string-color); }
+  .md-typeset .hljs-number,
+  .md-typeset .hljs-symbol,
+  .md-typeset .hljs-bullet { color: var(--md-code-hl-number-color); }
+  .md-typeset .hljs-title,
+  .md-typeset .hljs-title.function_,
+  .md-typeset .hljs-function .hljs-title { color: var(--md-code-hl-function-color); }
+  .md-typeset .hljs-built_in,
+  .md-typeset .hljs-class .hljs-title,
+  .md-typeset .hljs-title.class_,
+  .md-typeset .hljs-type,
+  .md-typeset .hljs-meta { color: var(--md-code-hl-special-color); }
+  .md-typeset .hljs-name,
+  .md-typeset .hljs-tag,
+  .md-typeset .hljs-selector-id,
+  .md-typeset .hljs-selector-class { color: var(--md-code-hl-name-color); }
+  .md-typeset .hljs-attr,
+  .md-typeset .hljs-attribute,
+  .md-typeset .hljs-variable,
+  .md-typeset .hljs-template-variable,
+  .md-typeset .hljs-property { color: var(--md-code-hl-variable-color); }
+  .md-typeset .hljs-operator,
+  .md-typeset .hljs-punctuation { color: var(--md-code-hl-operator-color); }
+  .md-typeset .hljs-deletion { color: var(--md-code-hl-string-color); }
+  .md-typeset .hljs-emphasis { font-style: italic; }
+  .md-typeset .hljs-strong { font-weight: 700; }
 </style>
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.9.0/dist/highlightjs-line-numbers.min.js"></script>

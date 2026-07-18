@@ -5,6 +5,28 @@ A fast, flexible static site generator in **.NET 11** — a reimplementation of 
 first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and
 the Markdown in `docs/` builds with little to no change.
 
+> [!IMPORTANT]
+> **Netdocs is an AI-generated derivative work** inspired by, and partially reusing
+> files from, [MkDocs](https://www.mkdocs.org/) and
+> [Material for MkDocs](https://github.com/squidfunk/mkdocs-material). Full credit for
+> the theme, its compiled CSS/JS, the lunr-based search, and the overall design goes to
+> **Martin Donath ([@squidfunk](https://github.com/squidfunk))** and the Material for
+> MkDocs contributors. This project bundles their assets under
+> `src/Netdocs.Theme.Material/assets/vendor/material/` and redistributes them unmodified
+> under the MIT License — see [`THIRD_PARTY_LICENSES/`](THIRD_PARTY_LICENSES/) and
+> [`LICENSE`](LICENSE). If you want a supported, production-grade tool, use Material for
+> MkDocs directly and consider [sponsoring it](https://github.com/sponsors/squidfunk).
+
+## Credits & attribution
+
+- **Material for MkDocs** — © 2016-2025 Martin Donath. MIT. https://github.com/squidfunk/mkdocs-material
+  Vendored: compiled `main`/`palette` CSS, `bundle.js`, the search worker, and lunr.
+- **MkDocs** — the static-site-generator concepts and configuration model this project mirrors.
+- **lunr / lunr-languages** — MIT, © Oliver Nightingale and contributors.
+
+See [`src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md`](src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md)
+for the full list of vendored files and their origins.
+
 ## Quick start
 
 ```pwsh

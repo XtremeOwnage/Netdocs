@@ -50,7 +50,43 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         }
 
         site.State["tags"] = index;
+        RenderTagIndex(site, index);
         return Task.CompletedTask;
+    }
+
+    /// <summary>Replaces the <c>&lt;!-- material/tags --&gt;</c> marker with a rendered tag index.</summary>
+    private static void RenderTagIndex(SiteContext site, SortedDictionary<string, List<Page>> index)
+    {
+        const string marker = "<!-- material/tags -->";
+        var markdown = new System.Text.StringBuilder();
+        foreach (var (tag, pages) in index)
+        {
+            markdown.Append("## ").AppendLine(tag).AppendLine();
+            foreach (var page in pages.DistinctBy(p => p.Url).OrderBy(GetDisplayTitle, StringComparer.OrdinalIgnoreCase))
+                markdown.Append("- [").Append(GetDisplayTitle(page)).Append("](/").Append(page.Url).AppendLine(")");
+            markdown.AppendLine();
+        }
+
+        foreach (var page in site.Pages)
+        {
+            if (page.RawMarkdown.Contains(marker, StringComparison.Ordinal))
+                page.RawMarkdown = page.RawMarkdown.Replace(marker, markdown.ToString());
+        }
+    }
+
+    /// <summary>Title known before render: front matter, else first H1 in markdown, else filename.</summary>
+    private static string GetDisplayTitle(Page page)
+    {
+        if (!string.IsNullOrEmpty(page.Title)) return page.Title;
+        if (page.FrontMatter.TryGetValue("title", out var t) && t is string ft && ft.Length > 0) return ft;
+        foreach (var line in page.RawMarkdown.Split('\n'))
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("# ", StringComparison.Ordinal))
+                return trimmed[2..].Trim();
+        }
+        var name = System.IO.Path.GetFileNameWithoutExtension(page.RelativePath);
+        return name.Replace('-', ' ').Replace('_', ' ');
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)

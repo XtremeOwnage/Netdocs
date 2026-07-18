@@ -35,25 +35,39 @@ public sealed class BuildEngine(
         var provider = services.BuildServiceProvider();
         var effectivePlugins = BuildEffectivePluginList();
         var host = PluginHost.Build(config, options, effectivePlugins, registry, provider, services, loggerFactory);
+        _log.LogDebug("Loaded {Count} plugins: {Plugins}", host.Plugins.Count, string.Join(", ", host.Plugins.Select(p => p.Name)));
 
         // 1. Discover source content.
         var discovery = new ContentDiscovery(config, loggerFactory.CreateLogger<ContentDiscovery>());
         var pages = discovery.Discover().ToList();
 
         // 2. Navigation filters (file-filter, shadow tags).
+        var beforeFilter = pages.Count;
         pages = pages.Where(p => host.NavigationFilters.All(f => f.ShouldInclude(p, site))).ToList();
+        _log.LogDebug("Navigation filters kept {Kept}/{Total} pages", pages.Count, beforeFilter);
         site.Pages.AddRange(pages);
 
         // 3. OnBuildStart hooks.
+        _log.LogDebug("Running OnBuildStart hooks ({Count})", host.BuildHooks.Count);
         foreach (var hook in host.BuildHooks)
+        {
+            _log.LogTrace("OnBuildStart: {Hook}", hook.GetType().Name);
             await hook.OnBuildStartAsync(site, ct);
+        }
 
         // 4. Content generators (blog lists, tags, archives).
+        var generatedCount = 0;
         foreach (var generator in host.ContentGenerators)
             await foreach (var generated in generator.GenerateAsync(site, ct))
+            {
                 site.Pages.Add(generated);
+                generatedCount++;
+                _log.LogTrace("Generated page {Url} by {Generator}", generated.Url, generator.GetType().Name);
+            }
+        _log.LogDebug("Content generators produced {Count} pages", generatedCount);
 
         // 5. Preprocess markdown (snippets, abbreviations, macros).
+        _log.LogDebug("Preprocessing {Count} pages with {Preprocessors} preprocessor(s)", site.Pages.Count, host.Preprocessors.Count);
         foreach (var page in site.Pages)
         {
             var md = page.RawMarkdown;
@@ -63,6 +77,7 @@ public sealed class BuildEngine(
         }
 
         // 6. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
+        _log.LogDebug("Rendering markdown for {Count} pages (parallel)", site.Pages.Count);
         using var pipelines = new ThreadLocal<MarkdownPipeline>(
             () => MarkdownPipelineFactory.Build(site, host.MarkdigContributors), trackAllValues: false);
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
@@ -73,11 +88,12 @@ public sealed class BuildEngine(
 
         // 7. Resolve navigation.
         site.Navigation = NavigationBuilder.Build(config, site.Pages);
+        _log.LogDebug("Resolved navigation ({Count} top-level nodes)", site.Navigation.Count);
 
         // 8. Template render (parallel) + emit.
         var templateEngine = CreateTemplateEngine();
         Directory.CreateDirectory(config.AbsoluteSiteDir);
-        if (options.Clean) CleanOutput(config.AbsoluteSiteDir);
+        if (options.Clean) { CleanOutput(config.AbsoluteSiteDir); _log.LogDebug("Cleaned output directory {Dir}", config.AbsoluteSiteDir); }
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
@@ -89,7 +105,9 @@ public sealed class BuildEngine(
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, html, ct);
+            _log.LogTrace("Wrote {Path}", path);
         }
+        _log.LogDebug("Emitted {Count} HTML pages", rendered.Count);
 
         // 8b. 404 page.
         if (templateEngine.TryResolve("404.html", out _))
@@ -107,10 +125,14 @@ public sealed class BuildEngine(
 
         // 10. Copy assets (theme + docs static + plugin-registered).
         await AssetPipeline.CopyAllAsync(config, host.Assets, ct);
+        _log.LogDebug("Copied theme, static, and plugin assets to {Dir}", config.AbsoluteSiteDir);
 
         // 11. OnBuildComplete hooks (search index, rss, sitemap).
         foreach (var hook in host.BuildHooks)
+        {
+            _log.LogTrace("OnBuildComplete: {Hook}", hook.GetType().Name);
             await hook.OnBuildCompleteAsync(site, ct);
+        }
 
         sw.Stop();
         _log.LogInformation("Built {Count} pages in {Ms} ms", site.Pages.Count, sw.ElapsedMilliseconds);

@@ -29,33 +29,81 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
     // After snippets (10) so an included snippet can carry a calc block; before table-reader (20).
     public int Order => 15;
 
-    // A fenced block opened with ``` or ~~~ and the info string `calc`.
-    private static readonly Regex CalcFence = new(
-        @"(?<indent>[ \t]*)(?<fence>`{3,}|~{3,})[ \t]*calc[ \t]*\r?\n(?<body>.*?)(?:\r?\n)?\k<indent>\k<fence>[ \t]*(?=\r?\n|$)",
-        RegexOptions.Singleline | RegexOptions.Compiled);
+    // Matches the opening line of a fenced code block: optional indent, a run of 3+ backticks or
+    // tildes, then the info word. Trailing attributes (e.g. ```json title="x", ```python {.foo})
+    // are allowed after the info token so fence tracking stays in sync with such blocks. `calc`
+    // blocks are rendered; every other fence is copied through verbatim so a ```calc shown *inside*
+    // a larger ```` example fence is left untouched.
+    private static readonly Regex FenceOpen = new(
+        @"^(?<indent>[ \t]{0,3})(?<fence>`{3,}|~{3,})[ \t]*(?<info>[^`\s]*)[^\r\n]*$",
+        RegexOptions.Compiled);
 
     // Characters allowed in an output expression. Deliberately excludes ';', quotes, brackets
     // and backslashes so a stray expression can't inject arbitrary JS into the generated function.
     private static readonly Regex UnsafeExprChars = new(@"[^0-9a-zA-Z_.\+\-\*/%()<>=!?:,&|\s]", RegexOptions.Compiled);
 
-    public void Configure(IPluginContext ctx) => _log = ctx.Logger;
+    public void Configure(IPluginContext ctx)
+    {
+        _log = ctx.Logger;
+        // Register the evaluator once for the whole site rather than injecting it into page
+        // content. It subscribes to Material's `document$` so it re-binds forms on instant
+        // navigation, and it never leaks into a page's rendered markdown/examples.
+        ctx.AddInlineScript(EvaluatorJs);
+    }
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
     {
-        if (markdown.IndexOf("calc", StringComparison.Ordinal) < 0 || !CalcFence.IsMatch(markdown))
+        if (markdown.IndexOf("calc", StringComparison.Ordinal) < 0)
             return Task.FromResult(markdown);
 
-        var scriptEmitted = false;
-        var result = CalcFence.Replace(markdown, m =>
+        var lines = markdown.Split('\n');
+        var sb = new StringBuilder(markdown.Length);
+        var changed = false;
+
+        for (var i = 0; i < lines.Length; i++)
         {
-            var html = RenderBlock(m.Groups["body"].Value, page, ref scriptEmitted);
-            // Surround with blank lines so Markdig treats it as a standalone raw-HTML block.
-            return "\n" + html + "\n";
-        });
-        return Task.FromResult(result);
+            var open = FenceOpen.Match(lines[i].TrimEnd('\r'));
+            if (!open.Success)
+            {
+                sb.Append(lines[i]);
+                if (i < lines.Length - 1) sb.Append('\n');
+                continue;
+            }
+
+            var fence = open.Groups["fence"].Value;
+            var marker = fence[0];
+            // Closing fence: same character, at least as long, nothing but the marker on the line.
+            int end = i + 1;
+            for (; end < lines.Length; end++)
+            {
+                var t = lines[end].Trim().TrimEnd('\r');
+                if (t.Length >= fence.Length && t.All(c => c == marker)) break;
+            }
+
+            if (open.Groups["info"].Value.Equals("calc", StringComparison.OrdinalIgnoreCase))
+            {
+                // Our block: render body (lines between the fences) to a standalone HTML island.
+                var body = end > i + 1 ? string.Join("\n", lines, i + 1, end - i - 1) : "";
+                sb.Append('\n').Append(RenderBlock(body, page)).Append('\n');
+                changed = true;
+            }
+            else
+            {
+                // Some other fence (e.g. a ```` markdown example that itself contains ```calc):
+                // copy it through unchanged, including its closing line.
+                for (var k = i; k <= end && k < lines.Length; k++)
+                {
+                    sb.Append(lines[k]);
+                    if (k < lines.Length - 1) sb.Append('\n');
+                }
+            }
+            i = end; // resume after the closing fence line
+        }
+
+        return Task.FromResult(changed ? sb.ToString() : markdown);
     }
 
-    private string RenderBlock(string body, Page page, ref bool scriptEmitted)
+    private string RenderBlock(string body, Page page)
     {
         object? tree;
         try
@@ -128,13 +176,6 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
         }
         sb.Append("</div>");
         sb.Append("</form>");
-
-        // Emit the shared evaluator once per page (idempotent guard also protects instant nav).
-        if (!scriptEmitted)
-        {
-            sb.Append(EvaluatorScript);
-            scriptEmitted = true;
-        }
 
         return sb.ToString();
     }
@@ -247,11 +288,11 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
 
     private static string Esc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
-    // Vanilla-JS evaluator, injected once per page. Collects each form's inputs into a scope,
-    // builds a Function from the sanitised expression with the input names as parameters, and
-    // recomputes on input. Re-binds on Material's `document$` so instant navigation keeps working.
-    private const string EvaluatorScript = """
-<script>
+    // Vanilla-JS evaluator, registered once for the whole site via AddInlineScript. Collects each
+    // form's inputs into a scope, builds a Function from the sanitised expression with the input
+    // names as parameters, and recomputes on input. Binds on Material's `document$` so instant
+    // navigation keeps working; falls back to DOMContentLoaded when Material isn't present.
+    private const string EvaluatorJs = """
 (function () {
   function fmt(value, spec) {
     if (!isFinite(value)) return "—";
@@ -297,6 +338,5 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
     document.addEventListener("DOMContentLoaded", bindAll);
   }
 })();
-</script>
 """;
 }

@@ -16,9 +16,10 @@ public class CalculatorPluginTests
         public ILogger Logger { get; } = NullLogger.Instance;
         public IServiceCollection Services { get; } = new ServiceCollection();
         public IReadOnlyDictionary<string, object?> PluginOptions { get; } = new Dictionary<string, object?>();
+        public List<string> InlineScripts { get; } = new();
         public void AddStylesheet(string href) { }
         public void AddScript(string src, bool defer = true) { }
-        public void AddInlineScript(string javascript) { }
+        public void AddInlineScript(string javascript) => InlineScripts.Add(javascript);
         public void AddAsset(string sourcePath, string destRelative) { }
     }
 
@@ -71,15 +72,47 @@ public class CalculatorPluginTests
     }
 
     [Fact]
-    public void EvaluatorScript_EmittedOncePerPage()
+    public void Evaluator_RegisteredOnceGlobally_NotInContent()
     {
-        var md = PowerCalc + "\n\nSome text.\n\n" + PowerCalc;
+        // The evaluator is a site-wide inline script, never injected into page content.
+        var plugin = new CalculatorPlugin();
+        var ctx = new FakeContext();
+        plugin.Configure(ctx);
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var page = new Page { SourcePath = "x.md", RelativePath = "x.md", RawMarkdown = PowerCalc };
+        var result = plugin.ProcessAsync(page, PowerCalc, site, CancellationToken.None).GetAwaiter().GetResult();
+
+        Assert.Single(ctx.InlineScripts);
+        Assert.Contains("function bindAll", ctx.InlineScripts[0]);
+        // Content carries the form but no evaluator <script>.
+        Assert.Contains("<form class=\"nd-calc\"", result);
+        Assert.DoesNotContain("function bindAll", result);
+        Assert.DoesNotContain("<script", result);
+    }
+
+    [Fact]
+    public void CalcFence_NestedInLargerFence_IsLeftAsSource()
+    {
+        // A ```calc shown *inside* a ```` example fence must render as source, not a form.
+        var md = "````markdown\n" + PowerCalc + "\n````";
         var result = Run(md);
 
-        var scripts = System.Text.RegularExpressions.Regex.Matches(result, "function bindAll");
-        Assert.Single(scripts);
-        // Two forms though.
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(result, "<form class=\"nd-calc\"").Count);
+        Assert.DoesNotContain("<form class=\"nd-calc\"", result);
+        Assert.Contains("```calc", result);
+        Assert.Contains("title: Power cost", result);
+    }
+
+    [Fact]
+    public void FenceWithAttributes_BeforeCalc_DoesNotDesyncTracking()
+    {
+        // A ```json title="..." fence before the calc block must not throw off fence tracking.
+        var md = "```json title=\"appsettings.json\"\n{ \"name\": \"calculator\" }\n```\n\n" + PowerCalc;
+        var result = Run(md);
+
+        Assert.Contains("<form class=\"nd-calc\"", result);
+        Assert.Contains("data-calc-expr", result);
+        // The JSON example is left untouched as source.
+        Assert.Contains("```json title=\"appsettings.json\"", result);
     }
 
     [Fact]

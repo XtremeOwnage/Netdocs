@@ -117,7 +117,38 @@ End users who aren't building from source should instead download a
 [release binary](../getting-started/installation.md) or use the Docker image rather than
 running `dotnet`.
 
-## 4. Verify parity
+## 4. Redirects for moved pages
+
+If your mkdocs site used the [`redirects`](https://github.com/mkdocs/mkdocs-redirects)
+plugin, its `redirect_maps` are carried over automatically by `netdocs import` — the
+generated `appsettings.json` keeps the same `redirects` plugin entry, and Netdocs' built-in
+`redirects` plugin emits the same client-side redirect stubs at build time:
+
+```json
+{
+  "Netdocs": {
+    "plugins": [
+      {
+        "name": "redirects",
+        "options": {
+          "redirect_maps": {
+            "old/page.md": "new/page/",
+            "gone.md": "https://example.com/moved"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Netdocs does **not** try to guess which URLs changed during the migration and invent
+redirects for them — automatic slug diffing is unreliable and can produce redirect loops.
+If your slug settings differ from mkdocs (see [Slugify](../reference/configuration.md#slugify)),
+build both generators once, diff the emitted paths, and add any changed URLs to
+`redirect_maps` explicitly. This keeps redirect behavior predictable and reviewable.
+
+## 5. Verify parity
 
 Before switching DNS/Pages over, build both generators and diff the output:
 

@@ -198,6 +198,25 @@ encoder quality. Conversions are cached by source content hash under `.cache/web
 unchanged images are not re-encoded on subsequent builds. Remote images (`http://`,
 `https://`, `//`, `data:`), SVGs, and images already in WebP format are left untouched.
 
+### Incremental builds and deploys
+
+Netdocs avoids redundant work through content-hash caches rather than a bespoke deploy
+manifest:
+
+- **Render cache** (`.cache/render.json`) keys each page's rendered HTML/TOC on its
+  processed markdown, the pipeline configuration, and the link map. Unchanged pages skip
+  the expensive parse/render step on the next build.
+- **WebP cache** (`.cache/webp/`) keys converted images on source content hash + quality,
+  so unchanged images are never re-encoded.
+- **Deploy transfer** is already incremental at the backend: the **git branch** target is
+  content-addressed and only commits changed blobs, and the **S3** target uses
+  `aws s3 sync`, which compares size/modified time and uploads only changed objects.
+
+Because the deploy backends already skip unchanged files, Netdocs does not publish a
+separate file-hash manifest to the publish branch — doing so would duplicate git/S3
+behavior. Remember that navigation or metadata changes invalidate a page's render-cache
+entry (the link map hash changes), so those pages are correctly rebuilt.
+
 ## Other hosts
 
 The `site/` output is static HTML/CSS/JS. Upload it to any static host (Netlify, S3 +

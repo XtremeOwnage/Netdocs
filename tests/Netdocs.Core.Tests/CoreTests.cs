@@ -368,4 +368,30 @@ public class MarkdownTests
         Assert.Contains("href=\"../getting-started/quickstart/\"", nested.HtmlContent);
         Assert.DoesNotContain("href=\"/reference/cli/\"", nested.HtmlContent);
     }
+
+    [Fact]
+    public void MarkdownLinks_WithPercentEncodedSpaces_ResolveToSlugifiedTarget()
+    {
+        // A hand-written `.md` link may URL-encode spaces (`%20`). The rewriter must decode
+        // it so it matches the raw relative path used as the link-map key, and rewrite it to
+        // the (possibly slugified) target URL.
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var pipeline = MarkdownPipelineFactory.Build(site, []);
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["cluster/Openshift Registry Setup.md"] = "cluster/openshift-registry-setup/",
+        };
+
+        var page = new Page
+        {
+            SourcePath = "cluster/deploy/index.md",
+            RelativePath = "cluster/deploy/index.md",
+            Url = "cluster/deploy/",
+            ProcessedMarkdown = "See [reg](../Openshift%20Registry%20Setup.md).",
+        };
+        new DocumentRenderer(pipeline, map).Render(page);
+
+        Assert.Contains("href=\"../../cluster/openshift-registry-setup/\"", page.HtmlContent);
+        Assert.DoesNotContain("%20", page.HtmlContent);
+    }
 }

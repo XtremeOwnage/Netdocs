@@ -4,7 +4,7 @@ title: CLI reference
 
 # CLI reference
 
-The `netdocs` executable exposes three commands: `build`, `serve`, and `watch`.
+The `netdocs` executable exposes four commands: `build`, `serve`, `watch`, and `import`.
 
 ```text
 netdocs - static site generator
@@ -13,6 +13,7 @@ Usage:
   netdocs build [options]     Build the site to the output directory
   netdocs serve [options]     Serve with live reload
   netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
+  netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
 ```
 
 ## Commands
@@ -22,6 +23,7 @@ Usage:
 | `netdocs build` | Build the site to the configured output dir (`siteDir`). |
 | `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
 | `netdocs watch` | Long-running publish daemon: polls a git remote and rebuilds when the tracked branch advances. |
+| `netdocs import` | Convert an existing `mkdocs.yml` into a Netdocs `appsettings.json`. |
 | `netdocs --help` | Print usage. |
 
 If no command is given, `build` is assumed.
@@ -112,6 +114,35 @@ Run the publish daemon, tracking `main` on `origin` every 15 seconds:
 ```pwsh
 netdocs watch --remote origin --branch main --interval 15
 ```
+
+## Importing from MkDocs
+
+If you already have a Material for MkDocs project, `netdocs import` converts its
+`mkdocs.yml` into an equivalent Netdocs `appsettings.json` so you can migrate without
+rewriting configuration by hand:
+
+```pwsh
+# Convert ./mkdocs.yml -> ./appsettings.json
+netdocs import
+
+# Convert an explicit file to a chosen output path
+netdocs import path/to/mkdocs.yml --out appsettings.json
+
+# Overwrite an existing appsettings.json
+netdocs import --force
+```
+
+The importer maps site metadata, `theme` (name, palette, features, font, icon, logo,
+favicon), `nav` (including nested sections), `plugins`, `markdown_extensions`,
+`extra_css`, `extra_javascript`, and `extra` into the Netdocs schema. Empty and default
+values are omitted. It refuses to overwrite an existing output file unless you pass
+`--force`.
+
+!!! note
+    Not every MkDocs plugin has a Netdocs equivalent. Review the generated
+    `appsettings.json`, remove any plugins Netdocs does not implement, and run
+    `netdocs build` to validate. See the [plugins reference](../plugins/index.md) for the
+    built-in set.
 
 ## Environment variables
 

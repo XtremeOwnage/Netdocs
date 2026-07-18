@@ -197,13 +197,14 @@ body {
 /* Give code content a little more horizontal breathing room so text is never
    flush against the panel border. */
 .md-typeset .highlight > pre > code {
-  padding: 0.75em 1.2em;
+  padding: 0.8em 1.5em;
 }
 
 /* Bare <pre><code> blocks (not wrapped in a .highlight container) still need a
    panel border, but a wrapped block must NOT get a second, inset border on the
    inner <code> — that produced the "double border" seen on the reference page. */
 .md-typeset pre > code {
+  padding: 0.8em 1.5em;
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
   box-shadow: var(--nd-code-shadow);
@@ -235,7 +236,7 @@ body {
   margin: 0;
   font-size: 0.85em;
   font-weight: 700;
-  padding: 0.5em 1em;
+  padding: 0.5em 1.5em;
   border-top-left-radius: 0.2rem;
   border-top-right-radius: 0.2rem;
   background: color-mix(in srgb, var(--md-code-bg-color) 100%, var(--md-default-fg-color) 6%);

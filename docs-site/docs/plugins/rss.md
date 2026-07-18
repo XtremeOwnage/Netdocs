@@ -21,6 +21,8 @@ feed. Requires the [blog](blog.md) plugin to have collected posts.
 | `feed_description` | string | `site_description` | Override the feed/channel description. |
 | `image` | string | — | Channel image (logo) URL; relative URLs are resolved against `site_url`. |
 | `ttl` | int | — | RSS `<ttl>` in minutes (advisory cache time for readers). |
+| `social_icon` | bool | `false` | Add the feed as an RSS icon in the header/footer social row (see [Output](#output)). |
+| `social_feed` | string | `rss` | Which feed the social icon links when `social_icon: true` — `rss` or `atom`. |
 
 ```json
 { "name": "rss", "options": { "length": 20, "atom": true, "full_content": false } }
@@ -57,8 +59,28 @@ image: hero.png
 
 ## Output
 
-`site/feed_rss_created.xml` (and `site/feed_atom_created.xml` when `atom: true`) — link them
-from your `extra.social` block or `<head>`:
+Feeds are written to the **root of your built site** (next to `index.html`), so they are served at
+a stable, predictable URL:
+
+| Feed | Default file | Served at | Configure with |
+|---|---|---|---|
+| RSS 2.0 | `feed_rss_created.xml` | `<site_url>/feed_rss_created.xml` | `rss_file` |
+| Atom 1.0 *(when `atom: true`)* | `feed_atom_created.xml` | `<site_url>/feed_atom_created.xml` | `atom_file` |
+
+The RSS feed advertises itself with an `atom:link rel="self"` element so readers can discover the
+canonical feed URL.
+
+### Show the feed as a social icon
+
+Set `social_icon: true` and the plugin adds an RSS entry to your `extra.social` row automatically —
+no manual link needed. It links `feed_rss_created.xml` by default, or the Atom feed with
+`social_feed: atom`:
+
+```json
+{ "name": "rss", "options": { "atom": true, "social_icon": true } }
+```
+
+To place or style the link yourself instead, add it to `extra.social` by hand:
 
 ```json
 "extra": {
@@ -67,9 +89,6 @@ from your `extra.social` block or `<head>`:
   ]
 }
 ```
-
-The RSS feed also advertises itself with an `atom:link rel="self"` element so readers can
-discover the canonical feed URL.
 
 ## Attribution
 

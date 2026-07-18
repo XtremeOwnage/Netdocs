@@ -44,6 +44,35 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
         _feedDescription = o.Get("feed_description").AsString();
         _channelImage = o.Get("image").AsString();
         _ttl = o.Get("ttl").AsInt(0);
+
+        // `social_icon: true` surfaces the feed as an RSS icon in the header/footer social row.
+        // `social_feed: atom` links the Atom feed instead of the default RSS feed.
+        if (o.Get("social_icon").AsBool(false))
+        {
+            var useAtom = string.Equals(o.Get("social_feed").AsString(), "atom", StringComparison.OrdinalIgnoreCase);
+            var feedFile = useAtom ? _atomFile : _rssFile;
+            var siteUrl = (ctx.Config.SiteUrl ?? "").TrimEnd('/');
+            var link = siteUrl.Length > 0 ? $"{siteUrl}/{feedFile}" : "/" + feedFile;
+            AddSocialEntry(ctx.Config, "fontawesome/solid/rss", link);
+        }
+    }
+
+    /// <summary>Appends a <c>{ icon, link }</c> entry to <c>extra.social</c> so the theme renders it
+    /// alongside the other social links. Config's <c>extra</c> map is treated as immutable, so a
+    /// shallow copy is written back with the augmented social list.</summary>
+    private static void AddSocialEntry(SiteConfig config, string icon, string link)
+    {
+        var extra = new Dictionary<string, object?>(config.Extra, StringComparer.OrdinalIgnoreCase);
+        var social = extra.TryGetValue("social", out var existing)
+            ? new List<object?>(existing.AsList())
+            : [];
+        social.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["icon"] = icon,
+            ["link"] = link,
+        });
+        extra["social"] = social;
+        config.Extra = extra;
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)

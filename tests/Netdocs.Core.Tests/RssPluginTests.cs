@@ -147,9 +147,57 @@ public class RssPluginTests : IDisposable
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(xml, "<item>").Count);
     }
 
-    private sealed class FakeContext(IReadOnlyDictionary<string, object?> options) : IPluginContext
+    [Fact]
+    public void SocialIcon_AddsRssFeedEntryToExtraSocial()
     {
-        public SiteConfig Config { get; } = new();
+        var config = new SiteConfig { SiteUrl = "https://example.com/" };
+        var plugin = new RssPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?> { ["social_icon"] = true }, config));
+
+        Assert.True(config.Extra.TryGetValue("social", out var socialObj));
+        var social = Assert.IsAssignableFrom<System.Collections.IEnumerable>(socialObj).Cast<object?>().ToList();
+        var entry = Assert.IsAssignableFrom<IDictionary<string, object?>>(social.Single());
+        Assert.Equal("fontawesome/solid/rss", entry["icon"]);
+        Assert.Equal("https://example.com/feed_rss_created.xml", entry["link"]);
+    }
+
+    [Fact]
+    public void SocialFeedAtom_LinksAtomFeed()
+    {
+        var config = new SiteConfig { SiteUrl = "https://example.com" };
+        var plugin = new RssPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?> { ["social_icon"] = true, ["social_feed"] = "atom" }, config));
+
+        var social = ((System.Collections.IEnumerable)config.Extra["social"]!).Cast<object?>().ToList();
+        var entry = (IDictionary<string, object?>)social.Single()!;
+        Assert.Equal("https://example.com/feed_atom_created.xml", entry["link"]);
+    }
+
+    [Fact]
+    public void SocialIcon_PreservesExistingSocialEntries()
+    {
+        var config = new SiteConfig
+        {
+            SiteUrl = "https://example.com",
+            Extra = new Dictionary<string, object?>
+            {
+                ["social"] = new List<object?>
+                {
+                    new Dictionary<string, object?> { ["icon"] = "fontawesome/brands/github", ["link"] = "https://github.com/x" },
+                },
+            },
+        };
+        var plugin = new RssPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?> { ["social_icon"] = true }, config));
+
+        var social = ((System.Collections.IEnumerable)config.Extra["social"]!).Cast<object?>().ToList();
+        Assert.Equal(2, social.Count);
+    }
+
+    private sealed class FakeContext(IReadOnlyDictionary<string, object?> options, SiteConfig? config = null) : IPluginContext
+    {
+        public SiteConfig Config { get; } = config ?? new();
         public BuildOptions Options { get; } = new();
         public Microsoft.Extensions.Logging.ILogger Logger { get; } = NullLogger.Instance;
         public Microsoft.Extensions.DependencyInjection.IServiceCollection Services { get; }

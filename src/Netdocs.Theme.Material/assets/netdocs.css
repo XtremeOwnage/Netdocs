@@ -1,0 +1,29 @@
+/* Netdocs theme overrides layered on top of the vendored Material stylesheet. */
+
+/* Sticky footer: make the body a full-height flex column so the main content
+   region grows to fill the viewport and the footer is pinned to the bottom on
+   short pages instead of floating mid-screen. */
+html {
+  min-height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* The header/tabs/social nodes sit above the container; the container already
+   carries `flex-grow: 1`, so it expands to consume any remaining height. */
+.md-container {
+  flex-grow: 1;
+}
+
+/* Social icon links render inline SVGs; keep them sized consistently in the
+   footer meta row. */
+.md-social__link svg,
+.md-header__social svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}

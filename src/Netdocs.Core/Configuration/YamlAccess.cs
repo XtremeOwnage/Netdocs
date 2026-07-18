@@ -29,6 +29,15 @@ public static class YamlAccess
         _ => fallback
     };
 
+    public static int AsInt(this object? node, int fallback = 0) => node switch
+    {
+        int i => i,
+        long l => (int)l,
+        double d => (int)d,
+        string s when int.TryParse(s, out var n) => n,
+        _ => fallback
+    };
+
     public static object? Get(this IReadOnlyDictionary<string, object?> map, string key) =>
         map.TryGetValue(key, out var v) ? v : null;
 

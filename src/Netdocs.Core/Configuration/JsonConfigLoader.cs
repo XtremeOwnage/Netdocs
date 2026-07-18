@@ -64,6 +64,8 @@ public static class JsonConfigLoader
         MinifyHtml = m.Get("minifyHtml").AsBool(false),
         MinifyCss = m.Get("minifyCss").AsBool(false),
         MinifyJs = m.Get("minifyJs").AsBool(false),
+        ConvertImagesToWebp = m.Get("convertImagesToWebp").AsBool(false),
+        WebpQuality = m.Get("webpQuality").AsInt(80),
     };
 
     private static SlugifyConfig ParseSlugify(IReadOnlyDictionary<string, object?> m) => new()

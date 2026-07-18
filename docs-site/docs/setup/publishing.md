@@ -166,7 +166,9 @@ copied assets:
     "optimize": {
       "minifyHtml": true,
       "minifyCss": true,
-      "minifyJs": true
+      "minifyJs": true,
+      "convertImagesToWebp": true,
+      "webpQuality": 80
     }
   }
 }
@@ -176,6 +178,25 @@ copied assets:
 are copied into the output. The minifier is conservative — it never renames identifiers or
 reorders rules, and it preserves string, template, and URL contents verbatim. Files that are
 already minified (`*.min.css`, `*.min.js`) are copied through untouched.
+
+### WebP image conversion
+
+`convertImagesToWebp` emits a `.webp` sibling next to every copied `.png`/`.jpg`/`.jpeg`
+image and rewrites local `<img>` references into a `<picture>` element:
+
+```html
+<picture>
+  <source srcset="images/diagram.webp" type="image/webp">
+  <img src="images/diagram.png" alt="Diagram">
+</picture>
+```
+
+This is **non-destructive** — the original raster file is kept and referenced as the
+`<img>` fallback, so browsers without WebP support still render correctly while modern
+browsers download the smaller WebP. `webpQuality` (1–100, default `80`) controls the
+encoder quality. Conversions are cached by source content hash under `.cache/webp/`, so
+unchanged images are not re-encoded on subsequent builds. Remote images (`http://`,
+`https://`, `//`, `data:`), SVGs, and images already in WebP format are left untouched.
 
 ## Other hosts
 

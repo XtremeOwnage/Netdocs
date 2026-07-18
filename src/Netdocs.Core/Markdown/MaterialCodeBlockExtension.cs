@@ -1,5 +1,6 @@
 using System.Text;
 using Markdig;
+using Markdig.Extensions.Mathematics;
 using Markdig.Renderers;
 using Markdig.Renderers.Html;
 using Markdig.Renderers.Html.Inlines;
@@ -19,6 +20,18 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 {
     protected override void Write(HtmlRenderer renderer, CodeBlock block)
     {
+        // MathBlock derives from FencedCodeBlock, so it reaches this renderer first.
+        // Emit Markdig's math markup (<div class="math">\[…\]</div>) for MathJax.
+        if (block is MathBlock)
+        {
+            renderer.EnsureLine();
+            renderer.Write("<div class=\"math\">\\[");
+            renderer.WriteLeafRawLines(block, writeEndOfLines: true, escape: true);
+            renderer.Write("\\]</div>");
+            renderer.EnsureLine();
+            return;
+        }
+
         var fenced = block as FencedCodeBlock;
         var info = fenced?.Info?.Trim() ?? "";
         var args = fenced?.Arguments?.Trim();

@@ -1,0 +1,18 @@
+{{~ #
+# partials/source-file.html — "Last updated / Created" footer shown under the article body
+# for regular (non-post) pages when source metadata is available.
+#
+# Data:  `show_source_meta` (bool), `updated_display`, `created_display`, `page.meta.is_post`.
+#
+# Override: drop a file at `<custom_dir>/partials/source-file.html`. Return nothing to hide.
+~}}
+{{~ if show_source_meta && !page.meta.is_post ~}}
+<hr>
+<div class="md-source-file">
+  <span class="md-source-file__fact">
+    <span class="md-icon"></span>
+    Last updated: {{ updated_display }}
+    {{~ if created_display ~}} &middot; Created: {{ created_display }}{{~ end ~}}
+  </span>
+</div>
+{{~ end ~}}

@@ -1,0 +1,20 @@
+{{~ #
+# partials/breadcrumbs.html — Breadcrumb trail above the page title.
+#
+# Data:  `breadcrumbs` — ordered list of { title, url } from the page's location in the nav.
+#        `features` — gate on "navigation.path"; `base_url` — site root prefix for links.
+#
+# Override: drop a file at `<custom_dir>/partials/breadcrumbs.html`. Return nothing to hide.
+~}}
+{{~ if (features | array.contains "navigation.path") && breadcrumbs && (array.size breadcrumbs) > 0 ~}}
+<nav class="md-path" aria-label="Breadcrumb">
+  <ul class="md-path__list">
+    {{~ for crumb in breadcrumbs ~}}
+    <li class="md-path__item">
+      {{~ if crumb.url ~}}<a href="{{ base_url }}{{ crumb.url }}" class="md-path__link">{{ crumb.title }}</a>
+      {{~ else ~}}<span class="md-path__link">{{ crumb.title }}</span>{{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ul>
+</nav>
+{{~ end ~}}

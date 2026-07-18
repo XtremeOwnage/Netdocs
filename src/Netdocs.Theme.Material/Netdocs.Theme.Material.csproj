@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Netdocs.Abstractions\Netdocs.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\**\*" Pack="true" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="templates\**\*" Pack="true" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

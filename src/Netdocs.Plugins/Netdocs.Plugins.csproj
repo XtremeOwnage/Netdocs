@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Netdocs.Abstractions\Netdocs.Abstractions.csproj" />
+    <ProjectReference Include="..\Netdocs.Core\Netdocs.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Markdig" />
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+</Project>

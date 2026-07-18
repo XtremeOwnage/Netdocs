@@ -1,0 +1,8 @@
+artifacts/
+bin/
+obj/
+*.user
+
+# Built sites live next to their mkdocs.yml
+/**/site/
+.cache/

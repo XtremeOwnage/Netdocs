@@ -65,9 +65,11 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(dir, "search_index.json"), json, ct);
     }
 
-    /// <summary>Splits a page into its intro (text before the first heading) and per-section docs.
-    /// The page-level doc uses only the intro so search teasers stay concise (matches Material);
-    /// the body text lives in the per-section docs.</summary>
+    /// <summary>Splits a page into its page-level text and per-section docs, matching mkdocs-material.
+    /// The H1 is the page title (not a section), so the content beneath it — up to the first H2/H3 —
+    /// becomes the page-level doc's text. That text is the teaser Material shows on the main result
+    /// line for each page, so leaving it empty (as an H1-as-section split does) drops all excerpts.
+    /// Block-level HTML is preserved in the text so teasers render like the upstream index.</summary>
     private static (string Intro, IReadOnlyList<SearchDoc> Sections) SplitPage(HtmlParser parser, Page page)
     {
         if (string.IsNullOrEmpty(page.HtmlContent))
@@ -81,26 +83,31 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         var intro = new StringBuilder();
         string? currentId = null, currentTitle = null;
         var buffer = new StringBuilder();
-        var seenHeading = false;
+        var seenSection = false;
 
         foreach (var node in body.ChildNodes)
         {
-            if (node is IElement el && el.TagName is "H1" or "H2" or "H3" && !string.IsNullOrEmpty(el.Id))
+            // The H1 is the page title, not a searchable section; its text is captured by page.Title
+            // and the content that follows it flows into the page-level teaser.
+            if (node is IElement h1 && h1.TagName == "H1")
+                continue;
+
+            if (node is IElement el && el.TagName is "H2" or "H3" && !string.IsNullOrEmpty(el.Id))
             {
                 if (currentId is not null)
                     sections.Add(new SearchDoc($"{page.Url}#{currentId}", currentTitle ?? "", Collapse(buffer.ToString()), []));
                 currentId = el.Id;
                 currentTitle = el.TextContent.Trim();
                 buffer.Clear();
-                seenHeading = true;
+                seenSection = true;
             }
-            else if (seenHeading)
+            else if (seenSection)
             {
-                buffer.Append(node.TextContent).Append(' ');
+                buffer.Append(NodeText(node)).Append(' ');
             }
             else
             {
-                intro.Append(node.TextContent).Append(' ');
+                intro.Append(NodeText(node)).Append(' ');
             }
         }
         if (currentId is not null)
@@ -110,6 +117,12 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         if (introText.Length == 0 && sections.Count == 0) introText = Collapse(page.PlainText);
         return (introText, sections);
     }
+
+    /// <summary>Serializes a node for the search index: block-level HTML is kept (matching the
+    /// upstream mkdocs-material index, whose text field carries markup so teasers render richly),
+    /// while bare text nodes contribute their text content.</summary>
+    private static string NodeText(INode node) =>
+        node is IElement el ? el.OuterHtml : node.TextContent;
 
     private static string[] ExtractTags(Page page)
     {

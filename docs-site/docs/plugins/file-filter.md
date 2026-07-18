@@ -57,3 +57,7 @@ This page is excluded when the filter is active.
 ```json
 { "name": "file-filter" }
 ```
+
+## Attribution
+
+Behavior is modeled on the mkdocs-file-filter concept (MIT). See [Attributions](../about/attributions.md).

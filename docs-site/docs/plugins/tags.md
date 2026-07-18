@@ -61,3 +61,7 @@ used.
 ## Output
 
 `site/tags.json` — a map of tag → `[{ title, url }]`.
+
+## Attribution
+
+Behavior is modeled on the [Material for MkDocs](https://github.com/squidfunk/mkdocs-material) tags plugin (MIT). See [Attributions](../about/attributions.md).

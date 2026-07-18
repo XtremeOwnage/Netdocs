@@ -28,3 +28,7 @@ palette and referenced via `og:image` / `twitter:image` meta tags.
 !!! note
     A usable system font is required. If none is found, card generation is skipped with a
     warning.
+
+## Attribution
+
+Behavior is modeled on the [Material for MkDocs](https://github.com/squidfunk/mkdocs-material) social-cards plugin (MIT). See [Attributions](../about/attributions.md).

@@ -45,3 +45,7 @@ Paths are resolved against the configured `base_path` entries (and the project r
 !!! tip
     Keep include sources out of the built site by excluding them
     (e.g. `"exclude": [ "_include/**", "snippets/**" ]`).
+
+## Attribution
+
+Behavior is modeled on [pymdownx.snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/) by @facelessuser (MIT). See [Attributions](../about/attributions.md).

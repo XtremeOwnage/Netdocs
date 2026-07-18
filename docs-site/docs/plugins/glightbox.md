@@ -19,3 +19,7 @@ Enable the plugin — no options required:
 The plugin injects the GLightbox CSS/JS and an initializer that wraps every
 `.md-content img` (that isn't already linked) so clicking an image opens it in the
 lightbox.
+
+## Attribution
+
+Behavior is modeled on [mkdocs-glightbox](https://github.com/blueswen/mkdocs-glightbox) + [GLightbox](https://github.com/biati-digital/glightbox) (MIT). See [Attributions](../about/attributions.md).

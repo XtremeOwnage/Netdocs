@@ -77,6 +77,10 @@ production-grade tool, use Material for MkDocs directly.
 - **MkDocs** — the static-site-generator concepts and configuration model this project mirrors.
 - **lunr / lunr-languages** — MIT, © Oliver Nightingale and contributors.
 
+For the **full list of derivative plugins and bundled libraries** (with authors and
+licenses), see [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md) or the
+[Attributions page](https://xtremeownage.github.io/Netdocs/about/attributions/) on the docs site.
+
 See [`src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md`](src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md)
 for the full list of vendored files and their origins.
 

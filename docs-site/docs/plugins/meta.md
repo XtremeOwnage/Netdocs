@@ -36,3 +36,7 @@ Every page under `guides/` inherits `template` and `tags` unless it sets its own
 ```json
 { "name": "meta", "options": { "meta_file": ".meta.yml" } }
 ```
+
+## Attribution
+
+Behavior is modeled on the [Material for MkDocs](https://github.com/squidfunk/mkdocs-material) meta plugin (MIT). See [Attributions](../about/attributions.md).

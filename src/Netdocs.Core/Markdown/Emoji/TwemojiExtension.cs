@@ -17,10 +17,19 @@ public sealed class TwemojiInline : LeafInline
     public required string Shortcode { get; init; }
 }
 
+/// <summary>Inline node for an icon shortcode (<c>:material-*:</c> etc.) resolved to inline SVG.</summary>
+public sealed class IconInline : LeafInline
+{
+    public required string Name { get; init; }
+    public required string Svg { get; init; }
+}
+
 /// <summary>
 /// Parses <c>:shortcode:</c> emoji using Markdig's built-in shortcode table and emits a
 /// <see cref="TwemojiInline"/> so it can be rendered as a Twemoji SVG image (mirrors
-/// mkdocs-material's <c>pymdownx.emoji</c> + twemoji generator).
+/// mkdocs-material's <c>pymdownx.emoji</c> + twemoji generator). Shortcodes that aren't
+/// emoji but resolve to a bundled icon (<c>:material-*:</c>, <c>:octicons-*:</c>,
+/// <c>:fontawesome-*:</c>) emit an <see cref="IconInline"/> with inline SVG.
 /// </summary>
 public sealed class TwemojiInlineParser : InlineParser
 {
@@ -48,19 +57,63 @@ public sealed class TwemojiInlineParser : InlineParser
         if (p > end || text[p] != ':') return false;
 
         var shortcode = text.Substring(start, p - start + 1);
-        if (!Map.TryGetValue(shortcode, out var unicode)) return false;
-
         var startPosition = processor.GetSourcePosition(start, out var line, out var column);
-        processor.Inline = new TwemojiInline
+
+        if (Map.TryGetValue(shortcode, out var unicode))
         {
-            Unicode = unicode,
-            Shortcode = shortcode,
-            Span = new(startPosition, processor.GetSourcePosition(p)),
-            Line = line,
-            Column = column,
-        };
-        slice.Start = p + 1;
-        return true;
+            processor.Inline = new TwemojiInline
+            {
+                Unicode = unicode,
+                Shortcode = shortcode,
+                Span = new(startPosition, processor.GetSourcePosition(p)),
+                Line = line,
+                Column = column,
+            };
+            slice.Start = p + 1;
+            return true;
+        }
+
+        // Not a Unicode emoji — try the bundled icon set (material/octicons/fontawesome).
+        var name = shortcode.Trim(':');
+        if (IconRegistry.IsIconName(name) && IconRegistry.RenderSvg(name) is { } svg)
+        {
+            processor.Inline = new IconInline
+            {
+                Name = name,
+                Svg = svg,
+                Span = new(startPosition, processor.GetSourcePosition(p)),
+                Line = line,
+                Column = column,
+            };
+            slice.Start = p + 1;
+            return true;
+        }
+
+        return false;
+    }
+}
+
+/// <summary>Renders an <see cref="IconInline"/> as an inline SVG wrapped in a
+/// <c>&lt;span class="twemoji"&gt;</c>, carrying any attr_list classes/attributes
+/// (e.g. <c>{ .lg .middle }</c>) so mkdocs-material icon usage renders identically.</summary>
+public sealed class IconRenderer : HtmlObjectRenderer<IconInline>
+{
+    protected override void Write(HtmlRenderer renderer, IconInline obj)
+    {
+        if (!renderer.EnableHtmlForInline) return;
+
+        var attrs = obj.TryGetAttributes();
+        renderer.Write("<span class=\"twemoji");
+        if (attrs?.Classes is { Count: > 0 } classes)
+            foreach (var c in classes)
+                renderer.Write(' ').Write(c);
+        renderer.Write('"');
+        if (!string.IsNullOrEmpty(attrs?.Id))
+            renderer.Write(" id=\"").Write(attrs!.Id).Write('"');
+        if (attrs?.Properties is { Count: > 0 } props)
+            foreach (var prop in props)
+                renderer.Write(' ').Write(prop.Key).Write("=\"").Write(prop.Value ?? "").Write('"');
+        renderer.Write('>').Write(obj.Svg).Write("</span>");
     }
 }
 
@@ -119,7 +172,12 @@ public sealed class TwemojiExtension(string baseUrl) : IMarkdownExtension
 
     public void Setup(MarkdownPipeline pipeline, IMarkdownRenderer renderer)
     {
-        if (renderer is HtmlRenderer html && !html.ObjectRenderers.Contains<TwemojiRenderer>())
-            html.ObjectRenderers.Insert(0, new TwemojiRenderer(_baseUrl));
+        if (renderer is HtmlRenderer html)
+        {
+            if (!html.ObjectRenderers.Contains<TwemojiRenderer>())
+                html.ObjectRenderers.Insert(0, new TwemojiRenderer(_baseUrl));
+            if (!html.ObjectRenderers.Contains<IconRenderer>())
+                html.ObjectRenderers.Insert(0, new IconRenderer());
+        }
     }
 }

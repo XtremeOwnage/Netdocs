@@ -121,6 +121,36 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void Icons_RegistryLoadsBundledSet()
+    {
+        // The embedded icon dataset should decompress and expose thousands of icons.
+        Assert.True(Netdocs.Core.Markdown.Emoji.IconRegistry.Count > 5000);
+        Assert.NotNull(Netdocs.Core.Markdown.Emoji.IconRegistry.Get("material-home"));
+        var svg = Netdocs.Core.Markdown.Emoji.IconRegistry.RenderSvg("material-home");
+        Assert.NotNull(svg);
+        Assert.Contains("<svg", svg);
+        Assert.Contains("<path", svg);
+    }
+
+    [Fact]
+    public void Icons_MaterialShortcodeRendersInlineSvg()
+    {
+        var html = Render("Launch :material-home: now\n");
+        Assert.Contains("class=\"twemoji", html);
+        Assert.Contains("<svg", html);
+        Assert.DoesNotContain(":material-home:", html); // shortcode fully resolved
+    }
+
+    [Fact]
+    public void Icons_ShortcodeCarriesAttrListClasses()
+    {
+        var html = Render("Big :material-home:{ .lg .middle } icon\n");
+        Assert.Contains("<svg", html);
+        Assert.Contains("lg", html);
+        Assert.Contains("middle", html);
+    }
+
+    [Fact]
     public void Emoji_ZwjSequenceKeepsVariationSelector()
     {
         // Family/zwj sequences keep FE0F; simple emoji strip it.

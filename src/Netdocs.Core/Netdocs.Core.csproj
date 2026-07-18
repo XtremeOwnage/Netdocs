@@ -24,4 +24,14 @@
       <LogicalName>theme/assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
+  <!--
+    Bundled icon set (Material Design Icons, Octicons, FontAwesome Free) used to
+    resolve `:material-*:` / `:octicons-*:` / `:fontawesome-*:` shortcodes to inline
+    SVG, mirroring mkdocs-material. Stored gzipped (~1.3MB) and decompressed lazily.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Markdown\Emoji\data\icons.json.gz">
+      <LogicalName>icons/icons.json.gz</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

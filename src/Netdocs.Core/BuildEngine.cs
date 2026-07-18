@@ -136,9 +136,31 @@ public sealed class BuildEngine(
             await hook.OnBuildCompleteAsync(site, ct);
         }
 
+        // 12. Built-in sitemap.xml.
+        await EmitSitemapAsync(site, ct);
+
         sw.Stop();
         _log.LogInformation("Built {Count} pages in {Ms} ms", site.Pages.Count, sw.ElapsedMilliseconds);
         return site;
+    }
+
+    private async Task EmitSitemapAsync(SiteContext site, CancellationToken ct)
+    {
+        var baseUrl = (config.SiteUrl ?? "").TrimEnd('/');
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        sb.AppendLine("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
+        foreach (var page in site.Pages.OrderBy(p => p.Url, StringComparer.Ordinal))
+        {
+            var loc = baseUrl.Length > 0 ? $"{baseUrl}/{page.Url}" : "/" + page.Url;
+            sb.Append("  <url><loc>").Append(System.Security.SecurityElement.Escape(loc)).Append("</loc>");
+            if (page.Updated is { } updated)
+                sb.Append("<lastmod>").Append(updated.ToString("yyyy-MM-dd")).Append("</lastmod>");
+            sb.AppendLine("</url>");
+        }
+        sb.AppendLine("</urlset>");
+        await File.WriteAllTextAsync(Path.Combine(config.AbsoluteSiteDir, "sitemap.xml"), sb.ToString(), ct);
+        _log.LogDebug("Wrote sitemap.xml ({Count} urls)", site.Pages.Count);
     }
 
     /// <summary>Merges config plugins with plugins backed by markdown_extensions (e.g. snippets).</summary>

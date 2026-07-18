@@ -317,3 +317,95 @@ body {
   fill: currentColor;
 }
 
+
+/* ---------------------------------------------------------------------------
+   Calculator plugin (```calc fences -> interactive forms). Styles the input
+   grid and the computed-output cards. Uses Material CSS custom properties so
+   it follows the active palette (light/dark) automatically.
+   --------------------------------------------------------------------------- */
+.nd-calc {
+  display: block;
+  margin: 1.5em 0;
+  padding: 1em 1.2em;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .4rem;
+  background: var(--md-code-bg-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.nd-calc--error {
+  border-color: #d32f2f;
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.nd-calc__title {
+  font-weight: 700;
+  font-size: .9rem;
+  margin-bottom: .8em;
+}
+
+.nd-calc__inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .8em 1.2em;
+}
+
+.nd-calc__field {
+  display: flex;
+  flex-direction: column;
+  gap: .25em;
+}
+
+.nd-calc__field label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-calc__field input,
+.nd-calc__field select {
+  font: inherit;
+  font-size: .8rem;
+  padding: .35em .5em;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .25rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.nd-calc__field input[type="range"] {
+  padding: 0;
+}
+
+.nd-calc__range {
+  font-size: .72rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-calc__outputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .8em 1.2em;
+  margin-top: 1em;
+  padding-top: 1em;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.nd-calc__result {
+  display: flex;
+  flex-direction: column;
+  gap: .1em;
+}
+
+.nd-calc__label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-calc__value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--md-primary-fg-color);
+}

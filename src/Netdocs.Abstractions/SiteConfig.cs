@@ -70,6 +70,11 @@ public sealed class PaletteConfig
     public string? Scheme { get; set; }
     public string? Primary { get; set; }
     public string? Accent { get; set; }
+
+    /// <summary>Optional palette-switcher toggle (Material icon name + accessible label). When any
+    /// palette declares a toggle, the theme renders a light/dark switcher in the header.</summary>
+    public string? ToggleIcon { get; set; }
+    public string? ToggleName { get; set; }
 }
 
 public sealed class PluginConfig

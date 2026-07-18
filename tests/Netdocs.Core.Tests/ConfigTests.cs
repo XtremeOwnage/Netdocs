@@ -53,6 +53,38 @@ public class ConfigTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void ConfigLoader_ParsesPaletteToggle()
+    {
+        var yaml = """
+            site_name: Test Site
+            theme:
+              name: material
+              palette:
+                - scheme: slate
+                  primary: indigo
+                  toggle:
+                    icon: material/brightness-4
+                    name: Switch to light mode
+                - scheme: default
+                  toggle:
+                    icon: material/brightness-7
+                    name: Switch to dark mode
+            """;
+        var path = Path.Combine(Path.GetTempPath(), $"mkdocs_{Guid.NewGuid():N}.yml");
+        File.WriteAllText(path, yaml);
+        try
+        {
+            var config = ConfigLoader.Load(path);
+            Assert.Equal(2, config.Theme.Palette.Count);
+            Assert.Equal("slate", config.Theme.Palette[0].Scheme);
+            Assert.Equal("material/brightness-4", config.Theme.Palette[0].ToggleIcon);
+            Assert.Equal("Switch to light mode", config.Theme.Palette[0].ToggleName);
+            Assert.Equal("material/brightness-7", config.Theme.Palette[1].ToggleIcon);
+        }
+        finally { File.Delete(path); }
+    }
 }
 
 public class NavigationTests

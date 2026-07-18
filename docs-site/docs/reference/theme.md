@@ -38,6 +38,35 @@ driven by the vendored Material CSS/JS bundle. The theme is configured under
 - `scheme` — `default` (light) or `slate` (dark).
 - `primary` / `accent` — Material color names (e.g. `indigo`, `teal`, `grey`, `orange`).
 - `media` — optional media query used for automatic light/dark switching.
+- `toggle` — optional `{ "icon": "...", "name": "..." }`. When present, the theme renders a
+  header switcher button so visitors can flip between schemes (persisted in the browser).
+
+### Light/dark toggle
+
+List two palettes, each with a `toggle`, to render a header switcher. The **first** palette is
+the default applied on initial load, so put `slate` first for a dark-by-default site:
+
+```json
+"palette": [
+  {
+    "scheme": "slate",
+    "primary": "indigo",
+    "accent": "indigo",
+    "toggle": { "icon": "material/brightness-4", "name": "Switch to light mode" }
+  },
+  {
+    "scheme": "default",
+    "primary": "indigo",
+    "accent": "indigo",
+    "toggle": { "icon": "material/brightness-7", "name": "Switch to dark mode" }
+  }
+]
+```
+
+Recognized toggle icons are `material/brightness-7` (sun), `material/brightness-4` (moon), and
+`material/brightness-auto`. The selected scheme is stored in the browser and restored on the
+visitor's next visit. Add `media` queries instead if you prefer the scheme to follow the
+operating-system setting automatically.
 
 ## Fonts
 

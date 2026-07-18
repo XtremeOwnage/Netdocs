@@ -85,12 +85,18 @@ public static class JsonConfigLoader
         Features = StringList(m.Get("features")),
         Font = m.Get("font").AsMap(),
         Icon = m.Get("icon").AsMap(),
-        Palette = m.Get("palette").AsList().Select(p => p.AsMap()).Select(pm => new PaletteConfig
+        Palette = m.Get("palette").AsList().Select(p => p.AsMap()).Select(pm =>
         {
-            Media = pm.Get("media").AsString(),
-            Scheme = pm.Get("scheme").AsString(),
-            Primary = pm.Get("primary").AsString(),
-            Accent = pm.Get("accent").AsString(),
+            var toggle = pm.Get("toggle").AsMap();
+            return new PaletteConfig
+            {
+                Media = pm.Get("media").AsString(),
+                Scheme = pm.Get("scheme").AsString(),
+                Primary = pm.Get("primary").AsString(),
+                Accent = pm.Get("accent").AsString(),
+                ToggleIcon = toggle.Get("icon").AsString(),
+                ToggleName = toggle.Get("name").AsString(),
+            };
         }).ToList(),
     };
 

@@ -68,6 +68,13 @@ public static class MkDocsImporter
                 AddIfSet(po, "scheme", p.Scheme);
                 AddIfSet(po, "primary", p.Primary);
                 AddIfSet(po, "accent", p.Accent);
+                if (!string.IsNullOrEmpty(p.ToggleIcon) || !string.IsNullOrEmpty(p.ToggleName))
+                {
+                    var toggle = new JsonObject();
+                    AddIfSet(toggle, "icon", p.ToggleIcon);
+                    AddIfSet(toggle, "name", p.ToggleName);
+                    po["toggle"] = toggle;
+                }
                 arr.Add(po);
             }
             o["palette"] = arr;

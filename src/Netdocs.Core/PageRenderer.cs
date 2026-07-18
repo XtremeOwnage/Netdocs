@@ -56,6 +56,7 @@ public static class PageRenderer
             ["palette_scheme"] = Sanitize(palette?.Scheme ?? "default"),
             ["palette_primary"] = Sanitize(palette?.Primary ?? "indigo"),
             ["palette_accent"] = Sanitize(palette?.Accent ?? "indigo"),
+            ["palettes"] = BuildPalettes(site.Config.Theme.Palette),
             ["font_text"] = font.TryGetValue("text", out var ft) ? ft?.ToString() ?? "Roboto" : "Roboto",
             ["font_code"] = font.TryGetValue("code", out var fc) ? fc?.ToString() ?? "Roboto Mono" : "Roboto Mono",
             ["updated_display"] = page.Updated?.ToString("MMMM d, yyyy"),
@@ -73,6 +74,45 @@ public static class PageRenderer
     }
 
     private static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();
+
+    /// <summary>Projects the configured palettes into a template-friendly list. Only palettes that
+    /// declare a <c>toggle</c> render a switcher button (mirroring Material's palette component,
+    /// which the vendored bundle.js drives via the <c>__palette</c> radio inputs).</summary>
+    private static List<Dictionary<string, object?>> BuildPalettes(IReadOnlyList<PaletteConfig> palettes)
+    {
+        var result = new List<Dictionary<string, object?>>();
+        for (var i = 0; i < palettes.Count; i++)
+        {
+            var p = palettes[i];
+            var hasToggle = !string.IsNullOrEmpty(p.ToggleIcon);
+            result.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["index"] = i + 1,
+                ["media"] = p.Media ?? "",
+                ["scheme"] = Sanitize(p.Scheme ?? "default"),
+                ["primary"] = Sanitize(p.Primary ?? "indigo"),
+                ["accent"] = Sanitize(p.Accent ?? "indigo"),
+                ["has_toggle"] = hasToggle,
+                ["toggle_name"] = p.ToggleName ?? "Switch color scheme",
+                ["toggle_svg"] = hasToggle ? BrightnessIcon(p.ToggleIcon!) : "",
+            });
+        }
+        return result;
+    }
+
+    private static string BrightnessIcon(string name)
+    {
+        var d = name.ToLowerInvariant() switch
+        {
+            var n when n.Contains("brightness-7") || n.Contains("weather-sunny") =>
+                "M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5M2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1m18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1M11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1m0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1M5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58m12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06m1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06M7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06Z",
+            var n when n.Contains("brightness-auto") =>
+                "m14.3 16-1.1-3h-2.4l-1.1 3H7.8L11 7h2l3.2 9h-1.9M20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69M11.5 10.5h1l.9 2.5h-2.8l.9-2.5Z",
+            _ =>
+                "M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9m0 2c.83 0 1.5.67 1.5 1.5S12.83 8 12 8s-1.5-.67-1.5-1.5S11.17 5 12 5M10 9.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5S8.5 11.83 8.5 11s.67-1.5 1.5-1.5m5.5 2c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5M11 15c.83 0 1.5.67 1.5 1.5S11.83 18 11 18s-1.5-.67-1.5-1.5S10.17 15 11 15Z",
+        };
+        return $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"{d}\"/></svg>";
+    }
 
     /// <summary>Newest-first blog sequence: previous = older post, next = newer post.</summary>
     private static (Page? prev, Page? next) BlogSiblings(SiteContext site, Page page)

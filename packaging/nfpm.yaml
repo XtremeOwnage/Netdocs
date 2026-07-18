@@ -14,8 +14,8 @@ homepage: https://github.com/XtremeOwnage/Netdocs
 license: MIT
 
 contents:
-  # The self-contained publish folder (binary + theme/templates + theme/assets).
-  - src: ./dist
+  # The self-contained linux publish folder (binary + theme/templates + theme/assets).
+  - src: ./dist/linux-x64
     dst: /opt/netdocs
   # Expose the CLI on PATH.
   - src: /opt/netdocs/netdocs

@@ -27,7 +27,7 @@ public sealed class ThemeTemplateLoader(IReadOnlyList<string> searchDirs) : ITem
     public string Load(TemplateContext context, SourceSpan callerSpan, string templatePath)
         => File.ReadAllText(templatePath);
 
-    public async ValueTask<string> LoadAsync(TemplateContext context, SourceSpan callerSpan, string templatePath)
+    public async ValueTask<string?> LoadAsync(TemplateContext context, SourceSpan callerSpan, string templatePath)
         => await File.ReadAllTextAsync(templatePath);
 }
 

@@ -24,6 +24,9 @@ public sealed class BuildEngine(
         var sw = System.Diagnostics.Stopwatch.StartNew();
         _log.LogInformation("Building '{Site}' ({Mode})", config.SiteName, options.IsProduction ? "production" : "development");
 
+        // Make sure the bundled theme is on disk (extracts embedded copy for single-file builds).
+        ThemeBootstrapper.EnsureExtracted();
+
         var site = new SiteContext { Config = config, Options = options, LoggerFactory = loggerFactory };
 
         // Plugin host (built on a lightweight provider so plugins can take core services).

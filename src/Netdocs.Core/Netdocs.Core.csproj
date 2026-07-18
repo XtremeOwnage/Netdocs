@@ -11,4 +11,17 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
+  <!--
+    Embed the bundled Material theme so a single-file (PublishSingleFile) executable
+    stays self-contained. Loose copies are still emitted next to the CLI for local
+    dev builds; ThemeBootstrapper extracts these resources only when those are absent.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Netdocs.Theme.Material\templates\**\*">
+      <LogicalName>theme/templates/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\Netdocs.Theme.Material\assets\**\*">
+      <LogicalName>theme/assets/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

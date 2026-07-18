@@ -409,3 +409,48 @@ body {
   font-weight: 700;
   color: var(--md-primary-fg-color);
 }
+
+/* --------------------------------------------------------------------------
+   CriticMarkup (KeysCriticExtension) — {++ins++} {--del--} {==mark==}
+   {>>comment<<} {~~old~>new~~}. Mirrors Material for MkDocs' critic palette.
+   -------------------------------------------------------------------------- */
+ins.critic,
+del.critic,
+.critic.comment {
+  border-radius: .1rem;
+  padding: 0 .1em;
+  text-decoration: none;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+ins.critic {
+  background-color: rgba(76, 175, 80, .18);
+  color: inherit;
+}
+
+del.critic {
+  background-color: rgba(244, 67, 54, .18);
+  text-decoration: line-through;
+  color: inherit;
+}
+
+mark.critic {
+  background-color: rgba(255, 235, 59, .5);
+  border-radius: .1rem;
+  padding: 0 .1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+[data-md-color-scheme="slate"] ins.critic { background-color: rgba(76, 175, 80, .3); }
+[data-md-color-scheme="slate"] del.critic { background-color: rgba(244, 67, 54, .3); }
+[data-md-color-scheme="slate"] mark.critic { background-color: rgba(255, 235, 59, .35); color: inherit; }
+
+.critic.comment {
+  background-color: var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
+  font-style: italic;
+}
+
+.critic.comment::before { content: "\A0//\A0"; opacity: .6; }

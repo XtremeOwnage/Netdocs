@@ -88,6 +88,27 @@ offering a one-click download of the same file.
 
 If the file can't be found, an HTML comment is emitted instead of a broken link.
 
+### `version("x.y.z"[, "url"])`, `flag("name"[, "text"])`, `badge("icon", "text")`
+
+Render mkdocs-material style **reference badges** — small pills that mark when a feature landed
+or its support status. They're handy at the top of a reference page.
+
+```markdown
+{{ version("1.2.0") }} {{ flag("experimental") }}
+```
+
+renders a version pill (tag icon + `1.2.0`) next to an "Experimental" status pill.
+
+- **`version`** shows a tag icon + version. Pass a second argument to link it (e.g. to a changelog
+  entry): `{{ version("1.2.0", "../about/changelog/") }}`.
+- **`flag`** shows a status pill. Known names (`experimental`, `required`, `default`, `optional`,
+  `beta`, `new`, `deprecated`) get a matching icon and label; a second argument overrides the text.
+- **`badge`** is the generic form — the first argument is any
+  [curated icon name](../reference/theme.md#icons) and the second is the label:
+  `{{ badge("shield-check", "Stable") }}`.
+
+Badges are styled by the theme (`.nd-badge`) and adapt to light/dark automatically.
+
 ## Writing your own macros
 
 ### Option 1 — Variables (no code)

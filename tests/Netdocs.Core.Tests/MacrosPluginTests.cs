@@ -99,6 +99,73 @@ public class MacrosPluginTests
     }
 
     [Fact]
+    public async Task Version_RendersBadge_WithTagIcon()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ version(\"1.2.0\") }}", Site(page), default);
+
+        Assert.Contains("class=\"nd-badge\"", result);
+        Assert.Contains("class=\"nd-badge__icon\"", result);
+        Assert.Contains(">1.2.0</span>", result);
+        Assert.DoesNotContain("version(", result);
+    }
+
+    [Fact]
+    public async Task Version_WithUrl_LinksTheVersion()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ version(\"1.2.0\", \"../changelog/\") }}", Site(page), default);
+
+        Assert.Contains("<a href=\"../changelog/\">1.2.0</a>", result);
+    }
+
+    [Fact]
+    public async Task Flag_KnownName_UsesDefaultLabel()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ flag(\"experimental\") }}", Site(page), default);
+
+        Assert.Contains("class=\"nd-badge\"", result);
+        Assert.Contains(">Experimental</span>", result);
+    }
+
+    [Fact]
+    public async Task Flag_CustomText_OverridesLabel()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ flag(\"required\", \"Must set\") }}", Site(page), default);
+
+        Assert.Contains(">Must set</span>", result);
+    }
+
+    [Fact]
+    public async Task Badge_RendersIconAndText()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ badge(\"shield-check\", \"Stable\") }}", Site(page), default);
+
+        Assert.Contains("class=\"nd-badge\"", result);
+        Assert.Contains(">Stable</span>", result);
+        Assert.Contains("<svg", result);
+    }
+
+    [Fact]
+    public async Task Badge_UnknownIcon_FallsBackToTag()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var result = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ badge(\"not-a-real-icon\", \"Label\") }}", Site(page), default);
+
+        Assert.Contains("class=\"nd-badge\"", result);
+        Assert.Contains(">Label</span>", result);
+    }
+
+    [Fact]
     public async Task IgnoreMacros_LeavesMarkdownUntouched()
     {
         var page = new Page

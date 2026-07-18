@@ -56,6 +56,7 @@ public sealed class NavNode
     public required string Title { get; init; }
     public Page? Page { get; init; }
     public string? Url => Page?.Url;
+    public string? Icon { get; set; }
     public IReadOnlyList<NavNode> Children { get; set; } = [];
     public bool IsSection => Page is null;
 

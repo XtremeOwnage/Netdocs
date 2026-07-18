@@ -44,6 +44,10 @@ public static class TemplateFunctions
 
         var overrides = ExtractIconOverrides(model);
         globals.Import("social_icon", (string? name) => SocialIcon(name ?? "", overrides));
+
+        var versioner = (model is not null && model.TryGetValue("asset_versioner", out var v) ? v as AssetVersioner : null)
+            ?? AssetVersioner.NoOp;
+        globals.Import("asset", (string? href) => versioner.Version(href));
     }
 
     /// <summary>Reads custom <c>extra.social_icons</c> ({ "icon-name": "&lt;svg path d&gt;" }) so sites can add

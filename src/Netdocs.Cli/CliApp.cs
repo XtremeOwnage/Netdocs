@@ -174,6 +174,7 @@ public static class CliApp
         .Register<TypesetPlugin>("typeset")
         .Register<TableReaderPlugin>("table-reader")
         .Register<Base64EmbedPlugin>("b64", "pymdownx.b64")
+        .Register<ArithmatexPlugin>("arithmatex", "pymdownx.arithmatex")
         .Register<MacrosPlugin>("macros");
 
     private static string? ResolveConfigPath(string? provided)

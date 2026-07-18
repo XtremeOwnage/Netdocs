@@ -232,9 +232,12 @@ body {
    highlighter partial) to survive a renderer swap. */
 .md-typeset .highlight > .filename {
   display: block;
+  margin: 0;
   font-size: 0.85em;
   font-weight: 700;
   padding: 0.5em 1em;
+  border-top-left-radius: 0.2rem;
+  border-top-right-radius: 0.2rem;
   background: color-mix(in srgb, var(--md-code-bg-color) 100%, var(--md-default-fg-color) 6%);
   border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
 }

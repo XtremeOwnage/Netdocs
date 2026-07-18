@@ -40,3 +40,10 @@ jobs:
           count="$(find "${out}" -name '*.html' | wc -l)"
           echo "Generated ${count} HTML pages in ${out}."
           test "${count}" -gt 0
+
+          # The social plugin is enabled on docs-site; confirm cards were rendered
+          # inside the container (this is the path that previously crashed on a
+          # missing font).
+          cards="$(find "${out}/assets/social" -name '*.png' 2>/dev/null | wc -l)"
+          echo "Generated ${cards} social card(s)."
+          test "${cards}" -gt 0

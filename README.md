@@ -6,11 +6,14 @@
 [![Docker](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docker.yml/badge.svg)](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docker.yml)
 [![Release](https://img.shields.io/github/v/release/XtremeOwnage/Netdocs?sort=semver)](https://github.com/XtremeOwnage/Netdocs/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-xtremeownage.github.io%2FNetdocs-blue)](https://xtremeownage.github.io/Netdocs/)
 
 A fast, flexible static site generator in **.NET 11** — a reimplementation of the
 [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) experience with a
 first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and
 the Markdown in `docs/` builds with little to no change.
+
+> 📖 **Full documentation:** <https://xtremeownage.github.io/Netdocs/>
 
 > [!IMPORTANT]
 > **Netdocs is an AI-generated derivative work** inspired by, and partially reusing

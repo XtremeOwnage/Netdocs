@@ -112,7 +112,9 @@ Here is a statement that needs a citation.[^src]
 [^src]: The supporting detail, rendered at the foot of the page with a back-link.
 
 The reference renders as a superscript link to the definition, and the definition gets a
-return arrow back to the reference.
+return arrow back to the reference. Hovering the reference shows the footnote content in a
+tooltip — this is enabled by the `content.footnote.tooltips` theme feature (add it to
+`theme.features` in `appsettings.json`), which mirrors Material's footnote-preview behaviour.
 
 ### Emoji
 

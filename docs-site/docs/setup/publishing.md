@@ -74,6 +74,74 @@ Use the same pattern: point the `--config` at your site's `appsettings.json` and
 its `siteDir`. For a project-page URL under a subpath, make sure `siteUrl` includes the
 subpath so links, the sitemap, and social cards resolve correctly.
 
+## Using the Netdocs GitHub Action
+
+If your site lives in its **own** repository (i.e. you are not building from the Netdocs
+source tree), you don't need .NET on the runner at all. The reusable
+[`XtremeOwnage/Netdocs`](https://github.com/XtremeOwnage/Netdocs) action downloads the
+matching native `netdocs` binary from the releases page and runs it for you:
+
+```yaml
+name: Docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git-revision-date needs full history
+
+      - name: Build with Netdocs
+        uses: XtremeOwnage/Netdocs@v1
+        with:
+          command: build
+          config: appsettings.json
+          args: --prod
+          # version: 1.0.0   # pin a release, or omit for 'latest'
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+Inputs:
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `command` | `build` | Netdocs subcommand (`build`, `serve`, `import`). |
+| `config` | *(none)* | Path to the config file; passed as `--config` when set. |
+| `version` | `latest` | Release version to download (e.g. `1.0.0`), or `latest`. |
+| `args` | *(none)* | Extra arguments appended verbatim (e.g. `--prod --strict`). |
+| `working-directory` | `.` | Directory to run `netdocs` in. |
+
+The action runs on Linux, Windows, and macOS runners (x64, plus Apple Silicon). Pin to a
+major tag like `@v1` for stability, or a full version tag for reproducible builds.
+
 ## Built-in deploy targets
 
 Instead of wiring up a workflow, `netdocs` can publish the build itself. Add a `deploy`

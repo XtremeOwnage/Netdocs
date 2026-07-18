@@ -1,0 +1,114 @@
+name: "Netdocs"
+description: "Build (or serve) a static site with Netdocs, a fast .NET static site generator."
+author: "XtremeOwnage"
+branding:
+  icon: "book-open"
+  color: "purple"
+
+inputs:
+  command:
+    description: "Netdocs subcommand to run (e.g. build, serve, import)."
+    required: false
+    default: "build"
+  config:
+    description: "Path to the config file (appsettings.json, or mkdocs.yml for import). Passed as --config when set."
+    required: false
+    default: ""
+  version:
+    description: "Netdocs release version to use, e.g. 1.2.3, or 'latest' to resolve the newest release."
+    required: false
+    default: "latest"
+  args:
+    description: "Additional arguments appended verbatim to the netdocs command."
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory to run netdocs in."
+    required: false
+    default: "."
+
+outputs:
+  netdocs-path:
+    description: "Absolute path to the downloaded netdocs executable."
+    value: ${{ steps.install.outputs.path }}
+  version:
+    description: "The resolved Netdocs version that was installed."
+    value: ${{ steps.install.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: install
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        repo="XtremeOwnage/Netdocs"
+        version="${INPUT_VERSION}"
+
+        # Map the GitHub runner OS/arch onto a published release asset name.
+        os="${RUNNER_OS}"
+        arch="${RUNNER_ARCH}"
+        case "${os}-${arch}" in
+          Linux-X64)   rid="linux-x64";   ext="" ;;
+          Windows-X64) rid="win-x64";     ext=".exe" ;;
+          macOS-X64)   rid="osx-x64";     ext="" ;;
+          macOS-ARM64) rid="osx-arm64";   ext="" ;;
+          *)
+            echo "::error::Netdocs does not publish a binary for ${os}/${arch}. Supported: Linux-X64, Windows-X64, macOS-X64, macOS-ARM64." >&2
+            exit 1
+            ;;
+        esac
+
+        # Resolve 'latest' to a concrete version via the GitHub API.
+        if [ "${version}" = "latest" ] || [ -z "${version}" ]; then
+          auth=()
+          if [ -n "${GH_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer ${GH_TOKEN}"); fi
+          tag="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${repo}/releases/latest" \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+          if [ -z "${tag}" ]; then
+            echo "::error::Could not resolve the latest Netdocs release. Pin an explicit 'version:' instead." >&2
+            exit 1
+          fi
+          version="${tag#v}"
+        fi
+
+        asset="netdocs-${version}-${rid}${ext}"
+        url="https://github.com/${repo}/releases/download/v${version}/${asset}"
+
+        dest_dir="${RUNNER_TEMP:-/tmp}/netdocs-bin"
+        mkdir -p "${dest_dir}"
+        dest="${dest_dir}/netdocs${ext}"
+
+        echo "Downloading ${url}"
+        curl -fsSL -o "${dest}" "${url}"
+        chmod +x "${dest}" || true
+
+        echo "path=${dest}" >> "${GITHUB_OUTPUT}"
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"
+        echo "${dest_dir}" >> "${GITHUB_PATH}"
+        "${dest}" --version || true
+
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        NETDOCS_BIN: ${{ steps.install.outputs.path }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        cmd=("${NETDOCS_BIN}" "${INPUT_COMMAND}")
+        if [ -n "${INPUT_CONFIG}" ]; then
+          cmd+=(--config "${INPUT_CONFIG}")
+        fi
+        if [ -n "${INPUT_ARGS}" ]; then
+          # shellcheck disable=SC2206
+          extra=(${INPUT_ARGS})
+          cmd+=("${extra[@]}")
+        fi
+        echo "Running: ${cmd[*]}"
+        "${cmd[@]}"

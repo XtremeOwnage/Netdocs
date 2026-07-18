@@ -137,12 +137,30 @@ Building from source instead? See [CONTRIBUTING.md](CONTRIBUTING.md) — contrib
 VS Code the **F5** launch profiles build and serve the sample site with the debugger
 attached.
 
+### GitHub Action
+
+Building in CI? Use the reusable action — no .NET setup required, it downloads the native
+binary for you:
+
+```yaml
+- uses: XtremeOwnage/Netdocs@v1
+  with:
+    command: build
+    config: appsettings.json
+    args: --prod
+    # version: 1.0.0   # pin a release, or omit for 'latest'
+```
+
+See [Publishing → Using the Netdocs GitHub Action](https://xtremeownage.github.io/Netdocs/setup/publishing/#using-the-netdocs-github-action)
+for the full input reference.
+
 ## Commands
 
 | Command | Description |
 |---|---|
 | `netdocs build` | Build the site to the configured output dir (`site_dir`). |
 | `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
+| `netdocs --version` | Print the installed Netdocs version and exit. |
 
 Options: `--config/-f`, `--port/-p`, `--clean`, `--strict`, `--prod`, `--verbose/-v`.
 

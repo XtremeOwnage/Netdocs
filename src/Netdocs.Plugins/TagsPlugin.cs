@@ -6,7 +6,7 @@ using Netdocs.Core.Content;
 namespace Netdocs.Plugins;
 
 /// <summary>Collects page tags, hides shadow tags in production, and exports tags.json.</summary>
-public sealed class TagsPlugin : IPlugin, IBuildHook
+public sealed partial class TagsPlugin : IPlugin, IBuildHook
 {
     private bool _export = true;
     private string _exportFile = "tags.json";
@@ -56,12 +56,59 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         return Task.CompletedTask;
     }
 
-    /// <summary>Replaces the <c>&lt;!-- material/tags --&gt;</c> marker with a rendered, hierarchical tag index.</summary>
+    /// <summary>
+    /// Replaces every <c>&lt;!-- material/tags --&gt;</c> marker with a rendered, hierarchical tag
+    /// index. The marker may carry an optional scope object to filter which tags are listed:
+    /// <c>&lt;!-- material/tags { include: [Foo, Bar] } --&gt;</c> or
+    /// <c>&lt;!-- material/tags { exclude: [Baz] } --&gt;</c>. A scope entry matches a tag when it
+    /// equals the tag or is a parent category of it (e.g. <c>Foo</c> matches <c>Foo</c> and
+    /// <c>Foo/Sub</c>). Each marker is rendered independently against its own scope.
+    /// </summary>
     private static void RenderTagIndex(SiteContext site, SortedDictionary<string, List<Page>> index)
     {
-        const string marker = "<!-- material/tags -->";
+        var regex = TagMarkerRegex();
+        var scopedRendered = 0;
+        var scopedEmpty = 0;
 
-        // Build a tree from '/'-separated tag paths so parents nest their children.
+        foreach (var page in site.Pages)
+        {
+            if (!page.RawMarkdown.Contains("material/tags", StringComparison.Ordinal))
+                continue;
+
+            page.RawMarkdown = regex.Replace(page.RawMarkdown, match =>
+            {
+                var cfg = match.Groups["cfg"].Success ? match.Groups["cfg"].Value : null;
+                var (include, exclude) = ParseScope(cfg);
+                var scoped = FilterIndex(index, include, exclude);
+
+                scopedRendered++;
+                if (scoped.Count == 0) scopedEmpty++;
+
+                var root = BuildTree(scoped);
+                var markdown = new System.Text.StringBuilder();
+                RenderNode(root, 0, markdown);
+                return markdown.ToString();
+            });
+        }
+
+        // A tags page with an empty index renders as a blank body, which looks like a bug. Surface
+        // why: no page declared front-matter tags, they were all hidden as shadow tags, or a
+        // marker's include/exclude scope matched nothing.
+        if (scopedEmpty > 0)
+        {
+            var log = site.LoggerFactory.CreateLogger("tags");
+            log.LogWarning(
+                "{Empty} of {Total} '<!-- material/tags -->' marker(s) produced an empty tag list; " +
+                "those sections will render blank. Add 'tags:' front matter to pages, verify the " +
+                "marker's include/exclude scope, or check shadow-tag settings.",
+                scopedEmpty, scopedRendered);
+        }
+    }
+
+    /// <summary>Builds a hierarchical <see cref="TagNode"/> tree from '/'-separated tag paths so
+    /// parent categories nest their children.</summary>
+    private static TagNode BuildTree(SortedDictionary<string, List<Page>> index)
+    {
         var root = new TagNode();
         foreach (var (tag, pages) in index)
         {
@@ -76,31 +123,65 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
             }
             node.Pages = pages;
         }
+        return root;
+    }
 
-        var markdown = new System.Text.StringBuilder();
-        RenderNode(root, 0, markdown);
+    /// <summary>Filters the tag index by optional include/exclude category lists. When
+    /// <paramref name="include"/> is non-empty a tag is kept only if it matches one of its entries;
+    /// any tag matching an <paramref name="exclude"/> entry is dropped. Matching is prefix-aware so
+    /// a category like <c>Application</c> also selects <c>Application/AWS</c>.</summary>
+    private static SortedDictionary<string, List<Page>> FilterIndex(
+        SortedDictionary<string, List<Page>> index, List<string> include, List<string> exclude)
+    {
+        if (include.Count == 0 && exclude.Count == 0)
+            return index;
 
-        var replaced = 0;
-        foreach (var page in site.Pages)
+        var result = new SortedDictionary<string, List<Page>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (tag, pages) in index)
         {
-            if (page.RawMarkdown.Contains(marker, StringComparison.Ordinal))
+            if (include.Count > 0 && !include.Any(e => MatchesCategory(tag, e))) continue;
+            if (exclude.Any(e => MatchesCategory(tag, e))) continue;
+            result[tag] = pages;
+        }
+        return result;
+    }
+
+    /// <summary>True when <paramref name="tag"/> equals <paramref name="entry"/> or sits beneath it
+    /// as a nested category (<c>entry/…</c>), case-insensitively.</summary>
+    private static bool MatchesCategory(string tag, string entry) =>
+        tag.Equals(entry, StringComparison.OrdinalIgnoreCase) ||
+        tag.StartsWith(entry + "/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Parses a marker scope object like <c>include: [A, B], exclude: [C]</c> into two
+    /// lists. Values may be bare, single- or double-quoted, and separated by commas.</summary>
+    private static (List<string> Include, List<string> Exclude) ParseScope(string? cfg)
+    {
+        var include = new List<string>();
+        var exclude = new List<string>();
+        if (string.IsNullOrWhiteSpace(cfg)) return (include, exclude);
+
+        foreach (var key in new[] { "include", "exclude" })
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(
+                cfg, key + @"\s*:\s*\[(?<vals>[^\]]*)\]",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!m.Success) continue;
+
+            var target = key == "include" ? include : exclude;
+            foreach (var raw in m.Groups["vals"].Value.Split(',', StringSplitOptions.RemoveEmptyEntries))
             {
-                page.RawMarkdown = page.RawMarkdown.Replace(marker, markdown.ToString());
-                replaced++;
+                var val = raw.Trim().Trim('"', '\'').Trim();
+                if (val.Length > 0) target.Add(val);
             }
         }
-
-        // A tags page with an empty index renders as a blank body, which looks like a bug. Surface
-        // why: either no page declared front-matter tags, or they were all hidden as shadow tags.
-        if (replaced > 0 && index.Count == 0)
-        {
-            var log = site.LoggerFactory.CreateLogger("tags");
-            log.LogWarning(
-                "Tags marker '<!-- material/tags -->' found on {Pages} page(s) but the tag index is empty; " +
-                "the tags page will be blank. Add 'tags:' front matter to pages, or check shadow-tag settings.",
-                replaced);
-        }
+        return (include, exclude);
     }
+
+    // Matches the bare marker and the scoped variant, capturing the optional { … } body.
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"<!--\s*material/tags\s*(\{(?<cfg>[^}]*)\})?\s*-->",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex TagMarkerRegex();
 
     private static void RenderNode(TagNode node, int depth, System.Text.StringBuilder markdown)
     {

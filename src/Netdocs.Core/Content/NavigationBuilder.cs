@@ -61,10 +61,17 @@ public static class NavigationBuilder
     /// section's landing page, and entries are ordered alphabetically with index pages
     /// first. A flat list (the previous behaviour) dumped every page into one level,
     /// which for large sites overflowed the header nav.
+    ///
+    /// Honours awesome-pages <c>.pages</c> files found alongside the content: a
+    /// <c>title:</c> overrides the section label, <c>hide: true</c> drops the folder
+    /// from the nav, and a <c>nav:</c> list orders the children (with <c>...</c> for
+    /// "everything else").
     /// </summary>
     private static IReadOnlyList<NavNode> AutoNav(IReadOnlyList<Page> pages)
     {
-        var root = new Dir("");
+        var docsRoot = DocsRoot(pages);
+
+        var root = new Dir("", "");
         foreach (var page in pages)
         {
             var parts = page.RelativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -74,7 +81,7 @@ public static class NavigationBuilder
             dir.Pages.Add(page);
         }
 
-        var nodes = BuildLevel(root).ToList();
+        var nodes = BuildLevel(root, docsRoot).ToList();
 
         // A top-level index/README page becomes a plain landing link (e.g. "Home"),
         // not a section, so it isn't swallowed by BuildLevel's index handling.
@@ -85,19 +92,37 @@ public static class NavigationBuilder
         return nodes;
     }
 
+    /// <summary>The absolute docs directory, derived from a page's source and relative paths.</summary>
+    private static string? DocsRoot(IReadOnlyList<Page> pages)
+    {
+        foreach (var page in pages)
+        {
+            if (string.IsNullOrEmpty(page.SourcePath) || string.IsNullOrEmpty(page.RelativePath))
+                continue;
+            var src = page.SourcePath.Replace('\\', '/');
+            var rel = page.RelativePath.Replace('\\', '/');
+            if (src.EndsWith(rel, StringComparison.OrdinalIgnoreCase))
+                return src[..^rel.Length].TrimEnd('/');
+        }
+        return null;
+    }
+
     /// <summary>Convert a directory's sub-folders and (non-index) pages into nav nodes,
-    /// interleaved and ordered alphabetically by name.</summary>
-    private static List<NavNode> BuildLevel(Dir dir)
+    /// interleaved and ordered alphabetically by name (or by the folder's <c>.pages</c> nav list).</summary>
+    private static List<NavNode> BuildLevel(Dir dir, string? docsRoot)
     {
         var entries = new List<(string Key, NavNode Node)>();
 
         foreach (var sub in dir.Subs.Values)
         {
-            var children = BuildLevel(sub);
+            var meta = PagesMeta.Load(docsRoot, sub.RelPath);
+            if (meta.Hide) continue; // awesome-pages `hide: true`
+
+            var children = BuildLevel(sub, docsRoot);
             var index = sub.Pages.FirstOrDefault(p => IsIndexPage(p.RelativePath));
             var section = new NavNode
             {
-                Title = Titleize(sub.Name),
+                Title = !string.IsNullOrEmpty(meta.Title) ? meta.Title! : Titleize(sub.Name),
                 Children = children,
                 SectionIndex = index,
                 Icon = index is not null ? PageIcon(index) : null,
@@ -111,10 +136,54 @@ public static class NavigationBuilder
             entries.Add((key, new NavNode { Title = page.Title, Page = page, Icon = PageIcon(page) }));
         }
 
-        return entries
-            .OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(e => e.Node)
-            .ToList();
+        var dirMeta = PagesMeta.Load(docsRoot, dir.RelPath);
+        return Order(entries, dirMeta.Nav);
+    }
+
+    /// <summary>Order a level's entries. With no <c>.pages</c> nav list, sort
+    /// alphabetically by name; otherwise follow the list, expanding <c>...</c> to the
+    /// remaining entries and appending anything the list omitted (so pages are never lost).</summary>
+    private static List<NavNode> Order(List<(string Key, NavNode Node)> entries, IReadOnlyList<string>? navList)
+    {
+        if (navList is null || navList.Count == 0)
+        {
+            return entries
+                .OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(e => e.Node)
+                .ToList();
+        }
+
+        var remaining = entries.ToList();
+        var result = new List<NavNode>();
+        var restAt = -1;
+
+        foreach (var raw in navList)
+        {
+            var name = raw.Trim();
+            if (name == "...")
+            {
+                restAt = result.Count;
+                continue;
+            }
+
+            var key = name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? name[..^3] : name;
+            if (IsIndexName(key)) continue; // the index is the section landing, not a child
+
+            var i = remaining.FindIndex(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0)
+            {
+                result.Add(remaining[i].Node);
+                remaining.RemoveAt(i);
+            }
+        }
+
+        // Whatever the list didn't mention goes at the `...` marker (or the end),
+        // in default alphabetical order.
+        var rest = remaining.OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase).Select(e => e.Node);
+        if (restAt >= 0) result.InsertRange(restAt, rest);
+        else result.AddRange(rest);
+
+        return result;
     }
 
     /// <summary>Turn a folder/file slug into a human-readable section title
@@ -127,17 +196,69 @@ public static class NavigationBuilder
         return words.Length > 0 ? string.Join(' ', words) : slug;
     }
 
+    private static bool IsIndexName(string name) =>
+        name.Equals("index", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("README", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Minimal reader for awesome-pages <c>.pages</c> files (title / hide / nav list).</summary>
+    private sealed class PagesMeta
+    {
+        public string? Title { get; private init; }
+        public bool Hide { get; private init; }
+        public IReadOnlyList<string>? Nav { get; private init; }
+
+        private static readonly PagesMeta Empty = new();
+
+        public static PagesMeta Load(string? docsRoot, string relDir)
+        {
+            if (string.IsNullOrEmpty(docsRoot)) return Empty;
+            var path = Path.Combine(docsRoot, relDir.Replace('/', Path.DirectorySeparatorChar), ".pages");
+            if (!File.Exists(path)) return Empty;
+
+            string? title = null;
+            var hide = false;
+            List<string>? nav = null;
+            var inNav = false;
+
+            foreach (var line in File.ReadLines(path))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+
+                if (inNav)
+                {
+                    if (trimmed.StartsWith("- "))
+                    {
+                        (nav ??= []).Add(trimmed[2..].Trim().Trim('"', '\''));
+                        continue;
+                    }
+                    inNav = false; // a non-list line ends the nav block
+                }
+
+                if (trimmed.StartsWith("title:", StringComparison.OrdinalIgnoreCase))
+                    title = trimmed[6..].Trim().Trim('"', '\'');
+                else if (trimmed.StartsWith("hide:", StringComparison.OrdinalIgnoreCase))
+                    hide = trimmed[5..].Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+                else if (trimmed.StartsWith("nav:", StringComparison.OrdinalIgnoreCase))
+                    inNav = true;
+            }
+
+            return new PagesMeta { Title = title, Hide = hide, Nav = nav };
+        }
+    }
+
     /// <summary>A node in the directory tree used to build the auto-nav.</summary>
-    private sealed class Dir(string name)
+    private sealed class Dir(string name, string relPath)
     {
         public string Name { get; } = name;
+        public string RelPath { get; } = relPath;
         public SortedDictionary<string, Dir> Subs { get; } = new(StringComparer.OrdinalIgnoreCase);
         public List<Page> Pages { get; } = [];
 
         public Dir Sub(string childName)
         {
             if (!Subs.TryGetValue(childName, out var d))
-                Subs[childName] = d = new Dir(childName);
+                Subs[childName] = d = new Dir(childName, RelPath.Length == 0 ? childName : RelPath + "/" + childName);
             return d;
         }
     }

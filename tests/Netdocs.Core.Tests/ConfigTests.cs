@@ -191,4 +191,63 @@ public class NavigationTests
         Assert.Single(iam.Children); // roles.md, index promoted out
         Assert.Equal("aws/iam/roles/", iam.Children[0].Url);
     }
+
+    [Fact]
+    public void AutoNav_HonoursAwesomePagesMetadata()
+    {
+        // Build a real docs tree on disk with awesome-pages `.pages` files: a title
+        // override, a hidden folder, and an explicit child ordering with `...`.
+        var docsRoot = Path.Combine(Path.GetTempPath(), "ndpages-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            void Write(string rel, string body)
+            {
+                var full = Path.Combine(docsRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+                File.WriteAllText(full, body);
+            }
+
+            Write("aws/.pages", "title: AWS\nnav:\n  - index.md\n  - zebra.md\n  - ...\n");
+            Write("aws/index.md", "");
+            Write("aws/zebra.md", "");
+            Write("aws/alpha.md", "");
+            Write("aws/mango.md", "");
+            Write("projects/.pages", "hide: true\n");
+            Write("projects/secret.md", "");
+
+            Netdocs.Abstractions.Page DP(string rel) =>
+                new()
+                {
+                    SourcePath = Path.Combine(docsRoot, rel.Replace('/', Path.DirectorySeparatorChar)),
+                    RelativePath = rel,
+                    Url = rel.Replace(".md", "/"),
+                    Title = Path.GetFileNameWithoutExtension(rel),
+                };
+
+            var pages = new List<Netdocs.Abstractions.Page>
+            {
+                DP("aws/index.md"),
+                DP("aws/zebra.md"),
+                DP("aws/alpha.md"),
+                DP("aws/mango.md"),
+                DP("projects/secret.md"),
+            };
+
+            var nav = Netdocs.Core.Content.NavigationBuilder.Build(new Netdocs.Abstractions.SiteConfig(), pages);
+
+            // `hide: true` drops the projects section entirely.
+            Assert.DoesNotContain(nav, n => n.Title == "Projects");
+
+            // `title: AWS` overrides the titleised "Aws".
+            var aws = Assert.Single(nav, n => n.Title == "AWS");
+
+            // Ordering: zebra first (explicit), then the rest alphabetically (alpha, mango).
+            // index.md is the section landing, not a child.
+            Assert.Equal(new[] { "zebra", "alpha", "mango" }, aws.Children.Select(c => c.Title).ToArray());
+        }
+        finally
+        {
+            Directory.Delete(docsRoot, recursive: true);
+        }
+    }
 }

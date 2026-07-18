@@ -32,7 +32,7 @@ public sealed class TemplateEngine
         var globals = new ScriptObject();
         foreach (var (key, value) in model)
             globals[key] = value;
-        TemplateFunctions.Register(globals);
+        TemplateFunctions.Register(globals, model);
         context.PushGlobal(globals);
         return template.Render(context);
     }

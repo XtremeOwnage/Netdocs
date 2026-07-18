@@ -41,6 +41,7 @@ public static class JsonConfigLoader
             Exclude = StringList(root.Get("exclude")),
             Extra = root.Get("extra").AsMap(),
             Slugify = ParseSlugify(root.Get("slugify").AsMap()),
+            SlugifyUrls = root.Get("slugify").AsMap().Get("urls").AsBool(false),
             Deploy = ParseDeploy(root.Get("deploy").AsMap()),
             Optimize = ParseOptimize(root.Get("optimize").AsMap()),
             Validation = ParseValidation(root.Get("validation").AsMap()),

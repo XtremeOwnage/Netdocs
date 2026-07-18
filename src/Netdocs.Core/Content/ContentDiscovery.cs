@@ -46,7 +46,7 @@ public sealed class ContentDiscovery(SiteConfig config, BuildOptions options, IL
         var raw = File.ReadAllText(absolutePath);
         var (meta, body) = FrontMatter.Split(raw);
 
-        var url = UrlFor(relative);
+        var url = UrlFor(relative, config.SlugifyUrls ? config.Slugify : null);
         var page = new Page
         {
             SourcePath = absolutePath,
@@ -70,18 +70,24 @@ public sealed class ContentDiscovery(SiteConfig config, BuildOptions options, IL
         return page;
     }
 
-    /// <summary>Directory-style URLs: foo/bar.md -> foo/bar/ ; index.md -> its dir.</summary>
-    public static string UrlFor(string relative)
+    /// <summary>Directory-style URLs: foo/bar.md -> foo/bar/ ; index.md -> its dir.
+    /// When <paramref name="slugify"/> is supplied, each path segment is slugified
+    /// (e.g. <c>Openshift Registry Setup.md</c> -> <c>openshift-registry-setup/</c>) so the
+    /// resulting URL is free of spaces and other characters that static hosts must
+    /// percent-encode.</summary>
+    public static string UrlFor(string relative, SlugifyConfig? slugify = null)
     {
         var withoutExt = relative[..^Path.GetExtension(relative).Length];
         var segments = withoutExt.Split('/');
-        if (segments[^1].Equals("index", StringComparison.OrdinalIgnoreCase)
-            || segments[^1].Equals("README", StringComparison.OrdinalIgnoreCase))
-        {
-            var dir = string.Join('/', segments[..^1]);
-            return dir.Length == 0 ? "" : dir + "/";
-        }
-        return withoutExt + "/";
+        var isIndex = segments[^1].Equals("index", StringComparison.OrdinalIgnoreCase)
+            || segments[^1].Equals("README", StringComparison.OrdinalIgnoreCase);
+
+        var urlSegments = isIndex ? segments[..^1] : segments;
+        if (slugify is not null)
+            urlSegments = [.. urlSegments.Select(s => Slug.Make(s, slugify))];
+
+        var dir = string.Join('/', urlSegments);
+        return dir.Length == 0 ? "" : dir + "/";
     }
 
     public static string OutputFileFor(string url)

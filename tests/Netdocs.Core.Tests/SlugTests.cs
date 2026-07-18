@@ -1,5 +1,4 @@
 using Netdocs.Abstractions;
-using Netdocs.Plugins;
 using Xunit;
 
 namespace Netdocs.Core.Tests;

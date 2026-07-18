@@ -19,6 +19,23 @@ public class UrlTests
         => Assert.Equal(expected, ContentDiscovery.UrlFor(relative));
 
     [Theory]
+    [InlineData("index.md", "")]
+    [InlineData("Openshift Registry Setup.md", "openshift-registry-setup/")]
+    [InlineData("cluster-setup/Deploying MetalLB.md", "cluster-setup/deploying-metallb/")]
+    [InlineData("Applications/Kubernetes/index.md", "applications/kubernetes/")]
+    [InlineData("Guide_One/Step Two.md", "guide-one/step-two/")]
+    public void UrlFor_WithSlugify_SlugifiesSegments(string relative, string expected)
+        => Assert.Equal(expected, ContentDiscovery.UrlFor(relative, new SlugifyConfig()));
+
+    [Fact]
+    public void UrlFor_WithSlugify_HonorsCaseAndSeparator()
+        => Assert.Equal(
+            "Openshift_Registry_Setup/",
+            ContentDiscovery.UrlFor(
+                "Openshift Registry Setup.md",
+                new SlugifyConfig { Case = "none", Separator = "_" }));
+
+    [Theory]
     [InlineData("", "")]
     [InlineData("about/", "../")]
     [InlineData("blog/posts/hello/", "../../../")]

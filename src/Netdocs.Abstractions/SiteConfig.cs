@@ -43,6 +43,14 @@ public sealed class SiteConfig
     /// <summary>Controls how titles/ids are turned into URL slugs (blog, categories, authors, tags).</summary>
     public SlugifyConfig Slugify { get; set; } = new();
 
+    /// <summary>When true, slugify content file paths into their output URLs (e.g.
+    /// <c>Openshift Registry Setup.md</c> → <c>openshift-registry-setup/</c>) using the
+    /// <see cref="Slugify"/> settings. Off by default to keep URLs identical to source
+    /// filenames (mkdocs-compatible). Turn on to guarantee clean, space-free URLs that
+    /// static hosts (S3/CloudFront) can serve without percent-encoding issues. Internal
+    /// <c>.md</c> links are rewritten to the slugified targets automatically.</summary>
+    public bool SlugifyUrls { get; set; }
+
     /// <summary>Behaviour of the abbreviations feature (<c>&lt;abbr&gt;</c> tooltips).</summary>
     public AbbreviationsConfig Abbreviations { get; set; } = new();
 

@@ -113,9 +113,35 @@ produced by a configurable slugifier. Add a `slugify` block to control it:
 | `case` | `lower` | Letter casing: `lower`, `upper`, or `none` (preserve). |
 | `separator` | `-` | String inserted between words (e.g. `_` or `.`). |
 | `ascii` | `false` | When `true`, drop non-ASCII letters/digits instead of keeping them. |
+| `urls` | `false` | When `true`, slugify **content page URLs** too (see below). |
 
 With the defaults, `"Hello World!"` becomes `hello-world`. Set `"separator": "_"` to get
 `hello_world`, or `"case": "none"` to keep the original casing.
+
+### Slugifying content URLs
+
+By default a content file maps to a URL that mirrors its path exactly, so
+`Openshift Registry Setup.md` becomes `Openshift%20Registry%20Setup/`. Spaces (and other
+characters that must be percent-encoded) can trip up static hosts — for example an S3 +
+CloudFront site may fail to resolve `%20` paths and return `404`.
+
+Set `"urls": true` to slugify every path segment of content URLs using the same `case`,
+`separator`, and `ascii` rules:
+
+```json
+{
+  "Netdocs": {
+    "slugify": {
+      "urls": true
+    }
+  }
+}
+```
+
+With this enabled, `docs/cluster-setup/Openshift Registry Setup.md` is published at
+`cluster-setup/openshift-registry-setup/`. Internal `*.md` links are rewritten to the
+slugified targets automatically, so cross-page links keep working. Leaving `urls` off (the
+default) preserves mkdocs-compatible, filename-based URLs.
 
 ## Deployment
 

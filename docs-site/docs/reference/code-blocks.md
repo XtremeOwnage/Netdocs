@@ -205,8 +205,8 @@ stays un-highlighted.
 ## Mermaid diagrams
 
 A fence tagged `mermaid` is emitted as a diagram container and rendered in the browser by
-[Mermaid](https://mermaid.js.org/) — see the [Mermaid diagrams](markdown-extensions.md) notes for
-details.
+[Mermaid](https://mermaid.js.org/) — see the dedicated [Mermaid diagrams](mermaid.md) page for
+all supported chart types and tips.
 
 ````markdown
 ```mermaid

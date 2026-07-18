@@ -78,11 +78,13 @@ public sealed class BuildEngine(
 
         // 6. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
         _log.LogDebug("Rendering markdown for {Count} pages (parallel)", site.Pages.Count);
+        var linkMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in site.Pages) linkMap.TryAdd(p.RelativePath.Replace('\\', '/'), p.Url);
         using var pipelines = new ThreadLocal<MarkdownPipeline>(
             () => MarkdownPipelineFactory.Build(site, host.MarkdigContributors), trackAllValues: false);
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
         {
-            var renderer = new DocumentRenderer(pipelines.Value!);
+            var renderer = new DocumentRenderer(pipelines.Value!, linkMap);
             renderer.Render(page);
         });
 

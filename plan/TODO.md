@@ -6,9 +6,10 @@ existing `Web/` blog.
 
 ## High priority (parity)
 - [ ] **Social cards** (`social` plugin): OG image generation. Choose ImageSharp vs SkiaSharp. Cache by content hash. Prod-only.
-- [ ] **Server-side syntax highlighting** parity with Pygments/Material (currently emits `.highlight > pre > code` with a language class only; no token spans/colors). Options: port a highlighter or ship a client-side one styled to match Material.
-- [ ] **Search parity**: currently a lightweight client index + custom search JS. Evaluate porting Material's lunr worker + copying its search UI for exact behavior (suggest/highlight/share). Index schema already matches Material.
-- [ ] **Real Material CSS/JS assets**: current theme is a functional Material-like stylesheet. Copy Material's compiled bundles for pixel parity (respect license/attribution) or keep the lightweight theme.
+- [ ] **Server-side syntax highlighting** parity with Pygments/Material (currently emits `.highlight > pre > code` with a language class only; no token spans/colors). Material CSS styles the container, but tokens aren't colored. Options: port a highlighter or ship a client-side one styled to match Material.
+- [x] **Search parity**: DONE — vendored Material's compiled lunr search worker + UI; `Search` plugin emits the Material index schema (config.fields/pipeline/separator + per-section docs). Verified relevant ranked results.
+- [x] **Real Material CSS/JS assets**: DONE — vendored Material's compiled `main`/`palette` CSS + `bundle.js` + search worker + lunr under `assets/vendor/material` (MIT attribution + `THIRD_PARTY_LICENSES/`). Base template ported to Material DOM.
+- [x] **Relative `*.md` link rewriting** in content to output URLs (mkdocs-style). DONE (root-relative). Note: assumes site served at domain root.
 - [ ] **Jinja→Scriban override porting**: `docs/overrides/**` (Material Jinja) is ignored. Port `partials/header.html` and any others to Scriban so custom_dir works.
 
 ## Markdown extension gaps

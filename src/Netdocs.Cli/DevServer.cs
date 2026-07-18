@@ -45,8 +45,10 @@ public sealed class DevServer(
     private async Task ServeContent(HttpContext context, RequestDelegate next)
     {
         var path = context.Request.Path.Value ?? "/";
+        if (path.StartsWith("/__livereload", StringComparison.Ordinal)) { await next(context); return; }
         var relative = path.TrimStart('/');
         if (relative.Length == 0 || relative.EndsWith('/')) relative += "index.html";
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
 
         var file = Path.Combine(config.AbsoluteSiteDir, relative.Replace('/', Path.DirectorySeparatorChar));
         if (Directory.Exists(file)) file = Path.Combine(file, "index.html");

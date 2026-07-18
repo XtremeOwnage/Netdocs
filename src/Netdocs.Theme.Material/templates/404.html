@@ -3,13 +3,18 @@
 <head>
   <meta charset="utf-8">
   <title>404 - {{ config.site_name }}</title>
-  <link rel="stylesheet" href="{{ base_url }}assets/stylesheets/netdocs.css">
+  <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
+  <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
 </head>
-<body>
-  <div class="md-container md-404">
-    <h1>404</h1>
-    <p>The page you are looking for could not be found.</p>
-    <p><a href="{{ base_url }}">Return home</a></p>
+<body data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}">
+  <div class="md-container">
+    <main class="md-main"><div class="md-main__inner md-grid"><div class="md-content">
+      <article class="md-content__inner md-typeset" style="text-align:center">
+        <h1 style="font-size:4rem;margin:2rem 0 0">404</h1>
+        <p>The page you are looking for could not be found.</p>
+        <p><a href="{{ base_url }}">Return home</a></p>
+      </article>
+    </div></div></main>
   </div>
 </body>
 </html>

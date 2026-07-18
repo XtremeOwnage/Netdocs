@@ -1,0 +1,13 @@
+<nav class="md-nav md-nav--primary{{ if features | array.contains "navigation.tabs" }} md-nav--lifted{{ end }}" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="{{ base_url }}" title="{{ config.site_name }}" class="md-nav__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
+      {{~ if config.theme.logo ~}}<img src="{{ base_url }}{{ strip_slash config.theme.logo }}" alt="logo">{{~ end ~}}
+    </a>
+    {{ config.site_name }}
+  </label>
+  <ul class="md-nav__list" data-md-scrollfix>
+    {{~ for node in nav ~}}
+      {{ render_nav node ("__nav_" + (for.index + 1)) 1 }}
+    {{~ end ~}}
+  </ul>
+</nav>

@@ -6,3 +6,6 @@ obj/
 # Built sites live next to their mkdocs.yml
 /**/site/
 .cache/
+
+# Ignore the planning directories.
+plan/

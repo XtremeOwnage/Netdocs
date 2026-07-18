@@ -33,8 +33,14 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
                 docs.Add(section with { Tags = tags });
         }
 
+        var fields = new Dictionary<string, object?>
+        {
+            ["title"] = new Dictionary<string, object?> { ["boost"] = 1000.0 },
+            ["text"] = new Dictionary<string, object?> { ["boost"] = 1.0 },
+            ["tags"] = new Dictionary<string, object?> { ["boost"] = 1000000.0 },
+        };
         var index = new SearchIndex(
-            new SearchConfig([_language], "[\\s\\-]+", ["stemmer"]),
+            new SearchConfig([_language], "[\\s\\-]+", ["stemmer", "stopWordFilter", "trimmer"], fields),
             docs);
 
         var dir = Path.Combine(site.Config.AbsoluteSiteDir, "search");
@@ -84,7 +90,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
 }
 
 public sealed record SearchIndex(SearchConfig Config, IReadOnlyList<SearchDoc> Docs);
-public sealed record SearchConfig(IReadOnlyList<string> Lang, string Separator, IReadOnlyList<string> Pipeline);
+public sealed record SearchConfig(IReadOnlyList<string> Lang, string Separator, IReadOnlyList<string> Pipeline, IReadOnlyDictionary<string, object?> Fields);
 public sealed record SearchDoc(string Location, string Title, string Text, string[] Tags);
 
 internal static class SearchJson

@@ -1,0 +1,11 @@
+# Treat vendored third-party assets as binary (no EOL normalization)
+src/Netdocs.Theme.Material/assets/vendor/** -text
+*.min.js -text
+*.min.css -text
+
+# Normalize source line endings
+*.cs text
+*.csproj text
+*.json text
+*.md text
+*.html text

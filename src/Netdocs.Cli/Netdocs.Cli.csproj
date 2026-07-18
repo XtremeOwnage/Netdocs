@@ -23,7 +23,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\Netdocs.Theme.Material\templates\**\*" LinkBase="theme\templates" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\Netdocs.Theme.Material\assets\**\*" LinkBase="theme\assets" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Netdocs.Theme.Material\templates\**\*" LinkBase="theme/templates" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Netdocs.Theme.Material\assets\**\*" LinkBase="theme/assets" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

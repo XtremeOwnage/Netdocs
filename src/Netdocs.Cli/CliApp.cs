@@ -21,6 +21,8 @@ public static class CliApp
         {
             case "import":
                 return await ImportAsync(args);
+            case "new":
+                return await NewCommand.RunAsync(args);
             case "--help" or "-h" or "help":
                 return PrintHelp();
             case "--version" or "-V" or "version":
@@ -277,11 +279,12 @@ public static class CliApp
               netdocs deploy [options]    Build, then publish to the configured deploy target
               netdocs serve [options]     Serve with live reload
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
+              netdocs new [path]           Scaffold an annotated appsettings.json
               netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
               netdocs --version            Print the Netdocs version and exit
 
-            Import options:
-                  --out <path>      Output appsettings.json path (default next to mkdocs.yml)
+            New / import options:
+                  --out <path>      Output appsettings.json path (import; default next to mkdocs.yml)
                   --force           Overwrite an existing appsettings.json
 
             Options:

@@ -17,6 +17,11 @@ my-site/
 
 ## 2. Write `appsettings.json`
 
+!!! tip "Scaffold it instead"
+    Run **`netdocs new`** to generate a fully-annotated `appsettings.json` with every common
+    option, sane defaults, and links back to these docs — then edit to taste. See the
+    [`netdocs new`](../reference/cli.md#netdocs-new) reference.
+
 The site is configured under the `Netdocs` section:
 
 ```json

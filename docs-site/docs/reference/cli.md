@@ -4,7 +4,7 @@ title: CLI reference
 
 # CLI reference
 
-The `netdocs` executable exposes four commands: `build`, `serve`, `watch`, and `import`.
+The `netdocs` executable exposes these commands: `build`, `serve`, `watch`, `new`, and `import`.
 
 ```text
 netdocs - static site generator
@@ -13,6 +13,7 @@ Usage:
   netdocs build [options]     Build the site to the output directory
   netdocs serve [options]     Serve with live reload
   netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
+  netdocs new [path]           Scaffold an annotated appsettings.json
   netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
 ```
 
@@ -23,8 +24,30 @@ Usage:
 | `netdocs build` | Build the site to the configured output dir (`siteDir`). |
 | `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
 | `netdocs watch` | Long-running publish daemon: polls a git remote and rebuilds when the tracked branch advances. |
+| `netdocs new` | Scaffold a fully-annotated `appsettings.json` (all common options + doc links). |
 | `netdocs import` | Convert an existing `mkdocs.yml` into a Netdocs `appsettings.json`. |
 | `netdocs --help` | Print usage. |
+
+### `netdocs new`
+
+Writes a ready-to-edit `appsettings.json` with every common setting, sane defaults, and inline
+links back to this documentation. The file is JSONC — `//` comments and trailing commas are kept
+and parsed at build time, so you can leave the guidance in place.
+
+```bash
+netdocs new                    # writes ./appsettings.json
+netdocs new docs/appsettings.json
+netdocs new --force            # overwrite an existing file
+```
+
+Starting from scratch:
+
+```bash
+netdocs new
+mkdir docs && echo "# Home" > docs/index.md
+netdocs serve
+```
+
 
 If no command is given, `build` is assumed.
 

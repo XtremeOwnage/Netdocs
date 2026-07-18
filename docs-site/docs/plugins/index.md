@@ -59,6 +59,28 @@ annotate outbound links (e.g. affiliate disclosures). A few plugins are intentio
 Ordering only matters for Markdown preprocessors (they transform source text in sequence);
 see each plugin page for its order. Plugins that emit assets or pages are order-independent.
 
+## Disabling a plugin per page
+
+Every configured plugin runs on every page by default. To turn one off (or back on) for a single
+page, use its front matter. Two forms are supported — the map form wins, so it can re-enable a
+plugin that a list disabled:
+
+```yaml
+---
+title: Raw template snippet
+plugins:
+  macros: false        # don't run the macros preprocessor on this page
+disable_plugins:
+  - table-reader       # list form: turn these off
+---
+```
+
+This is handy for pages that contain literal `{{ … }}` (which the [macros](macros.md) plugin would
+otherwise try to expand), or to skip [table-reader](table-reader.md)/[snippets](snippets.md) on a
+page that shouldn't be transformed. Only per-page hooks are gated: Markdown **preprocessors** and
+per-page **build hooks** (e.g. search indexing). Global contributions — Markdig extensions and
+content generators — are not page-scoped and always apply.
+
 ## Built-in plugins
 
 | Plugin | Purpose |

@@ -79,7 +79,10 @@ public sealed class BuildEngine(
         {
             var md = page.RawMarkdown;
             foreach (var pre in host.Preprocessors)
+            {
+                if (pre is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
                 md = await pre.ProcessAsync(page, md, site, ct);
+            }
             page.ProcessedMarkdown = md;
         }
 
@@ -156,7 +159,10 @@ public sealed class BuildEngine(
         // 9. OnPageRendered hooks (search docs, etc.).
         foreach (var hook in host.BuildHooks)
             foreach (var page in site.Pages)
+            {
+                if (hook is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
                 await hook.OnPageRenderedAsync(page, site, ct);
+            }
 
         // 10. Copy assets (theme + docs static + plugin-registered).
         await AssetPipeline.CopyAllAsync(site, host.Assets, ct);

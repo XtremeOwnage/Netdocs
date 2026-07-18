@@ -84,14 +84,15 @@ see each plugin page for its order. Plugins that emit assets or pages are order-
 
 ## How plugins hook into the build
 
-A plugin implements `IPlugin` (with `Configure`) plus any of these opt-in interfaces:
+A plugin implements `IPlugin` (with `Configure`) plus any of the opt-in hook interfaces
+(`IMarkdownPreprocessor`, `IMarkdigContributor`, `IContentGenerator`, `IBuildHook`,
+`INavigationFilter`, …). Rather than duplicate that here, see:
 
-| Interface | Hook |
-|---|---|
-| `IMarkdownPreprocessor` | Transform raw Markdown before parsing. |
-| `IMarkdigContributor` | Contribute Markdig extensions to the pipeline. |
-| `IContentGenerator` | Emit virtual pages (blog lists, tag pages, archives). |
-| `IBuildHook` | `OnBuildStart` / `OnPageRendered` / `OnBuildComplete`. |
-| `INavigationFilter` | Decide whether a discovered page is included. |
+- **[Build lifecycle](../development/lifecycle.md)** — a visual diagram of *where* each hook runs in
+  the pipeline, so you know which interface to implement for a given job.
+- **[Events & callbacks](../development/events-and-callbacks.md)** — the full reference for every
+  hook interface, its method signatures, ordering, and when it fires.
+- **[External plugins](../development/external-plugins.md)** — how to ship a plugin as a separate
+  DLL and load it via config.
 
 See the source under `src/Netdocs.Plugins/` for reference implementations.

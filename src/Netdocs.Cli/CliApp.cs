@@ -46,6 +46,7 @@ public static class CliApp
             return command switch
             {
                 "build" => await BuildAsync(configPath, opts, loggerFactory, warnings),
+                "deploy" => await DeployAsync(configPath, opts, loggerFactory, warnings),
                 "serve" => await ServeAsync(configPath, opts, loggerFactory),
                 "watch" => await WatchAsync(configPath, opts, loggerFactory),
                 "--help" or "-h" or "help" => PrintHelp(),
@@ -71,7 +72,35 @@ public static class CliApp
             return 1;
         }
         log.LogInformation("Output: {Dir}", config.AbsoluteSiteDir);
+
+        // Optional post-build deploy when requested with --deploy (or a non-'none' deploy target and the deploy command).
+        if (opts.Deploy && !config.Deploy.Target.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            var deployer = new Netdocs.Core.Deploy.Deployer(config, loggerFactory.CreateLogger("deploy"));
+            return await deployer.DeployAsync();
+        }
         return 0;
+    }
+
+    private static async Task<int> DeployAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory, WarningCounter warnings)
+    {
+        // 'deploy' always builds first, then publishes to the configured target.
+        var (config, buildOptions) = LoadConfig(configPath, opts, serve: false);
+        var log = loggerFactory.CreateLogger("netdocs");
+        if (config.Deploy.Target.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            log.LogError("No deploy target configured. Set 'deploy.target' to 'filesystem' or 'git' in appsettings.json.");
+            return 1;
+        }
+        var engine = new BuildEngine(config, buildOptions, BuildRegistry(), loggerFactory);
+        await engine.BuildAsync();
+        if (buildOptions.Strict && warnings.Count > 0)
+        {
+            log.LogError("Aborting deploy: {Count} warning(s) treated as errors (strict mode).", warnings.Count);
+            return 1;
+        }
+        var deployer = new Netdocs.Core.Deploy.Deployer(config, loggerFactory.CreateLogger("deploy"));
+        return await deployer.DeployAsync();
     }
 
     private static async Task<int> ServeAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory)
@@ -168,6 +197,7 @@ public static class CliApp
                 case "--branch" when i + 1 < args.Length: opts.Branch = args[++i]; break;
                 case "--interval" when i + 1 < args.Length && int.TryParse(args[i + 1], out var iv): opts.Interval = iv; i++; break;
                 case "--once": opts.Once = true; break;
+                case "--deploy": opts.Deploy = true; break;
                 case "--strict": opts.Strict = true; break;
                 case "--prod" or "--production": opts.Production = true; break;
                 case "--verbose" or "-v": opts.Verbose = true; break;
@@ -183,6 +213,7 @@ public static class CliApp
 
             Usage:
               netdocs build [options]     Build the site to the output directory
+              netdocs deploy [options]    Build, then publish to the configured deploy target
               netdocs serve [options]     Serve with live reload
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
 
@@ -193,6 +224,7 @@ public static class CliApp
                   --no-cache        Ignore the incremental render cache (full re-render)
                   --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
+                  --deploy          After 'build', publish to the configured deploy target
                   --remote <name>   Git remote to watch (watch; default origin)
                   --branch <name>   Git branch to track (watch; default current branch)
                   --interval <sec>  Poll interval in seconds (watch; default 30)
@@ -219,6 +251,7 @@ internal sealed class CliOptions
     public string? Branch { get; set; }
     public int Interval { get; set; } = 30;
     public bool Once { get; set; }
+    public bool Deploy { get; set; }
     public bool Strict { get; set; }
     public bool Production { get; set; }
     public bool Verbose { get; set; }

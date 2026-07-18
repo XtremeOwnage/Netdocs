@@ -38,6 +38,12 @@ public sealed class SiteConfig
     /// <summary>Controls how titles/ids are turned into URL slugs (blog, categories, authors, tags).</summary>
     public SlugifyConfig Slugify { get; set; } = new();
 
+    /// <summary>Optional post-build deployment target (filesystem copy or git branch publish).</summary>
+    public DeployConfig Deploy { get; set; } = new();
+
+    /// <summary>Output optimization toggles (HTML minification, etc.).</summary>
+    public OptimizeConfig Optimize { get; set; } = new();
+
     /// <summary>Absolute path to the project root (folder containing mkdocs.yml).</summary>
     public string ProjectRoot { get; set; } = "";
 
@@ -86,6 +92,42 @@ public sealed class SlugifyConfig
 
     /// <summary>When true, drop non-ASCII letters/digits entirely instead of keeping them.</summary>
     public bool Ascii { get; set; }
+}
+
+/// <summary>
+/// Post-build deployment. <see cref="Target"/> selects the publish mechanism:
+/// <c>none</c> (default), <c>filesystem</c> (copy output to <see cref="Path"/>), or
+/// <c>git</c> (commit and push the output to <see cref="Branch"/> on <see cref="Remote"/>).
+/// </summary>
+public sealed class DeployConfig
+{
+    /// <summary><c>none</c> | <c>filesystem</c> | <c>git</c>.</summary>
+    public string Target { get; set; } = "none";
+
+    /// <summary>Destination directory for the <c>filesystem</c> target.</summary>
+    public string? Path { get; set; }
+
+    /// <summary>When true, delete files at the destination that the build did not produce.</summary>
+    public bool Clean { get; set; } = true;
+
+    /// <summary>Branch to publish for the <c>git</c> target (default <c>gh-pages</c>).</summary>
+    public string Branch { get; set; } = "gh-pages";
+
+    /// <summary>Remote to push to for the <c>git</c> target (default <c>origin</c>).</summary>
+    public string Remote { get; set; } = "origin";
+
+    /// <summary>Commit message template for the <c>git</c> target.</summary>
+    public string Message { get; set; } = "Deploy docs";
+
+    /// <summary>When true (default), push the branch to the remote after committing.</summary>
+    public bool Push { get; set; } = true;
+}
+
+/// <summary>Output optimization toggles applied while writing rendered pages.</summary>
+public sealed class OptimizeConfig
+{
+    /// <summary>Collapse insignificant whitespace/comments in emitted HTML.</summary>
+    public bool MinifyHtml { get; set; }
 }
 
 /// <summary>An authored navigation entry: either a link to a page or a titled section.</summary>

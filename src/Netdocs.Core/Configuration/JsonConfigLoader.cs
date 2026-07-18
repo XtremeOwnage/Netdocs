@@ -40,8 +40,26 @@ public static class JsonConfigLoader
             Exclude = StringList(root.Get("exclude")),
             Extra = root.Get("extra").AsMap(),
             Slugify = ParseSlugify(root.Get("slugify").AsMap()),
+            Deploy = ParseDeploy(root.Get("deploy").AsMap()),
+            Optimize = ParseOptimize(root.Get("optimize").AsMap()),
         };
     }
+
+    private static DeployConfig ParseDeploy(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Target = m.Get("target").AsString() ?? "none",
+        Path = m.Get("path").AsString(),
+        Clean = m.Get("clean").AsBool(true),
+        Branch = m.Get("branch").AsString() ?? "gh-pages",
+        Remote = m.Get("remote").AsString() ?? "origin",
+        Message = m.Get("message").AsString() ?? "Deploy docs",
+        Push = m.Get("push").AsBool(true),
+    };
+
+    private static OptimizeConfig ParseOptimize(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        MinifyHtml = m.Get("minifyHtml").AsBool(false),
+    };
 
     private static SlugifyConfig ParseSlugify(IReadOnlyDictionary<string, object?> m) => new()
     {

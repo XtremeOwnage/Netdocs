@@ -19,6 +19,18 @@ public sealed class GlightboxPlugin : IPlugin
     {
         ctx.AddStylesheet("https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css");
         ctx.AddScript("https://cdn.jsdelivr.net/npm/glightbox/dist/js/glightbox.min.js");
+        ctx.AddInlineScript("""
+            document.addEventListener("DOMContentLoaded", function () {
+              if (!window.GLightbox) return;
+              document.querySelectorAll(".md-content img").forEach(function (img) {
+                if (img.closest("a")) return;
+                var a = document.createElement("a");
+                a.href = img.src; a.className = "glightbox";
+                img.parentNode.insertBefore(a, img); a.appendChild(img);
+              });
+              GLightbox({ selector: ".glightbox", touchNavigation: true, zoomable: true });
+            });
+            """);
     }
 }
 

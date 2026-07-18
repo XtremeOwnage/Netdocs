@@ -39,6 +39,7 @@ public static class PageRenderer
             ["extra"] = site.Config.Extra,
             ["stylesheets"] = ResolveHrefs(site.Config.ExtraCss, assets.Stylesheets),
             ["scripts"] = assets.Scripts.Select(s => s.Src).Concat(site.Config.ExtraJavaScript).ToList(),
+            ["inline_scripts"] = assets.InlineScripts,
             ["content"] = page.HtmlContent,
             ["toc"] = page.Toc,
             ["palette_scheme"] = Sanitize(palette?.Scheme ?? "default"),

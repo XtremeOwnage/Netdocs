@@ -30,6 +30,9 @@ public interface IPluginContext
     /// <summary>Register a JS src to be injected before &lt;/body&gt;.</summary>
     void AddScript(string src, bool defer = true);
 
+    /// <summary>Register an inline JS snippet to be emitted (raw) before &lt;/body&gt;.</summary>
+    void AddInlineScript(string javascript);
+
     /// <summary>Copy an extra static asset (absolute source path) into the site output at destRelative.</summary>
     void AddAsset(string sourcePath, string destRelative);
 }

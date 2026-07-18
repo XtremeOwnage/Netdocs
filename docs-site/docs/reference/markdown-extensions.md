@@ -36,6 +36,10 @@ The shared pipeline enables these by default:
 | Content tabs | `=== "Tab"` |
 | Material code blocks | fenced code with highlight + line numbers |
 
+!!! tip "See them rendered"
+    The **[Admonitions & tabs](admonitions-and-tabs.md)** page shows every admonition type and
+    tab pattern rendered live next to its Markdown — the fastest way to find the right syntax.
+
 ### Admonitions
 
 ```markdown

@@ -28,6 +28,17 @@ public sealed partial class IgnoreRules
         return new IgnoreRules(patterns);
     }
 
+    public static IgnoreRules Load(string projectRoot, string docsDir, IEnumerable<string> extraPatterns)
+    {
+        var rules = Load(projectRoot, docsDir);
+        foreach (var pattern in extraPatterns)
+        {
+            var trimmed = pattern.Trim();
+            if (trimmed.Length > 0) rules._patterns.Add(GlobToRegex(trimmed));
+        }
+        return rules;
+    }
+
     public bool IsIgnored(string relativePath)
     {
         foreach (var pattern in _patterns)

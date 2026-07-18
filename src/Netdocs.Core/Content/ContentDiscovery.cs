@@ -14,7 +14,7 @@ public sealed class ContentDiscovery(SiteConfig config, ILogger<ContentDiscovery
         if (!Directory.Exists(docsDir))
             throw new DirectoryNotFoundException($"docs_dir not found: {docsDir}");
 
-        var ignore = IgnoreRules.Load(config.ProjectRoot, docsDir);
+        var ignore = IgnoreRules.Load(config.ProjectRoot, docsDir, config.Exclude);
         var pages = new List<Page>();
 
         foreach (var file in Directory.EnumerateFiles(docsDir, "*", SearchOption.AllDirectories))

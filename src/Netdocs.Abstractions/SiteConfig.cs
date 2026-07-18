@@ -29,6 +29,9 @@ public sealed class SiteConfig
     public IReadOnlyList<string> ExtraCss { get; set; } = [];
     public IReadOnlyList<string> ExtraJavaScript { get; set; } = [];
 
+    /// <summary>Glob patterns (docs-relative) to exclude from page discovery.</summary>
+    public IReadOnlyList<string> Exclude { get; set; } = [];
+
     /// <summary>extra: block, kept as a raw tree for templates.</summary>
     public IReadOnlyDictionary<string, object?> Extra { get; set; } = new Dictionary<string, object?>();
 

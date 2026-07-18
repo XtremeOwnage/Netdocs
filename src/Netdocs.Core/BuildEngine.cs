@@ -90,6 +90,7 @@ public sealed class BuildEngine(
 
         // 7. Resolve navigation.
         site.Navigation = NavigationBuilder.Build(config, site.Pages);
+        site.State["nav_pages"] = NavigationBuilder.Flatten(site.Navigation);
         _log.LogDebug("Resolved navigation ({Count} top-level nodes)", site.Navigation.Count);
 
         // 8. Template render (parallel) + emit.

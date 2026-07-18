@@ -84,13 +84,27 @@ Common key names (`ctrl`, `alt`, `shift`, `cmd`, `tab`, `esc`, `enter`, arrows, 
 | `{>>comment<<}` | editorial comment |
 | `{~~old~>new~~}` | substitution (delete + insert) |
 
+### Footnotes
+
+Footnotes are always on. Reference a note inline with `[^id]` and define it anywhere in
+the document:
+
+```markdown
+Here is a statement that needs a citation.[^src]
+
+[^src]: The supporting detail, rendered at the foot of the page with a back-link.
+```
+
+The reference renders as a superscript link to the definition, and the definition gets a
+return arrow back to the reference.
+
 ### Emoji
 
 Emoji shortcodes render as [Twemoji](https://github.com/jdecked/twemoji) SVG images
 (matching Material's `pymdownx.emoji` + twemoji generator):
 
 ```markdown
-Great job :smile: :rocket:
+Ship it :rocket:
 ```
 
 produces `<img class="twemoji" …>` elements served from a pinned jsDelivr CDN. To
@@ -128,6 +142,14 @@ key: value
 
 Inline code highlighting (pymdownx.inlinehilite) uses a shebang: `` `#!python range(10)` ``
 renders the span as highlighted `python`.
+
+To include a maintained, tested region of a source file in a code block instead of
+copy-pasting, use snippet [named sections](../plugins/snippets.md#named-sections).
+
+!!! note "Code annotations"
+    Material's numbered code annotations (`(1)` markers paired with a following list) are
+    not yet supported. Use `title=`, `hl_lines=`, and admonitions beneath the block to
+    explain code for now.
 
 ## Configurable extensions
 

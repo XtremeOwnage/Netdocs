@@ -9,3 +9,5 @@ obj/
 
 # Ignore the planning directories.
 plan/
+# Ad-hoc screenshots / scratch images used during verification.
+_*.png

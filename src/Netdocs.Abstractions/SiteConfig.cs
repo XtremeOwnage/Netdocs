@@ -183,6 +183,16 @@ public sealed class OptimizeConfig
 
     /// <summary>Quality (1-100) for generated webp images. Default 80.</summary>
     public int WebpQuality { get; set; } = 80;
+
+    /// <summary>
+    /// Self-host external CDN assets for offline use. When enabled, the build downloads every
+    /// external <c>&lt;script&gt;</c>/<c>&lt;link rel=stylesheet&gt;</c>/<c>&lt;img&gt;</c> asset
+    /// (highlight.js, Mermaid, web fonts, Twemoji, …), stores them under
+    /// <c>assets/external/</c>, and rewrites the pages to reference the local copies so the site
+    /// works without internet (including from <c>file://</c>). Requires network access at build
+    /// time; assets that fail to download keep their CDN URL and log a warning.
+    /// </summary>
+    public bool Offline { get; set; }
 }
 
 /// <summary>

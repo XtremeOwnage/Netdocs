@@ -186,6 +186,10 @@ public sealed class BuildEngine(
         var pruned = OutputWriter.PruneStale(site, config.AbsoluteSiteDir);
         if (pruned > 0) _log.LogInformation("Pruned {Count} stale output files", pruned);
 
+        // 13b. Offline self-hosting: download external CDN assets and rewrite pages to local copies.
+        if (config.Optimize.Offline)
+            await Optimization.SelfHostAssets.RunAsync(site, _log, ct);
+
         // 14. Optional build-time validation (links, anchors, unused images, orphan pages).
         // Runs last so every page/asset/plugin output is materialized on disk. Problems are
         // logged as warnings; `--strict` (or MKDOCS_STRICT) turns them into a failing build.

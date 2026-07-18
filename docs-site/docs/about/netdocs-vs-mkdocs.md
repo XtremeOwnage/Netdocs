@@ -63,6 +63,11 @@ If you're migrating, read this alongside the [migration guide](../setup/migratin
 - **Live-reload dev server.** `netdocs serve` runs a Kestrel dev server that watches your files,
   rebuilds incrementally, and pushes changes to the browser over a WebSocket.
 - **Config importer.** `netdocs import` gets you from `mkdocs.yml` to `appsettings.json` in one step.
+- **One-command offline builds.** `optimize.offline` self-hosts every CDN asset (highlight.js,
+  Mermaid, fonts, emoji) into the output so the site runs from `file://` — see
+  [building for offline usage](../setup/building-for-offline-usage.md).
+- **Build-time validation.** Optional broken-link/anchor/orphan checks that can fail CI under
+  `--strict` — see [validation](../reference/validation.md).
 
 ## Known gaps / not implemented yet
 
@@ -76,7 +81,6 @@ Notable things that are **not** implemented (or only partially) today:
 | Versioned docs (mike) | Not yet | No built-in multi-version switcher. |
 | Instant prefetch / progressive rendering knobs | Partial | Instant navigation works; not every Material `navigation.*` toggle is wired. |
 | i18n / static site search in non-Latin languages | Partial | Search supports configured `lang`; full CJK tokenization is limited. |
-| Offline bundle (fully CDN-free) | Partial | Most assets are vendored; Mermaid/Twemoji load from a CDN by default. |
 
 If you rely on something that isn't here, it's usually straightforward to add as a plugin — the
 [writing a plugin](../development/events-and-callbacks.md) reference and

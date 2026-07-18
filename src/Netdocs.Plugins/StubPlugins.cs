@@ -10,24 +10,6 @@ public sealed class FileFilterPlugin : IPlugin, INavigationFilter
     public bool ShouldInclude(Page page, SiteContext site) => true;
 }
 
-/// <summary>Sets created/updated dates. Currently uses filesystem timestamps; git integration is a TODO.</summary>
-public sealed class GitRevisionDatePlugin : IPlugin, IBuildHook
-{
-    public string Name => "git-revision-date-localized";
-    public void Configure(IPluginContext ctx) { }
-
-    public Task OnBuildStartAsync(SiteContext site, CancellationToken ct)
-    {
-        foreach (var page in site.Pages)
-        {
-            if (page.IsGenerated || !File.Exists(page.SourcePath)) continue;
-            page.Updated ??= File.GetLastWriteTimeUtc(page.SourcePath);
-            page.Created ??= File.GetCreationTimeUtc(page.SourcePath);
-        }
-        return Task.CompletedTask;
-    }
-}
-
 /// <summary>Injects the GLightbox assets used for image lightboxes.</summary>
 public sealed class GlightboxPlugin : IPlugin
 {

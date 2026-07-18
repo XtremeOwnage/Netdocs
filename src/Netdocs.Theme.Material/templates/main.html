@@ -11,6 +11,7 @@ func nav_active(node)
 end
 func nav_first_url(node)
   if node.page; ret node.url; end
+  if node.section_index; ret node.section_index.url; end
   for c in node.children
     u = nav_first_url(c)
     if u != ""; ret u; end

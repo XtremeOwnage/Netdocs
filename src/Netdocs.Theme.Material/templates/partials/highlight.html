@@ -3,7 +3,8 @@
   .md-typeset .highlight code.hljs { background: transparent; padding: 0; }
   .md-typeset .highlight > .filename {
     display: block; font-size: .85em; font-weight: 700; padding: .5em 1em;
-    background: var(--md-code-bg-color); border-bottom: .05rem solid var(--md-default-fg-color--lightest);
+    background: color-mix(in srgb, var(--md-code-bg-color) 100%, var(--md-default-fg-color) 6%);
+    border-bottom: .05rem solid var(--md-default-fg-color--lightest);
   }
   /* Line numbers (highlightjs-line-numbers.js) styled to match Material. */
   .md-typeset .hljs-ln { border-collapse: collapse; }
@@ -19,8 +20,13 @@
      anchor row highlighting, but the gutter itself must stay hidden. */
   .md-typeset code.nd-hide-linenums .hljs-ln-numbers { display: none; }
   .md-typeset code.nd-hide-linenums .hljs-ln-code { padding-left: 0 !important; }
-  /* hl_lines highlight */
-  .md-typeset .hljs-ln tr.hl-line { background: var(--md-code-hl-color, rgba(255, 235, 59, .18)); }
+  /* hl_lines highlight — a faint tinted background plus a solid left accent bar,
+     matching Material's own `.hll`. Using the SOLID accent as the row background
+     washed out the syntax-colored tokens, so use the translucent `--light` tint. */
+  .md-typeset .hljs-ln tr.hl-line {
+    background: var(--md-code-hl-color--light, rgba(66, 135, 255, .1));
+    box-shadow: 2px 0 0 0 var(--md-code-hl-color, #4287ff) inset;
+  }
   /* Inline code highlighting is colored by hljs like block code. */
   .md-typeset code.hljs { padding: 0 .2941176471em; }
 
@@ -66,6 +72,19 @@
   .md-typeset .hljs-strong { font-weight: 700; }
 </style>
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+<!-- highlight.min.js only bundles the "common" language set. Register the extra
+     major languages a homelab/infra docs site relies on so nothing renders as
+     plain text (PowerShell, Dockerfile, nginx, HTTP, YAML frontmatter, etc.). -->
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/powershell.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/dockerfile.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/nginx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/apache.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/http.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/dns.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/properties.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/dart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/scala.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/x86asm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.9.0/dist/highlightjs-line-numbers.min.js"></script>
 <script>
   (function () {

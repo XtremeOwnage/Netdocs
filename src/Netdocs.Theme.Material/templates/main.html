@@ -97,6 +97,24 @@ func render_toc(entry) ~}}
     {{~ for href in stylesheets ~}}
     <link rel="stylesheet" href="{{ base_url }}{{ asset href }}">
     {{~ end ~}}
+    {{~ # Helper functions for inline scripts (palette persistence, search index caching,
+       # instant navigation). The vendored Material bundle references these globals during
+       # init; without them it throws `__md_get is not defined`, which aborts the whole
+       # observable chain (breaking search, the palette toggle, and instant loading). ~}}
+    <script>
+      __md_scope = new URL("{{ base_url }}", location)
+      __md_hash = v => [...v].reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0)
+      __md_get = (key, storage = localStorage, scope = __md_scope) => (
+        JSON.parse(storage.getItem(scope.pathname + "." + key))
+      )
+      __md_set = (key, value, storage = localStorage, scope = __md_scope) => {
+        try {
+          storage.setItem(scope.pathname + "." + key, JSON.stringify(value))
+        } catch (err) {
+          /* Uncritical, just swallow */
+        }
+      }
+    </script>
   </head>
   <body dir="ltr" data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}" data-base="{{ base_url }}">
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">

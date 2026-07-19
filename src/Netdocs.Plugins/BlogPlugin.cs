@@ -21,6 +21,8 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
     private readonly List<BlogPost> _posts = [];
     private readonly Dictionary<string, Author> _authors = new(StringComparer.OrdinalIgnoreCase);
+    private List<Dictionary<string, object?>> _archivesNav = [];
+    private List<Dictionary<string, object?>> _categoriesNav = [];
 
     public string Name => "blog";
 
@@ -74,6 +76,27 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         _posts.Sort((a, b) => b.Date.CompareTo(a.Date));
         site.State["blog_posts"] = _posts;
 
+        // Precompute the blog-listing sidebar nav (years + categories).
+        _archivesNav = _archiveEnabled
+            ? _posts.GroupBy(p => p.Date.Year).OrderByDescending(g => g.Key)
+                .Select(g => new Dictionary<string, object?>
+                {
+                    ["year"] = g.Key.ToString(CultureInfo.InvariantCulture),
+                    ["url"] = $"/{_blogDir}archive/{g.Key}/",
+                    ["count"] = g.Count(),
+                }).ToList()
+            : [];
+        _categoriesNav = _categoriesEnabled
+            ? _posts.SelectMany(p => p.Categories).GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new Dictionary<string, object?>
+                {
+                    ["name"] = g.Key,
+                    ["url"] = $"/{_blogDir}category/{Slug.Make(g.Key)}/",
+                    ["count"] = g.Count(),
+                }).ToList()
+            : [];
+
         // Turn the existing blog index into page 1 of the paginated list.
         var index = site.Pages.FirstOrDefault(p =>
             p.RelativePath.Equals(_blogDir + "index.md", StringComparison.OrdinalIgnoreCase));
@@ -82,9 +105,19 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             var pageItems = _posts.Take(_perPage).ToList();
             index.RawMarkdown = RenderList("Blog", pageItems, _posts.Count > _perPage ? $"{_blogDir}page/2/" : null);
             index.Title = "Blog";
+            ApplyListingMeta(index);
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>Flags a blog-listing page and attaches the Archive/Categories sidebar nav data.</summary>
+    private void ApplyListingMeta(Page page)
+    {
+        page.Meta["is_blog_listing"] = true;
+        page.Meta["blog_index_url"] = "/" + _blogDir;
+        page.Meta["blog_archives"] = _archivesNav;
+        page.Meta["blog_categories"] = _categoriesNav;
     }
 
     /// <summary>Sets blog-post metadata on the page for the theme to render (sidebar + tag chips).</summary>
@@ -130,7 +163,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             var items = _posts.Skip((p - 1) * _perPage).Take(_perPage).ToList();
             var next = p < totalPages ? $"{_blogDir}page/{p + 1}/" : null;
             var url = $"{_blogDir}page/{p}/";
-            yield return Generated(site, url, $"Blog - Page {p}", RenderList($"Blog - Page {p}", items, next));
+            yield return Listing(Generated(site, url, $"Blog - Page {p}", RenderList($"Blog - Page {p}", items, next)));
         }
 
         // Category pages.
@@ -142,8 +175,8 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             {
                 var slug = Slug.Make(group.Key);
                 var url = $"{_blogDir}category/{slug}/";
-                yield return Generated(site, url, group.Key,
-                    RenderList($"Category: {group.Key}", group.Select(x => x.post).ToList(), null));
+                yield return Listing(Generated(site, url, group.Key,
+                    RenderList($"Category: {group.Key}", group.Select(x => x.post).ToList(), null)));
             }
         }
 
@@ -153,10 +186,17 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             foreach (var group in _posts.GroupBy(post => post.Date.Year).OrderByDescending(g => g.Key))
             {
                 var url = $"{_blogDir}archive/{group.Key}/";
-                yield return Generated(site, url, group.Key.ToString(),
-                    RenderList($"Archive: {group.Key}", group.ToList(), null));
+                yield return Listing(Generated(site, url, group.Key.ToString(),
+                    RenderList($"Archive: {group.Key}", group.ToList(), null)));
             }
         }
+    }
+
+    /// <summary>Attaches blog-listing sidebar metadata to a generated listing page.</summary>
+    private Page Listing(Page page)
+    {
+        ApplyListingMeta(page);
+        return page;
     }
 
     private static Page Generated(SiteContext site, string url, string title, string markdown) => new()
@@ -227,20 +267,49 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         return fromMeta;
     }
 
-    /// <summary>Small metadata header (date · reading time · categories) prepended to a post.</summary>
+    /// <summary>A concise teaser for the blog list: content up to <c>&lt;!-- more --&gt;</c> (or the
+    /// first paragraph), with any leading H1 stripped and length capped so it never becomes a
+    /// "wall of text" that duplicates the post title.</summary>
     private static string ReadExcerpt(Page page)
     {
         var md = page.RawMarkdown;
         var marker = md.IndexOf("<!-- more -->", StringComparison.OrdinalIgnoreCase);
-        if (marker > 0) return md[..marker].Trim();
+        var region = marker > 0 ? md[..marker] : md;
+        region = StripLeadingH1(region);
 
-        // First non-heading paragraph.
-        foreach (var para in md.Replace("\r\n", "\n").Split("\n\n"))
+        // First non-heading paragraph from the region.
+        string teaser = "";
+        foreach (var para in region.Replace("\r\n", "\n").Split("\n\n"))
         {
             var trimmed = para.Trim();
-            if (trimmed.Length > 0 && !trimmed.StartsWith('#')) return trimmed;
+            if (trimmed.Length > 0 && !trimmed.StartsWith('#')) { teaser = trimmed; break; }
         }
-        return "";
+        return CapLength(teaser, 320);
+    }
+
+    /// <summary>Removes a leading level-1 ATX (<c>#</c>) or Setext (underlined) heading.</summary>
+    private static string StripLeadingH1(string markdown)
+    {
+        var text = markdown.Replace("\r\n", "\n").TrimStart('\n', ' ', '\t');
+        var lines = text.Split('\n');
+        if (lines.Length == 0) return text;
+
+        if (lines[0].TrimStart().StartsWith("# ", StringComparison.Ordinal))
+            return string.Join('\n', lines[1..]).TrimStart('\n');
+        // Setext H1: a line followed by a line of '=' characters.
+        if (lines.Length > 1 && lines[1].Trim().Length > 0 && lines[1].Trim().All(c => c == '='))
+            return string.Join('\n', lines[2..]).TrimStart('\n');
+        return text;
+    }
+
+    /// <summary>Caps a teaser at a word boundary near <paramref name="max"/> characters.</summary>
+    private static string CapLength(string text, int max)
+    {
+        text = text.Trim();
+        if (text.Length <= max) return text;
+        var cut = text.LastIndexOf(' ', Math.Min(max, text.Length - 1));
+        if (cut <= 0) cut = max;
+        return text[..cut].TrimEnd() + " …";
     }
 
     private static string Normalize(string dir) => dir.Trim('/').Length == 0 ? "" : dir.Trim('/') + "/";

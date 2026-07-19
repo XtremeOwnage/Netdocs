@@ -1,0 +1,11 @@
+# Build output
+site/
+dist/
+artifacts/
+
+# .NET
+bin/
+obj/
+
+# Local
+.venv/

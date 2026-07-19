@@ -150,6 +150,44 @@ Point `customDir` at a directory of Scriban templates/partials to override the b
 theme. Files there take precedence over the bundled theme, letting you replace partials
 such as `partials/footer.html` or the base `main.html`.
 
+### Overridable templates & partials
+
+The Material theme is deliberately split into small pieces so you can override **just the
+part you care about** — for example, replace `partials/social.html` to change how social
+links render without copying the whole header. Create a file with the **same path** under
+your `customDir` and it wins over the bundled version.
+
+| File | Purpose |
+|---|---|
+| `main.html` | Base page layout: `<html>`, includes `head`, `header`, nav, content, `footer`, `scripts`. Defines the `render_nav` / `render_toc` helpers. |
+| `partials/head.html` | Everything inside `<head>`: meta, Open Graph / Twitter cards, stylesheets, fonts, and the inline `__md_*` helper script. Override to add analytics or verification tags. |
+| `partials/header.html` | The single-row header: logo, top-level nav (left), social + palette toggle + search (right). |
+| `partials/social.html` | Social links at the right of the header (driven by `extra.social`). |
+| `partials/search.html` | Search box + results overlay markup. |
+| `partials/nav.html` | Sidebar navigation drawer. |
+| `partials/tabs.html` | Header tabs bar (only when `navigation.tabs` is off and you want a second row). |
+| `partials/toc.html` | Right-hand table of contents. |
+| `partials/footer.html` | Site footer: prev/next nav, copyright, social links. |
+| `partials/post-meta.html` | Blog-post byline: author avatar/name, date, reading time, categories. |
+| `partials/blog-nav.html` | Blog sidebar: recent posts / categories / archive listing. |
+| `partials/scripts.html` | End-of-body scripts: Material `__config` blob, the vendored bundle, hashed site scripts, inline scripts, and the highlight/mermaid loaders. |
+| `partials/highlight.html` | highlight.js CDN loader + init (only injected when `highlight: highlightjs`). |
+| `partials/mermaid.html` | Mermaid CDN loader + init for ` ```mermaid ` diagrams. |
+| `404.html` | Not-found page layout. |
+
+!!! tip "Blog & tag pages don't have their own template"
+    The **blog index** and **tag** pages are produced by the blog/tags plugins as ordinary
+    content pages — their body HTML is generated, then rendered through `main.html` like any
+    other page. To restyle them, override `main.html` (or the blog partials `post-meta.html`
+    / `blog-nav.html`), or target their generated markup via `extra_css`. There is no
+    `blog.html` / `tags.html` to copy.
+
+Every bundled partial starts with a `{{ # … }}` comment block documenting the globals it
+receives and how to override it. Those Scriban comments produce **no output**, so they never
+appear in your HTML (minified or not) — read them straight from the
+[theme source](https://github.com/XtremeOwnage/Netdocs/tree/main/src/Netdocs.Theme.Material/templates).
+
+
 !!! note
     Netdocs templates use **Scriban**, not Jinja2. If any `.html` file under `customDir`
     still contains Jinja constructs (`{% %}`, `lang.t`, `super()`), the whole directory is

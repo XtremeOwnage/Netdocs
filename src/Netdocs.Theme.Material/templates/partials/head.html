@@ -1,0 +1,55 @@
+{{~ # ---------------------------------------------------------------------------
+   # partials/head.html — Everything inside <head>: meta tags, Open Graph / Twitter
+   # cards, stylesheets, fonts and the small inline helper script the Material bundle
+   # relies on.
+   #
+   # Available globals: config, page, is_homepage, page_description, og_image, og_url,
+   #   base_url, font_text, font_code, stylesheets, and the `asset` helper (adds the
+   #   content hash for cache-busting).
+   #
+   # Override: drop a file at `<custom_dir>/partials/head.html` to add analytics tags,
+   #   verification meta, extra <link>s, etc. without editing the base layout. Keep the
+   #   inline `__md_*` helper script if you rely on search / palette / instant nav.
+   # --------------------------------------------------------------------------- ~}}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="description" content="{{ config.site_description }}">
+    {{ if config.site_author }}<meta name="author" content="{{ config.site_author }}">{{ end }}
+    <title>{{ if !is_homepage && page.title != "" }}{{ page.title }} - {{ end }}{{ config.site_name }}</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ config.site_name }}">
+    <meta property="og:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
+    <meta property="og:description" content="{{ page_description }}">
+    <meta property="og:image" content="{{ og_image }}">
+    <meta property="og:url" content="{{ og_url }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
+    <meta name="twitter:description" content="{{ page_description }}">
+    <meta name="twitter:image" content="{{ og_image }}">
+    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
+    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
+    <link rel="stylesheet" href="{{ base_url }}{{ asset "assets/netdocs.css" }}">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family={{ string.replace font_text ' ' '+' }}:300,300i,400,400i,700,700i%7C{{ string.replace font_code ' ' '+' }}:400,400i,700,700i&display=fallback">
+    <style>:root{--md-text-font:"{{ font_text }}";--md-code-font:"{{ font_code }}"}</style>
+    {{~ for href in stylesheets ~}}
+    <link rel="stylesheet" href="{{ base_url }}{{ asset href }}">
+    {{~ end ~}}
+    {{~ # Helper functions for inline scripts (palette persistence, search index caching,
+       # instant navigation). The vendored Material bundle references these globals during
+       # init; without them it throws `__md_get is not defined`, which aborts the whole
+       # observable chain (breaking search, the palette toggle, and instant loading). ~}}
+    <script>
+      __md_scope = new URL("{{ base_url }}", location)
+      __md_hash = v => [...v].reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0)
+      __md_get = (key, storage = localStorage, scope = __md_scope) => (
+        JSON.parse(storage.getItem(scope.pathname + "." + key))
+      )
+      __md_set = (key, value, storage = localStorage, scope = __md_scope) => {
+        try {
+          storage.setItem(scope.pathname + "." + key, JSON.stringify(value))
+        } catch (err) {
+          /* Uncritical, just swallow */
+        }
+      }
+    </script>

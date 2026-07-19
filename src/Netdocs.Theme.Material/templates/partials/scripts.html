@@ -1,0 +1,39 @@
+{{~ # ---------------------------------------------------------------------------
+   # partials/scripts.html — End-of-body scripts: the Material `__config` blob, the
+   # vendored Material bundle, hashed site scripts, page inline scripts, and the
+   # optional highlight.js / mermaid loaders.
+   #
+   # Available globals: base_url, features, scripts, inline_scripts, highlight, and the
+   #   `asset` helper (adds the content hash for cache-busting).
+   #
+   # Override: drop a file at `<custom_dir>/partials/scripts.html` to add or reorder
+   #   script tags. Keep the `__config` blob and Material bundle if you rely on search,
+   #   palette switching, instant navigation, or clipboard copy.
+   # --------------------------------------------------------------------------- ~}}
+    <script id="__config" type="application/json">
+      {
+        "base": "{{ base_url }}",
+        "features": [{{~ for f in features ~}}"{{ f }}"{{~ if !for.last ~}}, {{~ end ~}}{{~ end ~}}],
+        "translations": {
+          "clipboard.copy": "Copy to clipboard",
+          "clipboard.copied": "Copied to clipboard",
+          "search.result.placeholder": "Type to start searching",
+          "search.result.none": "No matching documents",
+          "search.result.one": "1 matching document",
+          "search.result.other": "# matching documents",
+          "search.result.more.one": "1 more on this page",
+          "search.result.more.other": "# more on this page",
+          "search.result.term.missing": "Missing"
+        },
+        "search": "{{ base_url }}assets/vendor/material/javascripts/workers/search.2c215733.min.js"
+      }
+    </script>
+    <script src="{{ base_url }}assets/vendor/material/javascripts/bundle.d7400e89.min.js"></script>
+    {{~ for src in scripts ~}}
+    <script src="{{ base_url }}{{ asset src }}" defer></script>
+    {{~ end ~}}
+    {{~ for js in inline_scripts ~}}
+    <script>{{ js }}</script>
+    {{~ end ~}}
+    {{~ if (highlight | string.downcase) == "highlightjs" ~}}{{ include "partials/highlight.html" }}{{~ end ~}}
+    {{ include "partials/mermaid.html" }}

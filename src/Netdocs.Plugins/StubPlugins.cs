@@ -53,12 +53,6 @@ public sealed class TableReaderPlugin : IPlugin
     public void Configure(IPluginContext ctx) { }
 }
 
-public sealed class SocialPlugin : IPlugin
-{
-    public string Name => "social";
-    public void Configure(IPluginContext ctx) { }
-}
-
 public sealed class MacrosPlugin : IPlugin
 {
     public string Name => "macros";

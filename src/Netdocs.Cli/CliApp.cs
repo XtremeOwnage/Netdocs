@@ -89,6 +89,7 @@ public static class CliApp
 
     private static PluginRegistry BuildRegistry() => new PluginRegistry()
         .Register<SnippetsPlugin>("snippets", "pymdownx.snippets")
+        .Register<AbbreviationsPlugin>("abbreviations")
         .Register<SearchPlugin>("search")
         .Register<TagsPlugin>("tags")
         .Register<BlogPlugin>("blog")

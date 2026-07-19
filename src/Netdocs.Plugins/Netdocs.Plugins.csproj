@@ -7,5 +7,7 @@
     <PackageReference Include="Markdig" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="LibGit2Sharp" />
+    <PackageReference Include="SixLabors.ImageSharp" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" />
   </ItemGroup>
 </Project>

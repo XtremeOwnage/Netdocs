@@ -15,6 +15,10 @@ public static class PageRenderer
 
         var palette = site.Config.Theme.Palette.Count > 0 ? site.Config.Theme.Palette[0] : null;
         var font = site.Config.Theme.Font;
+        var siteUrl = (site.Config.SiteUrl ?? "").TrimEnd('/');
+        var socialPath = SocialImagePath.For(page);
+        var description = page.FrontMatter.TryGetValue("description", out var d) && d is string ds && ds.Length > 0
+            ? ds : site.Config.SiteDescription ?? "";
 
         Page? prev = null, next = null;
         if (site.State.GetValueOrDefault("nav_pages") is List<Page> navPages)
@@ -52,6 +56,9 @@ public static class PageRenderer
             ["show_source_meta"] = !page.IsGenerated && page.Updated.HasValue,
             ["prev_page"] = prev,
             ["next_page"] = next,
+            ["page_description"] = description,
+            ["og_image"] = siteUrl.Length > 0 ? $"{siteUrl}/{socialPath}" : "/" + socialPath,
+            ["og_url"] = siteUrl.Length > 0 ? $"{siteUrl}/{page.Url}" : "/" + page.Url,
         };
 
         return engine.Render(template, model);

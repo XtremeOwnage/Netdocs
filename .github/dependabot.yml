@@ -24,3 +24,16 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+
+  # Front-end JS/CSS libraries loaded from a CDN, tracked via /package.json.
+  # Dependabot flags new releases here; a maintainer then bumps the matching CDN
+  # URL in the theme templates / plugins. See
+  # docs-site/docs/development/frontend-dependencies.md.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps(frontend)"
+

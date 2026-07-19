@@ -1,7 +1,9 @@
 using Markdig;
+using Markdig.Extensions.EmphasisExtras;
 using Netdocs.Abstractions;
 using Netdocs.Core.Markdown.Admonitions;
 using Netdocs.Core.Markdown.Emoji;
+using Netdocs.Core.Markdown.Extras;
 using Netdocs.Core.Markdown.Tabs;
 
 namespace Netdocs.Core.Markdown;
@@ -15,7 +17,8 @@ public static class MarkdownPipelineFactory
             .UseYamlFrontMatter()
             .UsePipeTables()
             .UseGridTables()
-            .UseEmphasisExtras()      // ~~del~~, ~sub~, ^sup^, ==mark==
+            // Strikethrough/sub/sup/mark; '++' is left free for pymdownx.keys.
+            .UseEmphasisExtras(EmphasisExtraOptions.Default & ~EmphasisExtraOptions.Inserted)
             .UseTaskLists()
             .UseFootnotes()
             .UseAutoIdentifiers()     // toc permalink ids
@@ -31,6 +34,7 @@ public static class MarkdownPipelineFactory
         builder.Extensions.AddIfNotAlready(new TabbedExtension());
         builder.Extensions.AddIfNotAlready(new MaterialCodeBlockExtension());
         builder.Extensions.AddIfNotAlready(new TwemojiExtension(ResolveTwemojiBase(site.Config)));
+        builder.Extensions.AddIfNotAlready(new KeysCriticExtension());
 
         foreach (var contributor in contributors)
             contributor.Extend(builder, site);

@@ -27,12 +27,15 @@ mirrors them and is watched by Dependabot.
 | Mermaid | `mermaid` | `templates/partials/mermaid.html` |
 | MathJax | `mathjax` | `ArithmatexPlugin.cs` (`arithmatex` plugin) |
 | GLightbox | `glightbox` | `StubPlugins.cs` (`glightbox` plugin) |
+| Twemoji | `@twemoji/api` | `TwemojiExtension.cs` (emoji SVG base URL) |
 
 !!! note "Twemoji"
-    Emoji SVGs come from a GitHub-tagged asset path
-    (`gh/jdecked/twemoji@…`), not an npm package, so it is pinned directly in
-    `TwemojiExtension.cs` and is not listed in `package.json`. Bump it there when a new
-    Twemoji release is desired.
+    Emoji SVGs are loaded from a GitHub-tagged asset path
+    (`gh/jdecked/twemoji@<version>/assets/svg/`), not an npm package. The npm
+    package `@twemoji/api` is versioned in lockstep with those GitHub release
+    tags, so it is listed in `package.json` purely to let Dependabot flag new
+    releases. When it bumps, set `TwemojiExtension.DefaultBaseUrl` to the same
+    `jdecked/twemoji@<version>` tag in the same PR.
 
 ## Updating a version manually
 

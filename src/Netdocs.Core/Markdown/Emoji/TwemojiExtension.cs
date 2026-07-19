@@ -158,7 +158,7 @@ public sealed class TwemojiRenderer(string baseUrl) : HtmlObjectRenderer<Twemoji
 public sealed class TwemojiExtension(string baseUrl) : IMarkdownExtension
 {
     /// <summary>jsDelivr-hosted Twemoji (jdecked fork) SVG assets, pinned for reproducibility.</summary>
-    public const string DefaultBaseUrl = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/";
+    public const string DefaultBaseUrl = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@17.0.3/assets/svg/";
 
     private readonly string _baseUrl = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl;
 

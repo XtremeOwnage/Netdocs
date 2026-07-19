@@ -21,8 +21,10 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
     private readonly List<BlogPost> _posts = [];
     private readonly Dictionary<string, Author> _authors = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<BlogPost>> _authorPosts = new(StringComparer.OrdinalIgnoreCase);
     private List<Dictionary<string, object?>> _archivesNav = [];
     private List<Dictionary<string, object?>> _categoriesNav = [];
+    private List<Dictionary<string, object?>> _authorsNav = [];
 
     public string Name => "blog";
 
@@ -48,9 +50,11 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         {
             var a = value.AsMap();
             _authors[id] = new Author(
+                id,
                 a.Get("name").AsString() ?? id,
                 a.Get("description").AsString() ?? "",
-                a.Get("avatar").AsString() ?? "");
+                a.Get("avatar").AsString() ?? "",
+                $"/{_blogDir}author/{Slug.Make(id)}/");
         }
     }
 
@@ -75,6 +79,23 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
         _posts.Sort((a, b) => b.Date.CompareTo(a.Date));
         site.State["blog_posts"] = _posts;
+
+        // Group posts by author (respecting front-matter order + single-author fallback).
+        foreach (var post in _posts)
+            foreach (var author in ResolveAuthors(post.Page))
+            {
+                if (!_authorPosts.TryGetValue(author.Id, out var list))
+                    _authorPosts[author.Id] = list = [];
+                list.Add(post);
+            }
+        _authorsNav = _authorPosts
+            .OrderBy(kv => _authors[kv.Key].Name, StringComparer.OrdinalIgnoreCase)
+            .Select(kv => new Dictionary<string, object?>
+            {
+                ["name"] = _authors[kv.Key].Name,
+                ["url"] = _authors[kv.Key].Url,
+                ["count"] = kv.Value.Count,
+            }).ToList();
 
         // Precompute the blog-listing sidebar nav (years + categories).
         _archivesNav = _archiveEnabled
@@ -118,6 +139,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         page.Meta["blog_index_url"] = "/" + _blogDir;
         page.Meta["blog_archives"] = _archivesNav;
         page.Meta["blog_categories"] = _categoriesNav;
+        page.Meta["blog_authors"] = _authorsNav;
     }
 
     /// <summary>Sets blog-post metadata on the page for the theme to render (sidebar + tag chips).</summary>
@@ -133,22 +155,34 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         page.Meta["post_tags"] = ReadList(page, "tags");
         page.Meta["blog_index_url"] = "/" + _blogDir;
 
-        var author = ResolveAuthor(page);
-        if (author is not null)
+        var authors = ResolveAuthors(page);
+        if (authors.Count > 0)
         {
-            page.Meta["post_author_name"] = author.Name;
-            page.Meta["post_author_role"] = author.Role;
-            page.Meta["post_author_avatar"] = author.Avatar;
+            page.Meta["post_authors"] = authors.Select(a => new Dictionary<string, object?>
+            {
+                ["name"] = a.Name,
+                ["role"] = a.Role,
+                ["avatar"] = a.Avatar,
+                ["url"] = a.Url,
+            }).ToList();
+
+            var primary = authors[0];
+            page.Meta["post_author_name"] = primary.Name;
+            page.Meta["post_author_role"] = primary.Role;
+            page.Meta["post_author_avatar"] = primary.Avatar;
+            page.Meta["post_author_url"] = primary.Url;
         }
     }
 
-    private Author? ResolveAuthor(Page page)
+    private List<Author> ResolveAuthors(Page page)
     {
-        var ids = ReadList(page, "authors");
-        foreach (var id in ids)
-            if (_authors.TryGetValue(id, out var a)) return a;
+        var result = new List<Author>();
+        foreach (var id in ReadList(page, "authors"))
+            if (_authors.TryGetValue(id, out var a) && !result.Contains(a))
+                result.Add(a);
         // Default to the sole author when a post doesn't specify one.
-        return _authors.Count == 1 ? _authors.Values.First() : null;
+        if (result.Count == 0 && _authors.Count == 1) result.Add(_authors.Values.First());
+        return result;
     }
 
     public async IAsyncEnumerable<Page> GenerateAsync(
@@ -190,6 +224,14 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                     RenderList($"Archive: {group.Key}", group.ToList(), null)));
             }
         }
+
+        // Author pages.
+        foreach (var (id, posts) in _authorPosts)
+        {
+            var author = _authors[id];
+            var url = author.Url.TrimStart('/');
+            yield return Listing(Generated(site, url, author.Name, RenderAuthorList(author, posts)));
+        }
     }
 
     /// <summary>Attaches blog-listing sidebar metadata to a generated listing page.</summary>
@@ -214,6 +256,21 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     {
         var sb = new StringBuilder();
         sb.Append("# ").AppendLine(title).AppendLine();
+        AppendPosts(sb, posts, nextPageUrl);
+        return sb.ToString();
+    }
+
+    private string RenderAuthorList(Author author, IReadOnlyList<BlogPost> posts)
+    {
+        var sb = new StringBuilder();
+        sb.Append("# ").AppendLine(author.Name).AppendLine();
+        if (author.Role.Length > 0) sb.Append('*').Append(author.Role).AppendLine("*").AppendLine();
+        AppendPosts(sb, posts, null);
+        return sb.ToString();
+    }
+
+    private void AppendPosts(StringBuilder sb, IReadOnlyList<BlogPost> posts, string? nextPageUrl)
+    {
         foreach (var post in posts)
         {
             var rootUrl = "/" + post.Page.Url;
@@ -227,7 +284,6 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         }
         if (nextPageUrl is not null)
             sb.Append("[Older posts →](/").Append(nextPageUrl).AppendLine(")");
-        return sb.ToString();
     }
 
     private static DateTimeOffset ReadDate(Page page)
@@ -353,4 +409,4 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
 public sealed record BlogPost(Page Page, DateTimeOffset Date, IReadOnlyList<string> Categories, string Excerpt);
 
-public sealed record Author(string Name, string Role, string Avatar);
+public sealed record Author(string Id, string Name, string Role, string Avatar, string Url);

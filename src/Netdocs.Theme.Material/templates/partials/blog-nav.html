@@ -30,4 +30,18 @@
     {{~ end ~}}
   </ul>
   {{~ end ~}}
+
+  {{~ if page.meta.blog_authors && (array.size page.meta.blog_authors) > 0 ~}}
+  <div class="md-nav__title" style="margin-top:1rem">Authors</div>
+  <ul class="md-nav__list">
+    {{~ for entry in page.meta.blog_authors ~}}
+    <li class="md-nav__item">
+      <a href="{{ base_url }}{{ strip_slash entry.url }}" class="md-nav__link">
+        <span class="md-ellipsis">{{ entry.name }}</span>
+        <span class="md-nav__source-file" style="margin-left:.4rem;color:var(--md-default-fg-color--light);font-size:.7rem">{{ entry.count }}</span>
+      </a>
+    </li>
+    {{~ end ~}}
+  </ul>
+  {{~ end ~}}
 </nav>

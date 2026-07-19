@@ -62,7 +62,7 @@ This plugin has no options — enable it by name:
 
 It runs as a Markdown preprocessor (order `20`), so directives are expanded before the
 Markdown is parsed and before later preprocessors (such as
-[affiliate-links](affiliate-links.md)) inspect the resulting table.
+[link-notes](link-notes.md)) inspect the resulting table.
 
 ## Attribution
 

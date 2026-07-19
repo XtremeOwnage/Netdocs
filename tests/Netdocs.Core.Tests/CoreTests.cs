@@ -87,6 +87,30 @@ public class MarkdownTests
         return page.HtmlContent;
     }
 
+    private static string RenderWith(string markdown, params Netdocs.Abstractions.IMarkdigContributor[] contributors)
+    {
+        var site = new SiteContext
+        {
+            Config = new SiteConfig(),
+            Options = new BuildOptions(),
+            LoggerFactory = NullLoggerFactory.Instance,
+        };
+        var pipeline = MarkdownPipelineFactory.Build(site, contributors);
+        var page = new Page { SourcePath = "x", RelativePath = "x.md", ProcessedMarkdown = markdown };
+        new DocumentRenderer(pipeline).Render(page);
+        return page.HtmlContent;
+    }
+
+    [Fact]
+    public void Typeset_ProducesSmartPunctuation()
+    {
+        var html = RenderWith("She said -- wait... \"really\"?\n", new Netdocs.Plugins.TypesetPlugin());
+        Assert.Contains("&ndash;", html);   // en dash from --
+        Assert.Contains("&hellip;", html);  // ellipsis from ...
+        Assert.Contains("&ldquo;", html);   // opening curly quote
+        Assert.Contains("&rdquo;", html);   // closing curly quote
+    }
+
     [Fact]
     public void Admonition_RendersMaterialMarkup()
     {

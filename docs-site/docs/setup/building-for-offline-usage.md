@@ -5,13 +5,17 @@ title: Building for offline usage
 # Building for offline usage
 
 Sometimes a site can't be hosted on the web — it ships on a USB stick, lives on an air-gapped
-network, or is opened straight from disk with `file://`. By default Netdocs loads a few assets
-from CDNs (syntax highlighting, Mermaid, web fonts, emoji). Offline mode **self-hosts all of
-them** so the built site is fully self-contained.
+network, or is opened straight from disk with `file://`. Netdocs loads a few assets from CDNs
+(syntax highlighting, Mermaid, web fonts, emoji) during development; offline mode **self-hosts all
+of them** so the built site is fully self-contained. It runs automatically on production builds.
 
 ## Enable it
 
-Set `optimize.offline` in `appsettings.json`:
+Offline self-hosting is **on by default for production builds** — `netdocs build --prod` (and
+`deploy`) self-host CDN assets automatically, while `serve`/dev builds skip it so local iteration
+stays fast. You don't have to configure anything to get a self-contained published site.
+
+To control it explicitly, set `optimize.offline` in `appsettings.json`:
 
 ```json
 "optimize": {
@@ -19,10 +23,16 @@ Set `optimize.offline` in `appsettings.json`:
 }
 ```
 
+| Value | Behaviour |
+|---|---|
+| omitted / `null` | **Default.** Self-host on production builds (`--prod`, `deploy`), skip during `serve`. |
+| `true` | Always self-host, including local and dev builds. |
+| `false` | Never self-host (keep CDN references). |
+
 Then build as usual:
 
 ```bash
-netdocs build
+netdocs build --prod
 ```
 
 ```

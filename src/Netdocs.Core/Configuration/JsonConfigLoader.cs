@@ -76,7 +76,8 @@ public static class JsonConfigLoader
         MinifyJs = m.Get("minifyJs").AsBool(false),
         ConvertImagesToWebp = m.Get("convertImagesToWebp").AsBool(false),
         WebpQuality = m.Get("webpQuality").AsInt(80),
-        Offline = m.Get("offline").AsBool(false),
+        // Tri-state: absent => null (auto: production-only). Present => explicit true/false.
+        Offline = m.Get("offline") is { } off ? off.AsBool(false) : null,
     };
 
     private static SlugifyConfig ParseSlugify(IReadOnlyDictionary<string, object?> m) => new()

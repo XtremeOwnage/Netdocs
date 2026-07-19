@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an idea or enhancement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: The use case or pain point behind the request.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like Netdocs to do. Config/CLI/API sketches welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, or how you work around this today.
+    validations:
+      required: false
+  - type: input
+    id: mkdocs-parity
+    attributes:
+      label: Material for MkDocs equivalent (if any)
+      description: A link helps, since Netdocs targets near drop-in compatibility.
+    validations:
+      required: false

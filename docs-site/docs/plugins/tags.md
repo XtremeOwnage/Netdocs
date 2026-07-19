@@ -30,6 +30,11 @@ Then place the marker on your tags page (e.g. `docs/tags.md`):
 
 Nested tags separated by `/` nest under their parent, producing a hierarchical index.
 
+Each tag heading is given an explicit anchor id matching MkDocs Material's tags plugin: the literal
+prefix `tag:` followed by each `/`-separated segment slugified on its own and rejoined with `/`
+(for example `Development/C#` becomes `#tag:development/c`). This keeps deep links to a tag identical
+between Netdocs and Material rather than collapsing into an auto-generated id (`#developmentc`).
+
 ### Scoped listings
 
 A marker can carry an optional scope object to list only some tags. This is handy when you want

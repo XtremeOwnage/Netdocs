@@ -105,6 +105,16 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void ExplicitAttrListId_WithColonAndSlash_BecomesHeadingId()
+    {
+        // The tags plugin emits headings like "### Development/C# { #tag:development/c }" so anchor
+        // links match MkDocs Material. Confirm Markdig's generic-attributes support keeps the ':'
+        // and '/' verbatim in the id rather than letting the auto-identifier collapse them.
+        var html = Render("### Development/C# { #tag:development/c }\n");
+        Assert.Contains("id=\"tag:development/c\"", html);
+    }
+
+    [Fact]
     public void Typeset_ProducesSmartPunctuation()
     {
         var html = RenderWith("She said -- wait... \"really\"?\n", new Netdocs.Plugins.TypesetPlugin());

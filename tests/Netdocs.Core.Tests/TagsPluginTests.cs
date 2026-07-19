@@ -146,4 +146,33 @@ public class TagsPluginTests
         Assert.Contains("[Proc Page](/proc/)", procs.RawMarkdown);
         Assert.DoesNotContain("[App Page]", procs.RawMarkdown);
     }
+
+    [Fact]
+    public async Task Heading_EmitsMaterialCompatibleAnchor_ForHierarchicalTag()
+    {
+        var page = Tagged("cs.md", "C# Page", "Development/C#");
+        var index = Marker("tags/index.md", "<!-- material/tags -->");
+        var site = BuildSite(page, index);
+
+        await Configured().OnBuildStartAsync(site, CancellationToken.None);
+
+        // Parent category and its child each carry an explicit "tag:" id matching MkDocs Material,
+        // with the '/' preserved and the '#' dropped by per-segment slugification.
+        Assert.Contains("## Development { #tag:development }", index.RawMarkdown);
+        Assert.Contains("### Development/C# { #tag:development/c }", index.RawMarkdown);
+    }
+
+    [Fact]
+    public async Task Heading_Anchor_SlugifiesSpacesAndPunctuationPerSegment()
+    {
+        var monitoring = Tagged("mon.md", "Mon Page", "Energy Monitoring");
+        var dotnet = Tagged("net.md", "Net Page", "Development/.NET");
+        var index = Marker("tags/index.md", "<!-- material/tags -->");
+        var site = BuildSite(monitoring, dotnet, index);
+
+        await Configured().OnBuildStartAsync(site, CancellationToken.None);
+
+        Assert.Contains("{ #tag:energy-monitoring }", index.RawMarkdown);
+        Assert.Contains("{ #tag:development/net }", index.RawMarkdown);
+    }
 }

@@ -29,12 +29,14 @@ public static class CliApp
             .AddEnvironmentVariables("NETDOCS_")
             .Build();
 
+        var warnings = new WarningCounter();
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConfiguration(configuration.GetSection("Logging"));
             builder.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
             builder.SetMinimumLevel(opts.Verbose ? LogLevel.Trace : LogLevel.Information);
             if (opts.Verbose) builder.AddFilter(null, LogLevel.Trace);
+            builder.AddProvider(new WarningCounterProvider(warnings));
         });
         var log = loggerFactory.CreateLogger("netdocs");
         log.LogDebug("Using config file {ConfigPath}", configPath);
@@ -43,7 +45,7 @@ public static class CliApp
         {
             return command switch
             {
-                "build" => await BuildAsync(configPath, opts, loggerFactory),
+                "build" => await BuildAsync(configPath, opts, loggerFactory, warnings),
                 "serve" => await ServeAsync(configPath, opts, loggerFactory),
                 "--help" or "-h" or "help" => PrintHelp(),
                 _ => Unknown(log, command),
@@ -56,12 +58,18 @@ public static class CliApp
         }
     }
 
-    private static async Task<int> BuildAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory)
+    private static async Task<int> BuildAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory, WarningCounter warnings)
     {
         var (config, buildOptions) = LoadConfig(configPath, opts, serve: false);
         var engine = new BuildEngine(config, buildOptions, BuildRegistry(), loggerFactory);
         await engine.BuildAsync();
-        loggerFactory.CreateLogger("netdocs").LogInformation("Output: {Dir}", config.AbsoluteSiteDir);
+        var log = loggerFactory.CreateLogger("netdocs");
+        if (buildOptions.Strict && warnings.Count > 0)
+        {
+            log.LogError("Aborting build: {Count} warning(s) treated as errors (strict mode).", warnings.Count);
+            return 1;
+        }
+        log.LogInformation("Output: {Dir}", config.AbsoluteSiteDir);
         return 0;
     }
 
@@ -76,16 +84,35 @@ public static class CliApp
     private static (SiteConfig, BuildOptions) LoadConfig(string configPath, CliOptions opts, bool serve)
     {
         var config = JsonConfigLoader.Load(configPath);
+
+        var isCi = IsTruthy(System.Environment.GetEnvironmentVariable("CI"));
+        var isLocal = serve || (!opts.Production && !isCi);
+
+        // Publish standard build flags to the process environment so YAML `!ENV [VAR, default]`
+        // tags and plugins observe a single, consistent view (mirrors mkdocs-material's flags).
+        var env = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["MKDOCS_PROD_BUILD"] = opts.Production ? "true" : "false",
+            ["IS_LOCAL_BUILD"] = isLocal ? "true" : "false",
+            ["CI"] = isCi ? "true" : null,
+        };
+        foreach (var (k, v) in env)
+            if (v is not null) System.Environment.SetEnvironmentVariable(k, v);
+
         var buildOptions = new BuildOptions
         {
             IsProduction = opts.Production,
             IsServe = serve,
-            Strict = opts.Strict,
+            Strict = opts.Strict || IsTruthy(System.Environment.GetEnvironmentVariable("MKDOCS_STRICT")),
             Clean = opts.Clean || !serve,
+            Environment = env,
         };
-        if (opts.Production) Environment.SetEnvironmentVariable("MKDOCS_PROD_BUILD", "true");
         return (config, buildOptions);
     }
+
+    private static bool IsTruthy(string? value) =>
+        value is not null && (value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value == "1" || value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 
     private static PluginRegistry BuildRegistry() => new PluginRegistry()
         .Register<SnippetsPlugin>("snippets", "pymdownx.snippets")
@@ -142,7 +169,7 @@ public static class CliApp
               -f, --config <path>   Path to appsettings.json (default ./appsettings.json)
               -p, --port <port>     Dev server port (default 8000)
                   --clean           Remove existing output before building
-                  --strict          Fail on plugin/template errors
+                  --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
               -v, --verbose         Verbose (Trace) logging
             """);
@@ -164,4 +191,29 @@ internal sealed class CliOptions
     public bool Strict { get; set; }
     public bool Production { get; set; }
     public bool Verbose { get; set; }
+}
+
+/// <summary>Thread-safe counter of warning/error log entries, used to enforce strict mode.</summary>
+internal sealed class WarningCounter
+{
+    private int _count;
+    public void Increment() => Interlocked.Increment(ref _count);
+    public int Count => Volatile.Read(ref _count);
+}
+
+/// <summary>Logger provider that tallies <see cref="LogLevel.Warning"/>+ messages into a <see cref="WarningCounter"/>.</summary>
+internal sealed class WarningCounterProvider(WarningCounter counter) : ILoggerProvider
+{
+    public ILogger CreateLogger(string categoryName) => new CountingLogger(counter);
+    public void Dispose() { }
+
+    private sealed class CountingLogger(WarningCounter counter) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel >= LogLevel.Warning) counter.Increment();
+        }
+    }
 }

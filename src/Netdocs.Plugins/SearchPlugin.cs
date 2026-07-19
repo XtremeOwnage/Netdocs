@@ -27,9 +27,10 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         foreach (var page in site.Pages)
         {
             var tags = ExtractTags(page);
-            docs.Add(new SearchDoc(page.Url, page.Title, Collapse(page.PlainText), tags));
+            var (intro, sections) = SplitPage(parser, page);
+            docs.Add(new SearchDoc(page.Url, page.Title, intro, tags));
 
-            foreach (var section in SplitSections(parser, page))
+            foreach (var section in sections)
                 docs.Add(section with { Tags = tags });
         }
 
@@ -49,33 +50,50 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         await File.WriteAllTextAsync(Path.Combine(dir, "search_index.json"), json, ct);
     }
 
-    private static IEnumerable<SearchDoc> SplitSections(HtmlParser parser, Page page)
+    /// <summary>Splits a page into its intro (text before the first heading) and per-section docs.
+    /// The page-level doc uses only the intro so search teasers stay concise (matches Material);
+    /// the body text lives in the per-section docs.</summary>
+    private static (string Intro, IReadOnlyList<SearchDoc> Sections) SplitPage(HtmlParser parser, Page page)
     {
-        if (string.IsNullOrEmpty(page.HtmlContent)) yield break;
+        if (string.IsNullOrEmpty(page.HtmlContent))
+            return (Collapse(page.PlainText), []);
+
         var doc = parser.ParseDocument($"<body>{page.HtmlContent}</body>");
         var body = doc.Body;
-        if (body is null) yield break;
+        if (body is null) return (Collapse(page.PlainText), []);
 
+        var sections = new List<SearchDoc>();
+        var intro = new StringBuilder();
         string? currentId = null, currentTitle = null;
         var buffer = new StringBuilder();
+        var seenHeading = false;
 
         foreach (var node in body.ChildNodes)
         {
             if (node is IElement el && el.TagName is "H1" or "H2" or "H3" && !string.IsNullOrEmpty(el.Id))
             {
                 if (currentId is not null)
-                    yield return new SearchDoc($"{page.Url}#{currentId}", currentTitle ?? "", Collapse(buffer.ToString()), []);
+                    sections.Add(new SearchDoc($"{page.Url}#{currentId}", currentTitle ?? "", Collapse(buffer.ToString()), []));
                 currentId = el.Id;
                 currentTitle = el.TextContent.Trim();
                 buffer.Clear();
+                seenHeading = true;
             }
-            else
+            else if (seenHeading)
             {
                 buffer.Append(node.TextContent).Append(' ');
             }
+            else
+            {
+                intro.Append(node.TextContent).Append(' ');
+            }
         }
         if (currentId is not null)
-            yield return new SearchDoc($"{page.Url}#{currentId}", currentTitle ?? "", Collapse(buffer.ToString()), []);
+            sections.Add(new SearchDoc($"{page.Url}#{currentId}", currentTitle ?? "", Collapse(buffer.ToString()), []));
+
+        var introText = Collapse(intro.ToString());
+        if (introText.Length == 0 && sections.Count == 0) introText = Collapse(page.PlainText);
+        return (introText, sections);
     }
 
     private static string[] ExtractTags(Page page)

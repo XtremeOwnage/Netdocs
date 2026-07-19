@@ -9,12 +9,24 @@ public sealed partial class IgnoreRules
 
     private IgnoreRules(List<Regex> patterns) => _patterns = patterns;
 
-    public static IgnoreRules Load(string projectRoot, string docsDir)
+    /// <param name="includeIgnoreFile">
+    /// When true, patterns from the <paramref name="ignoreFileName"/> file (default
+    /// <c>.mkdocsignore</c>) are loaded. Callers pass false to skip it — e.g. a development build
+    /// where the file-filter is disabled — so dev-only sections listed there stay in the site.
+    /// </param>
+    /// <param name="ignoreFileName">Name of the ignore file to read (from docs dir, then project root).</param>
+    public static IgnoreRules Load(
+        string projectRoot,
+        string docsDir,
+        IEnumerable<string> extraPatterns,
+        bool includeIgnoreFile = true,
+        string ignoreFileName = ".mkdocsignore")
     {
         var patterns = new List<Regex>();
-        foreach (var name in new[] { ".mkdocsignore" })
+
+        if (includeIgnoreFile)
         {
-            foreach (var path in new[] { Path.Combine(docsDir, name), Path.Combine(projectRoot, name) })
+            foreach (var path in new[] { Path.Combine(docsDir, ignoreFileName), Path.Combine(projectRoot, ignoreFileName) })
             {
                 if (!File.Exists(path)) continue;
                 foreach (var line in File.ReadAllLines(path))
@@ -25,18 +37,15 @@ public sealed partial class IgnoreRules
                 }
             }
         }
-        return new IgnoreRules(patterns);
-    }
 
-    public static IgnoreRules Load(string projectRoot, string docsDir, IEnumerable<string> extraPatterns)
-    {
-        var rules = Load(projectRoot, docsDir);
+        // Explicit config `exclude` globs are always honoured, independent of the ignore file.
         foreach (var pattern in extraPatterns)
         {
             var trimmed = pattern.Trim();
-            if (trimmed.Length > 0) rules._patterns.Add(GlobToRegex(trimmed));
+            if (trimmed.Length > 0) patterns.Add(GlobToRegex(trimmed));
         }
-        return rules;
+
+        return new IgnoreRules(patterns);
     }
 
     public bool IsIgnored(string relativePath)

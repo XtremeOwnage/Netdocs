@@ -55,7 +55,7 @@ public sealed class BuildEngine(
         List<Page> pages;
         using (Measure("1. content discovery"))
         {
-            var discovery = new ContentDiscovery(config, loggerFactory.CreateLogger<ContentDiscovery>());
+            var discovery = new ContentDiscovery(config, options, loggerFactory.CreateLogger<ContentDiscovery>());
             pages = discovery.Discover().ToList();
         }
 

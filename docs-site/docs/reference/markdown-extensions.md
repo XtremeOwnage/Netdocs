@@ -107,6 +107,28 @@ self-host the assets (or pin a different set), override the base URL:
 Fenced code blocks are highlighted client-side (highlight.js) with line numbers. Use
 ```` ```mermaid ```` fences for Mermaid diagrams.
 
+The pymdownx.highlight fence options are supported, in both the bare and the attr-list
+brace form:
+
+````markdown
+```python linenums="5" hl_lines="2 4-5" title="example.py"
+print("first")
+print("highlighted")
+```
+
+```{ .yaml .no-copy title="config.yml" }
+key: value
+```
+````
+
+- `linenums="N"` — start the line-number gutter at `N`.
+- `hl_lines="2 4-5"` — highlight the listed lines (ranges allowed).
+- `title="…"` — render a file-name caption above the block.
+- Line numbers are anchor-linkable (each line gets an `id`).
+
+Inline code highlighting (pymdownx.inlinehilite) uses a shebang: `` `#!python range(10)` ``
+renders the span as highlighted `python`.
+
 ## Configurable extensions
 
 Declared under `markdownExtensions`:

@@ -179,6 +179,37 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void CodeFence_LinenumsAndHlLines_EmitDataAttributes()
+    {
+        var html = Render("```python linenums=\"5\" hl_lines=\"2 4-5\"\nprint(1)\n```\n");
+        Assert.Contains("class=\"language-python\"", html);
+        Assert.Contains("data-linenums-start=\"5\"", html);
+        Assert.Contains("data-hl-lines=\"2 4-5\"", html);
+    }
+
+    [Fact]
+    public void CodeFence_BraceFormWithTitle_EmitsFilename()
+    {
+        var html = Render("```{ .yaml .no-copy title=\"config.yml\" }\nkey: value\n```\n");
+        Assert.Contains("class=\"language-yaml\"", html);
+        Assert.Contains("<span class=\"filename\">config.yml</span>", html);
+    }
+
+    [Fact]
+    public void InlineHilite_ShebangProducesLanguageClass()
+    {
+        var html = Render("Use `#!python range(10)` here.\n");
+        Assert.Contains("<code class=\"language-python\">range(10)</code>", html);
+    }
+
+    [Fact]
+    public void InlineCode_WithoutShebang_RendersPlainCode()
+    {
+        var html = Render("Plain `value` code.\n");
+        Assert.Contains("<code>value</code>", html);
+    }
+
+    [Fact]
     public void MermaidFence_RendersPreMermaid()
     {
         var html = Render("```mermaid\ngraph TD; A-->B;\n```\n");

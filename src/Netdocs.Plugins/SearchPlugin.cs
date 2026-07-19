@@ -9,14 +9,29 @@ namespace Netdocs.Plugins;
 /// <summary>Emits a Material-compatible <c>search/search_index.json</c> (page + per-section docs).</summary>
 public sealed class SearchPlugin : IPlugin, IBuildHook
 {
-    private string _language = "en";
+    private static readonly string[] DefaultPipeline = ["stemmer", "stopWordFilter", "trimmer"];
+    private const string DefaultSeparator = "[\\s\\-]+";
+
+    private IReadOnlyList<string> _languages = ["en"];
+    private string _separator = DefaultSeparator;
+    private IReadOnlyList<string> _pipeline = DefaultPipeline;
 
     public string Name => "search";
 
     public void Configure(IPluginContext ctx)
     {
-        if (ctx.PluginOptions.TryGetValue("lang", out var lang) && lang is string l)
-            _language = l;
+        var opts = ctx.PluginOptions;
+
+        // `lang` accepts a single language ("en") or a list (["en", "de"]).
+        if (opts.TryGetValue("lang", out var lang))
+            _languages = AsStringList(lang) is { Count: > 0 } list ? list : _languages;
+
+        if (opts.TryGetValue("separator", out var sep) && sep is string s && s.Length > 0)
+            _separator = s;
+
+        // `pipeline` overrides the lunr token pipeline; an empty list disables stemming/stopwords.
+        if (opts.TryGetValue("pipeline", out var pipe) && AsStringList(pipe) is { } p)
+            _pipeline = p;
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
@@ -41,7 +56,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
             ["tags"] = new Dictionary<string, object?> { ["boost"] = 1000000.0 },
         };
         var index = new SearchIndex(
-            new SearchConfig([_language], "[\\s\\-]+", ["stemmer", "stopWordFilter", "trimmer"], fields),
+            new SearchConfig(_languages, _separator, _pipeline, fields),
             docs);
 
         var dir = Path.Combine(site.Config.AbsoluteSiteDir, "search");
@@ -105,6 +120,15 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
 
     private static string Collapse(string text) =>
         string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>Normalizes a plugin option that may be a single string or a list into a string list.
+    /// Returns null when the value is neither (so callers can keep their default).</summary>
+    private static IReadOnlyList<string>? AsStringList(object? value) => value switch
+    {
+        string s => [s],
+        IEnumerable<object?> items => items.Select(x => x?.ToString() ?? "").Where(s => s.Length > 0).ToList(),
+        _ => null,
+    };
 }
 
 public sealed record SearchIndex(SearchConfig Config, IReadOnlyList<SearchDoc> Docs);

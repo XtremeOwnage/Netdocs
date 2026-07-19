@@ -4,11 +4,14 @@ using Netdocs.Abstractions;
 namespace Netdocs.Plugins;
 
 /// <summary>
-/// Minimal mkdocs-macros port. Expands two example macros to show the pattern users can
-/// extend: <c>{{ fileuri("name") }}</c> resolves a doc or asset to its published URL
-/// (prefixed with <c>site_url</c>), and <c>{{ button("text", "url") }}</c> renders a
-/// Material-styled call-to-action button. Honors mkdocs-macros' <c>render_by_default</c>
-/// option and the per-page <c>render_macros</c> / <c>ignore_macros</c> front-matter overrides.
+/// Minimal mkdocs-macros port. Ships two example function macros to show the pattern:
+/// <c>{{ fileuri("name") }}</c> resolves a doc or asset to its published URL (prefixed with
+/// <c>site_url</c>), and <c>{{ button("text", "url") }}</c> renders a Material-styled
+/// call-to-action button. Sites can define their own simple text macros without writing C#
+/// via the <c>variables</c> plugin option (each <c>key</c> becomes a <c>{{ key }}</c> token);
+/// richer macros are added by writing a custom <see cref="IMarkdownPreprocessor"/> plugin.
+/// Honors mkdocs-macros' <c>render_by_default</c> option and the per-page <c>render_macros</c>
+/// / <c>ignore_macros</c> front-matter overrides.
 /// </summary>
 public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 {
@@ -16,6 +19,7 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
     private string _docsDir = "";
     private string _siteUrl = "";
     private bool _renderByDefault = true;
+    private IReadOnlyDictionary<string, string> _variables = new Dictionary<string, string>();
 
     public string Name => "macros";
     public int Order => 25; // after snippets (10) / table-reader (20) so their output can use macros
@@ -28,6 +32,15 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
         if (ctx.PluginOptions.TryGetValue("render_by_default", out var rbd) && rbd is bool b)
             _renderByDefault = b;
+
+        // User-defined variables: `variables: { key: value }` in the plugin config become
+        // `{{ key }}` text macros, so a site can define its own macros without writing C#.
+        if (ctx.PluginOptions.TryGetValue("variables", out var vars) && vars is IReadOnlyDictionary<string, object?> map)
+        {
+            _variables = map
+                .Where(kv => kv.Value is not null)
+                .ToDictionary(kv => kv.Key, kv => kv.Value!.ToString() ?? "", StringComparer.Ordinal);
+        }
     }
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
@@ -43,6 +56,14 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
         result = ButtonRegex().Replace(result, m =>
             RenderButton(m.Groups["text"].Value, m.Groups["url"].Value));
+
+        // Bare `{{ name }}` tokens expand to a user-defined variable when one exists;
+        // unknown tokens are left untouched so they can be handled elsewhere (or shown literally).
+        if (_variables.Count > 0)
+        {
+            result = VariableRegex().Replace(result, m =>
+                _variables.TryGetValue(m.Groups["name"].Value, out var val) ? val : m.Value);
+        }
 
         return Task.FromResult(result);
     }
@@ -122,4 +143,7 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
     [GeneratedRegex("""\{\{\s*button\s*\(\s*["'](?<text>[^"']*)["']\s*,\s*["'](?<url>[^"']+)["']\s*\)\s*\}\}""")]
     private static partial Regex ButtonRegex();
+
+    [GeneratedRegex("""\{\{\s*(?<name>[A-Za-z_][\w.]*)\s*\}\}""")]
+    private static partial Regex VariableRegex();
 }

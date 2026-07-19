@@ -15,13 +15,61 @@ public static partial class CssJsMinifier
     {
         if (string.IsNullOrEmpty(css)) return css;
 
+        // Strip comments with a string-aware scanner FIRST. A regex that protects string literals
+        // before removing comments mis-reads quotes/apostrophes that live inside a comment (e.g.
+        // "it's" or a quoted word), which can swallow the following rule. Removing comments up
+        // front means the later string-protection pass only ever sees real CSS strings.
+        css = StripCssComments(css);
+
         var (withPlaceholders, strings) = ProtectStrings(css);
-        withPlaceholders = CssComments().Replace(withPlaceholders, "");
         withPlaceholders = Whitespace().Replace(withPlaceholders, " ");
         // Tidy spaces around structural punctuation.
         withPlaceholders = CssAroundPunctuation().Replace(withPlaceholders, "$1");
         withPlaceholders = withPlaceholders.Replace(";}", "}").Trim();
         return RestoreStrings(withPlaceholders, strings);
+    }
+
+    /// <summary>
+    /// Removes <c>/* … */</c> comments while skipping over string literals so a <c>/*</c> that
+    /// appears inside a CSS string (e.g. <c>content: "/*"</c>) is preserved, and quotes inside a
+    /// comment are discarded with the comment rather than treated as string delimiters.
+    /// </summary>
+    private static string StripCssComments(string css)
+    {
+        var sb = new System.Text.StringBuilder(css.Length);
+        int i = 0, n = css.Length;
+        while (i < n)
+        {
+            var c = css[i];
+
+            if (c is '"' or '\'')
+            {
+                var quote = c;
+                sb.Append(c);
+                i++;
+                while (i < n)
+                {
+                    var d = css[i];
+                    sb.Append(d);
+                    if (d == '\\' && i + 1 < n) { sb.Append(css[i + 1]); i += 2; continue; }
+                    i++;
+                    if (d == quote) break;
+                }
+                continue;
+            }
+
+            if (c == '/' && i + 1 < n && css[i + 1] == '*')
+            {
+                i += 2;
+                while (i + 1 < n && !(css[i] == '*' && css[i + 1] == '/')) i++;
+                i = Math.Min(i + 2, n); // skip closing */ (tolerate unterminated)
+                continue;
+            }
+
+            sb.Append(c);
+            i++;
+        }
+        return sb.ToString();
     }
 
     /// <summary>
@@ -58,9 +106,6 @@ public static partial class CssJsMinifier
 
     [GeneratedRegex(@"""(?:\\.|[^""\\])*""|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`")]
     private static partial Regex StringLiterals();
-
-    [GeneratedRegex(@"/\*[\s\S]*?\*/")]
-    private static partial Regex CssComments();
 
     [GeneratedRegex(@"/\*[\s\S]*?\*/")]
     private static partial Regex JsBlockComments();

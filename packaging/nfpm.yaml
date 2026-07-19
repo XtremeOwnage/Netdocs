@@ -1,0 +1,23 @@
+name: netdocs
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Netdocs contributors <noreply@github.com>
+description: |
+  A fast, flexible static site generator in .NET — a Material for MkDocs derivative.
+  Site configuration lives in appsettings.json and Markdown in docs/ builds with
+  little to no change.
+vendor: Netdocs contributors
+homepage: https://github.com/XtremeOwnage/Netdocs
+license: MIT
+
+contents:
+  # The self-contained publish folder (binary + theme/templates + theme/assets).
+  - src: ./dist
+    dst: /opt/netdocs
+  # Expose the CLI on PATH.
+  - src: /opt/netdocs/netdocs
+    dst: /usr/bin/netdocs
+    type: symlink

@@ -80,6 +80,7 @@ see each plugin page for its order. Plugins that emit assets or pages are order-
 | [affiliate-links](affiliate-links.md) | Auto tooltip + footer disclosure for affiliate links. |
 | [b64](b64.md) | Embed local images as inline `data:` URIs (pymdownx.b64). |
 | [arithmatex](arithmatex.md) | LaTeX math typeset with MathJax (pymdownx.arithmatex). |
+| [typeset](typeset.md) | Smart typography (curly quotes, en/em dashes, ellipses) via SmartyPants. |
 
 ## How plugins hook into the build
 

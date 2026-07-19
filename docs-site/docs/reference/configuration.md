@@ -29,6 +29,9 @@ matter of translating keys to JSON.
 | `extraJavaScript` | array | — | Extra script srcs injected before `</body>`. |
 | `exclude` | array | — | Glob patterns (docs-relative) to exclude from discovery. |
 | `extra` | object | — | Arbitrary data exposed to templates (e.g. `social` links). |
+| `slugify` | object | — | [URL slug generation](#slugify) rules. |
+| `deploy` | object | — | [Deployment target](#deployment) configuration. |
+| `optimize` | object | — | [Output optimization](#optimization) toggles. |
 
 ## Navigation
 
@@ -110,6 +113,65 @@ produced by a configurable slugifier. Add a `slugify` block to control it:
 
 With the defaults, `"Hello World!"` becomes `hello-world`. Set `"separator": "_"` to get
 `hello_world`, or `"case": "none"` to keep the original casing.
+
+## Deployment
+
+A `deploy` block tells `netdocs deploy` where to publish the built site. See
+[Publishing](../setup/publishing.md) for end-to-end walkthroughs of each target.
+
+```json
+{
+  "Netdocs": {
+    "deploy": {
+      "target": "git",
+      "branch": "gh-pages",
+      "remote": "origin",
+      "message": "Deploy docs",
+      "push": true
+    }
+  }
+}
+```
+
+| Option | Type | Default | Applies to | Description |
+|---|---|---|---|---|
+| `target` | string | `"none"` | — | Destination kind: `none`, `filesystem`, `git`, or `s3`. |
+| `path` | string | — | `filesystem` | Destination directory to copy the built site into. |
+| `clean` | bool | `true` | `filesystem`, `s3` | Delete files at the destination that this build did not produce. |
+| `branch` | string | `"gh-pages"` | `git` | Branch to publish to. |
+| `remote` | string | `"origin"` | `git` | Remote to push to. |
+| `message` | string | `"Deploy docs"` | `git` | Commit message for the published commit. |
+| `push` | bool | `true` | `git` | Push the branch to the remote after committing. |
+| `bucket` | string | — | `s3` | Target S3 bucket name. |
+| `prefix` | string | — | `s3` | Optional key prefix (sub-path) within the bucket. |
+| `region` | string | — | `s3` | AWS region (otherwise the AWS CLI default). |
+
+## Optimization
+
+An `optimize` block enables post-render output optimizations. All are **off by default** so
+builds stay fast and output stays debuggable; turn them on for production publishes.
+
+```json
+{
+  "Netdocs": {
+    "optimize": {
+      "minifyHtml": true,
+      "minifyCss": true,
+      "minifyJs": true,
+      "convertImagesToWebp": true,
+      "webpQuality": 80
+    }
+  }
+}
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `minifyHtml` | bool | `false` | Collapse insignificant whitespace/comments in emitted HTML. |
+| `minifyCss` | bool | `false` | Collapse whitespace/comments in emitted CSS assets. |
+| `minifyJs` | bool | `false` | Collapse whitespace/comments in emitted JavaScript assets. |
+| `convertImagesToWebp` | bool | `false` | Generate a `.webp` sibling for each raster image and wrap `<img>` in `<picture>` (originals are kept as fallback). |
+| `webpQuality` | int | `80` | Quality (1–100) for generated webp images. |
 
 ## Environment overrides
 

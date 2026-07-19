@@ -16,11 +16,13 @@ public sealed class PluginHost
     public IReadOnlyList<IBuildHook> BuildHooks { get; }
     public IReadOnlyList<INavigationFilter> NavigationFilters { get; }
 
-    private PluginHost(List<IPlugin> plugins, PluginAssets assets)
+    private PluginHost(List<IPlugin> plugins, PluginAssets assets, IReadOnlyDictionary<IPlugin, int?> orderOverrides)
     {
         Plugins = plugins;
         Assets = assets;
-        Preprocessors = plugins.OfType<IMarkdownPreprocessor>().OrderBy(p => p.Order).ToList();
+        Preprocessors = plugins.OfType<IMarkdownPreprocessor>()
+            .OrderBy(p => orderOverrides.TryGetValue((IPlugin)p, out var o) && o.HasValue ? o.Value : p.Order)
+            .ToList();
         MarkdigContributors = plugins.OfType<IMarkdigContributor>().ToList();
         ContentGenerators = plugins.OfType<IContentGenerator>().ToList();
         BuildHooks = plugins.OfType<IBuildHook>().ToList();
@@ -39,6 +41,7 @@ public sealed class PluginHost
         var log = loggerFactory.CreateLogger("PluginHost");
         var plugins = new List<IPlugin>();
         var assets = new PluginAssets();
+        var orderOverrides = new Dictionary<IPlugin, int?>();
 
         foreach (var entry in pluginConfigs)
         {
@@ -60,6 +63,7 @@ public sealed class PluginHost
             {
                 plugin.Configure(ctx);
                 plugins.Add(plugin);
+                orderOverrides[plugin] = entry.Order;
                 log.LogDebug("Loaded plugin {Name}", plugin.Name);
             }
             catch (Exception ex)
@@ -69,6 +73,6 @@ public sealed class PluginHost
             }
         }
 
-        return new PluginHost(plugins, assets);
+        return new PluginHost(plugins, assets, orderOverrides);
     }
 }

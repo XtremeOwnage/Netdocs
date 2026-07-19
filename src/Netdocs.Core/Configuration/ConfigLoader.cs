@@ -111,7 +111,10 @@ public static class ConfigLoader
     {
         var result = new List<PluginConfig>();
         foreach (var (name, opts) in EnumerateNamedList(node))
-            result.Add(new PluginConfig { Name = name, Options = opts });
+        {
+            var order = opts.Get("order") is { } orderNode ? orderNode.AsInt() : (int?)null;
+            result.Add(new PluginConfig { Name = name, Options = opts, Order = order });
+        }
         return result;
     }
 

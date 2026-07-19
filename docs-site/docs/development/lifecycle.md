@@ -71,6 +71,20 @@ Preprocessors are sorted by their `Order` property (ascending). The built-ins us
 Pick an `Order` relative to these when you need your preprocessor to run before or after
 a built-in.
 
+#### Overriding order from config
+
+You don't need to recompile a plugin to change where it runs: set an `order` on its
+`plugins` entry to override its natural `Order`. Lower runs earlier; ties keep config
+order. For example, to run `macros` *before* `table-reader`:
+
+```json title="appsettings.json"
+{ "name": "macros", "order": 15 }
+```
+
+Other hook types (Markdig contributors, content generators, build hooks, navigation
+filters) run in the order their plugins are listed in `plugins`, so reordering that list
+is all that's needed for them.
+
 ## Template render order
 
 Stage 11 renders each page with [Scriban](https://github.com/scriban/scriban). The theme's

@@ -89,6 +89,14 @@ public sealed class PluginConfig
 {
     public required string Name { get; init; }
     public IReadOnlyDictionary<string, object?> Options { get; init; } = new Dictionary<string, object?>();
+
+    /// <summary>
+    /// Optional override for this plugin's markdown-preprocessor stage order (the built-in
+    /// defaults are snippets=10, table-reader=20, abbreviations=20, macros=25). Lower runs
+    /// earlier. When null, the plugin's natural <see cref="IMarkdownPreprocessor.Order"/> is used.
+    /// Other hook types run in the order plugins are listed in config.
+    /// </summary>
+    public int? Order { get; init; }
 }
 
 /// <summary>

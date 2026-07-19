@@ -24,15 +24,23 @@ Reference the terms anywhere; matching words render as `<abbr>` with a tooltip:
 Netdocs is an SSG that outputs HTML and CSS.
 ```
 
+Abbreviations are expanded in prose only. Terms that appear inside inline code
+(`` `HTML` ``) or fenced code blocks are left untouched, so code samples are never
+rewritten.
+
 ## Options
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `files` | array | — | Abbreviation files appended to every page. |
+| `files` | array | `["_include/abbv.md"]` | Abbreviation files appended to every page. |
 
 ```json
 { "name": "abbreviations", "options": { "files": [ "_include/abbv.md" ] } }
 ```
+
+The plugin only runs when it is listed in `plugins`. If your abbreviations are not
+rendering, confirm the entry above is present and that each `files` path exists
+(relative to your `docs` directory).
 
 ## Attribution
 

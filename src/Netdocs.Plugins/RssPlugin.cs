@@ -1,6 +1,7 @@
 using System.Text;
 using System.Xml;
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -54,6 +55,6 @@ public sealed class RssPlugin : IPlugin, IBuildHook
         await writer.FlushAsync();
 
         var path = Path.Combine(site.Config.AbsoluteSiteDir, _feedFile);
-        await File.WriteAllTextAsync(path, sb.ToString(), ct);
+        await OutputWriter.WriteTextIfChangedAsync(site, path, sb.ToString(), ct);
     }
 }

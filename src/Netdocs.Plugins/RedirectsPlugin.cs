@@ -1,4 +1,5 @@
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -26,7 +27,6 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
                 ? source[..^3] + "/index.html"
                 : source.TrimEnd('/') + "/index.html";
             var dest = Path.Combine(site.Config.AbsoluteSiteDir, relative.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
 
             var escaped = System.Net.WebUtility.HtmlEncode(target);
             var html = $"""
@@ -41,7 +41,7 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
                 <body>Redirecting to <a href="{escaped}">{escaped}</a>…</body>
                 </html>
                 """;
-            await File.WriteAllTextAsync(dest, html, ct);
+            await OutputWriter.WriteTextIfChangedAsync(site, dest, html, ct);
         }
     }
 }

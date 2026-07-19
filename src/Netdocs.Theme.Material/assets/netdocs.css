@@ -173,10 +173,31 @@ body {
 
 .md-typeset .highlight,
 .md-typeset .highlighttable {
+  position: relative;
+  /* Space stacked code blocks apart. The gap normally comes from the inner
+     <pre>'s margin, but overflow:hidden (needed for the rounded corners) traps
+     that margin INSIDE the panel, so put the spacing on the container itself. */
+  margin: 1em 0;
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
   overflow: hidden;
   box-shadow: var(--nd-code-shadow);
+}
+
+/* Drop the inner <pre>'s own margin so it isn't trapped as internal whitespace,
+   and de-position it (Material sets pre{position:relative}) so the injected
+   copy/select nav anchors to the .highlight panel's top-right corner — over the
+   title bar when one is present — instead of the code area below it. */
+.md-typeset .highlight > pre,
+.md-typeset .highlighttable > pre {
+  margin: 0;
+  position: static;
+}
+
+/* Give code content a little more horizontal breathing room so text is never
+   flush against the panel border. */
+.md-typeset .highlight > pre > code {
+  padding: 0.75em 1.2em;
 }
 
 /* Bare <pre><code> blocks (not wrapped in a .highlight container) still need a
@@ -196,6 +217,14 @@ body {
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+
+/* Keep the copy/select nav pinned to the very top-right of the panel. It is
+   injected inside <pre>, which we set to position:static above, so it anchors to
+   the .highlight panel. */
+.md-typeset .highlight .md-code__nav {
+  top: 0.4em;
+  right: 0.4em;
 }
 
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a

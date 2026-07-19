@@ -63,6 +63,24 @@ The shared pipeline enables these by default:
 Enable `content.tabs.link` in theme features to link tabs with the same label across the
 page.
 
+### Emoji
+
+Emoji shortcodes render as [Twemoji](https://github.com/jdecked/twemoji) SVG images
+(matching Material's `pymdownx.emoji` + twemoji generator):
+
+```markdown
+Great job :smile: :rocket:
+```
+
+produces `<img class="twemoji" …>` elements served from a pinned jsDelivr CDN. To
+self-host the assets (or pin a different set), override the base URL:
+
+```json
+"markdownExtensions": [
+  { "name": "pymdownx.emoji", "options": { "base": "/assets/twemoji/" } }
+]
+```
+
 ### Code blocks
 
 Fenced code blocks are highlighted client-side (highlight.js) with line numbers. Use

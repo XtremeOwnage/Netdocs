@@ -39,15 +39,51 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
         page.PlainText = ExtractPlainText(page.HtmlContent);
     }
 
-    /// <summary>Rewrites relative <c>*.md</c> links in content to their output URLs (mkdocs-style).</summary>
+    /// <summary>Rewrites relative <c>*.md</c> links to output URLs and relative resource links
+    /// (images, files) to their actual source-based output paths — needed because blog posts
+    /// get their URL rewritten while their co-located assets keep the source path.</summary>
     private void RewriteMarkdownLinks(MarkdownDocument document, string currentRelativePath)
     {
         foreach (var link in document.Descendants<LinkInline>())
         {
-            if (link.IsImage || string.IsNullOrEmpty(link.Url)) continue;
-            var resolved = ResolveMarkdownLink(currentRelativePath, link.Url, linkMap!);
-            if (resolved is not null) link.Url = resolved;
+            if (string.IsNullOrEmpty(link.Url)) continue;
+
+            if (!link.IsImage)
+            {
+                var md = ResolveMarkdownLink(currentRelativePath, link.Url, linkMap!);
+                if (md is not null) { link.Url = md; continue; }
+            }
+
+            var resource = ResolveResourceLink(currentRelativePath, link.Url, link.IsImage);
+            if (resource is not null) link.Url = resource;
         }
+    }
+
+    /// <summary>Resolves a relative image/file link to an absolute, source-based output path.</summary>
+    internal static string? ResolveResourceLink(string currentRelativePath, string url, bool isImage)
+    {
+        if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
+            url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var cut = url.IndexOfAny(['#', '?']);
+        var suffix = cut >= 0 ? url[cut..] : "";
+        var path = cut >= 0 ? url[..cut] : url;
+        if (path.Length == 0) return null;
+
+        if (path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        // Only rewrite images or links that point at a file (have an extension); leave bare
+        // directory links alone so we don't mangle links to other pages.
+        var lastSegment = path.Split('/')[^1];
+        if (!isImage && !lastSegment.Contains('.')) return null;
+
+        var currentDir = Path.GetDirectoryName(currentRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
+        var combined = currentDir.Length == 0 ? path : currentDir + "/" + path;
+        return "/" + NormalizeRelative(combined) + suffix;
     }
 
     internal static string? ResolveMarkdownLink(string currentRelativePath, string url, IReadOnlyDictionary<string, string> map)

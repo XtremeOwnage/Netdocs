@@ -132,7 +132,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             if (post.Categories.Count > 0)
                 sb.Append(" &middot; ").Append(string.Join(", ", post.Categories));
             sb.AppendLine().AppendLine();
-            if (post.Excerpt.Length > 0) sb.AppendLine(post.Excerpt).AppendLine();
+            if (post.Excerpt.Length > 0) sb.AppendLine(RewriteExcerptLinks(post.Excerpt, post.Page.RelativePath)).AppendLine();
             sb.Append("[Continue reading](").Append(rootUrl).AppendLine(")").AppendLine();
         }
         if (nextPageUrl is not null)
@@ -208,6 +208,42 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     }
 
     private static string Normalize(string dir) => dir.Trim('/').Length == 0 ? "" : dir.Trim('/') + "/";
+
+    /// <summary>Rewrites relative image/file links in an excerpt to absolute source-based paths,
+    /// since the excerpt is embedded in the generated list page (a different directory).</summary>
+    private static string RewriteExcerptLinks(string markdown, string postRelativePath)
+    {
+        var dir = Path.GetDirectoryName(postRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
+        return System.Text.RegularExpressions.Regex.Replace(markdown, @"(!?\[[^\]]*\]\()([^)\s]+)(\))", match =>
+        {
+            var pre = match.Groups[1].Value;
+            var url = match.Groups[2].Value;
+            var post = match.Groups[3].Value;
+            if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
+                url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                return match.Value;
+            if (url.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) return match.Value;
+
+            var isImage = pre.StartsWith('!');
+            var lastSegment = url.Split('/')[^1];
+            if (!isImage && !lastSegment.Contains('.')) return match.Value;
+
+            var combined = dir.Length == 0 ? url : dir + "/" + url;
+            return pre + "/" + NormalizeRel(combined) + post;
+        });
+    }
+
+    private static string NormalizeRel(string path)
+    {
+        var parts = new List<string>();
+        foreach (var segment in path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".") continue;
+            if (segment == "..") { if (parts.Count > 0) parts.RemoveAt(parts.Count - 1); }
+            else parts.Add(segment);
+        }
+        return string.Join('/', parts);
+    }
 }
 
 public sealed record BlogPost(Page Page, DateTimeOffset Date, IReadOnlyList<string> Categories, string Excerpt);

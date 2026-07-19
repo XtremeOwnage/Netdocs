@@ -33,6 +33,10 @@ public sealed class BuildEngine(
         services.AddSingleton(loggerFactory);
         services.AddLogging();
         var provider = services.BuildServiceProvider();
+
+        // Discover external plugins shipped as ./plugins/*.dll before resolving the effective set.
+        ExternalPluginLoader.Load(registry, provider, config.ProjectRoot, loggerFactory.CreateLogger("ExternalPlugins"));
+
         var effectivePlugins = BuildEffectivePluginList();
         var host = PluginHost.Build(config, options, effectivePlugins, registry, provider, services, loggerFactory);
         _log.LogDebug("Loaded {Count} plugins: {Plugins}", host.Plugins.Count, string.Join(", ", host.Plugins.Select(p => p.Name)));

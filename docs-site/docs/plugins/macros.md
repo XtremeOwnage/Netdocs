@@ -106,7 +106,7 @@ public sealed partial class YearMacroPlugin : IPlugin, IMarkdownPreprocessor
 © {{ year() }} Example Corp.
 ```
 
-Build it into a DLL and load it with the [external-plugin loader](../reference/external-plugins.md).
+Build it into a DLL and load it with the [external-plugin loader](../development/external-plugins.md).
 See [Events & callbacks](../development/events-and-callbacks.md) for the full plugin
 interface list and where each hook runs in the build.
 

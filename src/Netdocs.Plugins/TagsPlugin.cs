@@ -109,10 +109,13 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         public List<Page>? Pages { get; set; }
     }
 
-    /// <summary>Display name for a page on the tags page: an explicit <c>tags_title</c> front-matter
-    /// override wins, then the resolved title, then the first H1, then the filename.</summary>
+    /// <summary>Display name for a page on the tags page: an explicit <c>tag_title</c> (or legacy
+    /// <c>tags_title</c>) front-matter override wins, then the resolved title, then the first H1,
+    /// then the filename.</summary>
     private static string GetDisplayTitle(Page page)
     {
+        if (!string.IsNullOrWhiteSpace(page.TagTitle))
+            return page.TagTitle!;
         if (page.FrontMatter.TryGetValue("tags_title", out var tt) && tt is string tts && tts.Length > 0)
             return tts;
         if (!string.IsNullOrEmpty(page.Title)) return page.Title;

@@ -56,6 +56,13 @@ public sealed class ContentDiscovery(SiteConfig config, ILogger<ContentDiscovery
         if (meta.TryGetValue("title", out var t) && t is string title)
             page.Title = title;
 
+        if (meta.TryGetValue("page_title", out var pt) && pt is string pageTitle && pageTitle.Length > 0)
+            page.PageTitle = pageTitle;
+        if (meta.TryGetValue("nav_title", out var nt) && nt is string navTitle && navTitle.Length > 0)
+            page.NavTitle = navTitle;
+        if (meta.TryGetValue("tag_title", out var gt) && gt is string tagTitle && tagTitle.Length > 0)
+            page.TagTitle = tagTitle;
+
         return page;
     }
 

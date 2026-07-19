@@ -48,6 +48,7 @@ func render_nav(node, path, level)
             {{ render_nav c (path + "_" + (for.index + 1)) (level + 1) }}
           {{~ end ~}}
         </ul>
+        {{~ if toc_integrate && node.section_index && node.section_index.url == page.url ~}}{{ render_integrated_toc }}{{~ end ~}}
       </nav>
     </li>
   {{~ else ~}}
@@ -55,6 +56,7 @@ func render_nav(node, path, level)
       <a href="{{ base_url }}{{ node.url }}" class="md-nav__link{{ if active }} md-nav__link--active{{ end }}">
         <span class="md-ellipsis">{{ node.title }}</span>
       </a>
+      {{~ if toc_integrate && node.url == page.url ~}}{{ render_integrated_toc }}{{~ end ~}}
     </li>
   {{~ end
 end
@@ -69,7 +71,22 @@ func render_toc(entry) ~}}
     </nav>
     {{~ end ~}}
   </li>
-{{~ end ~}}
+{{~ end
+func render_integrated_toc()
+  toc_root = toc
+  if toc && (array.size toc) > 0 && toc[0].level == 1
+    toc_root = toc[0].children
+  end
+  if toc_root && (array.size toc_root) > 0 ~}}
+  <nav class="md-nav md-nav--secondary" aria-label="Table of contents" data-md-level="0">
+    <label class="md-nav__title" for="__toc"><span class="md-nav__icon md-icon"></span>Table of contents</label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      {{~ for entry in toc_root ~}}{{ render_toc entry }}{{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end
+end
+toc_integrate = features | array.contains "toc.integrate" ~}}
 <!doctype html>
 <html lang="{{ config.theme.language }}" class="no-js">
   <head>
@@ -143,6 +160,7 @@ func render_toc(entry) ~}}
               </div>
             </div>
           </div>
+          {{~ if !toc_integrate ~}}
           <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
@@ -150,6 +168,7 @@ func render_toc(entry) ~}}
               </div>
             </div>
           </div>
+          {{~ end ~}}
           <div class="md-content" data-md-component="content">
             <article class="md-content__inner md-typeset">
 {{~ if (features | array.contains "navigation.path") && breadcrumbs && (array.size breadcrumbs) > 0 ~}}

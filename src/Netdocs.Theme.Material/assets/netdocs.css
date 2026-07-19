@@ -227,6 +227,18 @@ body {
   right: 0.4em;
 }
 
+/* Filename/label title bar (fence `title="…"`). This is emitted server-side by
+   the core fence parser, so its styling lives here (not in the swappable
+   highlighter partial) to survive a renderer swap. */
+.md-typeset .highlight > .filename {
+  display: block;
+  font-size: 0.85em;
+  font-weight: 700;
+  padding: 0.5em 1em;
+  background: color-mix(in srgb, var(--md-code-bg-color) 100%, var(--md-default-fg-color) 6%);
+  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a
    back-link, the author profile, a "Metadata" heading, and a stacked date / category /
    reading-time list. Self-contained `.nd-post-*` markup (not Material's drawer classes)

@@ -236,7 +236,7 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
     {{~ for js in inline_scripts ~}}
     <script>{{ js }}</script>
     {{~ end ~}}
-    {{ include "partials/highlight.html" }}
+    {{~ if (highlight | string.downcase) == "highlightjs" ~}}{{ include "partials/highlight.html" }}{{~ end ~}}
     {{ include "partials/mermaid.html" }}
   </body>
 </html>

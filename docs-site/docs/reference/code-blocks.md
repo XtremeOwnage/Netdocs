@@ -11,7 +11,9 @@ can copy the exact syntax you need. Netdocs parses the same
 fence options the MkDocs Material sites rely on, so most existing Markdown works unchanged.
 
 Syntax highlighting is applied in the browser, and it is **scheme-aware**: token colors are
-mapped onto the theme's palette so code stays legible in both light and dark mode.
+mapped onto the theme's palette so code stays legible in both light and dark mode. The
+highlighter is swappable — see [Code highlighting](theme.md#code-highlighting) to switch it off
+or bring your own (Prism, Shiki, …).
 
 ## Basic block
 

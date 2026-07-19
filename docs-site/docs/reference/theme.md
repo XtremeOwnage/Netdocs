@@ -17,6 +17,7 @@ driven by the vendored Material CSS/JS bundle. The theme is configured under
 | `logo` | string | — | Path to a logo image. |
 | `favicon` | string | — | Path to a favicon. |
 | `customDir` | string | — | Override directory for templates/partials (Scriban). |
+| `highlight` | string | `"highlightjs"` | Client-side syntax-highlighting renderer for code blocks (see [Code highlighting](#code-highlighting)). |
 | `palette` | array | — | Color schemes (see below). |
 | `features` | array | — | Enabled Material feature flags. |
 | `font` | object | — | `text` and `code` font families. |
@@ -94,6 +95,54 @@ Feature flags mirror Material for MkDocs. Commonly used flags:
 | `content.code.copy` | Copy-to-clipboard on code blocks. |
 | `content.tabs.link` | Link content tabs with the same label across a page. |
 | `toc.follow` | Table of contents follows the scroll position. |
+
+## Code highlighting
+
+Code blocks are produced in two independent stages:
+
+1. **Parsing (core, always on).** The Markdig fence parser understands the fence
+   syntax — language, `title="…"`, `linenums`, `hl_lines`, the brace/attr-list
+   form, `#!lang` inline shebangs, and ` ```mermaid ` — and emits neutral,
+   renderer-agnostic HTML: `<pre><code class="language-x" …>`. This never changes.
+2. **Highlighting (theme, swappable).** A client-side renderer colourises that
+   HTML in the browser. This is what the `highlight` key selects.
+
+| Value | Behaviour |
+|---|---|
+| `highlightjs` *(default)* | [highlight.js](https://highlightjs.org) via CDN, with line numbers, `hl_lines` row highlighting, and an extended language set (PowerShell, Dockerfile, nginx, HTTP, DNS zones, …). Zero configuration. |
+| `none` | No highlighter is injected. Blocks render as plain, monospaced text. Titles (`title="…"`) still render — that styling is part of the core theme, not the highlighter. Line numbers and `hl_lines` are not shown (they are produced by the highlight.js renderer). |
+| *(any other value)* | Treated as **`custom`**: Netdocs injects no highlighter and gets out of your way. Wire up your own (Prism, Shiki, a self-hosted highlight.js build, …) through `extra_css` / `extra_javascript`. Your script sees the same `<pre><code class="language-x">` markup. |
+
+```json title="appsettings.json"
+{
+  "Netdocs": {
+    "theme": {
+      "name": "material",
+      "highlight": "highlightjs"
+    }
+  }
+}
+```
+
+### Bringing your own highlighter
+
+Set `highlight` to any value other than `highlightjs`/`none` and load your
+renderer as an extra asset:
+
+```json title="appsettings.json"
+{
+  "Netdocs": {
+    "theme": { "highlight": "prism" },
+    "extra_css": ["https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.css"],
+    "extra_javascript": ["https://cdn.jsdelivr.net/npm/prismjs/prism.min.js"]
+  }
+}
+```
+
+Because the core parser already stamps each block with `class="language-x"`, most
+highlighters work with no further wiring. If your theme uses instant navigation,
+re-run your highlighter on Material's `document$` observable so blocks are
+re-processed after each page swap.
 
 ## Overrides (`customDir`)
 

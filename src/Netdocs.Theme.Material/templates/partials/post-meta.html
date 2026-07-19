@@ -1,0 +1,27 @@
+<nav class="md-nav md-nav--primary" aria-label="Post metadata">
+  <a href="{{ page.meta.blog_index_url }}" class="md-nav__link" style="font-weight:700">
+    <span class="md-nav__icon md-icon"></span> Back to index
+  </a>
+
+  {{~ if page.meta.post_author_name ~}}
+  <div class="md-post__authors" style="display:flex;align-items:center;gap:.7rem;margin:1.2rem 0 1rem">
+    {{~ if page.meta.post_author_avatar ~}}
+    <img src="{{ base_url }}{{ strip_slash page.meta.post_author_avatar }}" alt="{{ page.meta.post_author_name }}"
+         style="width:2.4rem;height:2.4rem;border-radius:50%;object-fit:cover">
+    {{~ end ~}}
+    <div>
+      <div style="font-weight:700">{{ page.meta.post_author_name }}</div>
+      {{~ if page.meta.post_author_role ~}}<div style="color:var(--md-default-fg-color--light);font-size:.72rem">{{ page.meta.post_author_role }}</div>{{~ end ~}}
+    </div>
+  </div>
+  {{~ end ~}}
+
+  <div class="md-post__meta" style="font-size:.75rem;color:var(--md-default-fg-color--light)">
+    <div style="font-weight:700;color:var(--md-default-fg-color);margin-bottom:.5rem">Metadata</div>
+    <div style="margin:.35rem 0">📅 {{ page.meta.post_date }}</div>
+    {{~ if page.meta.post_categories && (array.size page.meta.post_categories) > 0 ~}}
+    <div style="margin:.35rem 0">🏷 in {{ array.join page.meta.post_categories ", " }}</div>
+    {{~ end ~}}
+    <div style="margin:.35rem 0">🕐 {{ page.meta.post_readtime }} min read</div>
+  </div>
+</nav>

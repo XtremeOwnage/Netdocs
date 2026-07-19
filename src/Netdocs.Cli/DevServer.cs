@@ -120,11 +120,33 @@ public sealed class DevServer(
         var debounce = new System.Timers.Timer(250) { AutoReset = false };
         debounce.Elapsed += async (_, _) => { await RebuildAsync(); await NotifyClientsAsync(); };
 
+        // Directories the build itself writes into. Changes under these must never trigger a
+        // rebuild, otherwise each build's own output re-arms the watcher and the server rebuilds
+        // in an endless loop. Resolved to absolute paths so the check is independent of the
+        // configured site/docs directory names.
+        var ignoredRoots = new[]
+        {
+            Path.GetFullPath(config.AbsoluteSiteDir),
+            Path.GetFullPath(Path.Combine(config.ProjectRoot, ".cache")),
+            Path.GetFullPath(Path.Combine(config.ProjectRoot, "artifacts")),
+            Path.GetFullPath(Path.Combine(config.ProjectRoot, ".git")),
+        };
+
+        bool IsIgnored(string fullPath)
+        {
+            var normalized = Path.GetFullPath(fullPath);
+            foreach (var root in ignoredRoots)
+            {
+                if (normalized.Equals(root, PathComparison) ||
+                    normalized.StartsWith(root + Path.DirectorySeparatorChar, PathComparison))
+                    return true;
+            }
+            return false;
+        }
+
         void OnChange(object _, FileSystemEventArgs e)
         {
-            if (e.FullPath.Contains($"{Path.DirectorySeparatorChar}site{Path.DirectorySeparatorChar}") ||
-                e.FullPath.Contains($"{Path.DirectorySeparatorChar}artifacts{Path.DirectorySeparatorChar}") ||
-                e.FullPath.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}")) return;
+            if (IsIgnored(e.FullPath)) return;
             debounce.Stop();
             debounce.Start();
         }
@@ -135,6 +157,9 @@ public sealed class DevServer(
         watcher.Renamed += OnChange;
         return watcher;
     }
+
+    private static readonly StringComparison PathComparison =
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private async Task RebuildAsync()
     {

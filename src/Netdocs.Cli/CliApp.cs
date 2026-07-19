@@ -63,6 +63,7 @@ public static class CliApp
             return command switch
             {
                 "build" => await BuildAsync(configPath, opts, loggerFactory, warnings),
+                "profile" => await ProfileAsync(configPath, opts, loggerFactory),
                 "deploy" => await DeployAsync(configPath, opts, loggerFactory, warnings),
                 "serve" => await ServeAsync(configPath, opts, loggerFactory),
                 "watch" => await WatchAsync(configPath, opts, loggerFactory),
@@ -95,6 +96,20 @@ public static class CliApp
             var deployer = new Netdocs.Core.Deploy.Deployer(config, loggerFactory.CreateLogger("deploy"));
             return await deployer.DeployAsync();
         }
+        return 0;
+    }
+
+    private static async Task<int> ProfileAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory)
+    {
+        // A profiling build always re-renders (no cache) so per-phase timings reflect real work.
+        opts.NoCache = true;
+        var (config, buildOptions) = LoadConfig(configPath, opts, serve: false);
+        var profiler = new Netdocs.Core.Diagnostics.BuildProfiler();
+        var engine = new BuildEngine(config, buildOptions, BuildRegistry(), loggerFactory, profiler);
+        await engine.BuildAsync();
+
+        Console.WriteLine();
+        Console.WriteLine(profiler.Render());
         return 0;
     }
 
@@ -276,6 +291,7 @@ public static class CliApp
 
             Usage:
               netdocs build [options]     Build the site to the output directory
+              netdocs profile [options]   Build once and print a per-phase/plugin timing tree
               netdocs deploy [options]    Build, then publish to the configured deploy target
               netdocs serve [options]     Serve with live reload
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push

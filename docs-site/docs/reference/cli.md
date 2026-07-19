@@ -4,13 +4,14 @@ title: CLI reference
 
 # CLI reference
 
-The `netdocs` executable exposes these commands: `build`, `serve`, `watch`, `new`, and `import`.
+The `netdocs` executable exposes these commands: `build`, `profile`, `serve`, `watch`, `new`, and `import`.
 
 ```text
 netdocs - static site generator
 
 Usage:
   netdocs build [options]     Build the site to the output directory
+  netdocs profile [options]   Build once and print a per-phase/plugin timing tree
   netdocs serve [options]     Serve with live reload
   netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
   netdocs new [path]           Scaffold an annotated appsettings.json
@@ -22,6 +23,7 @@ Usage:
 | Command | Description |
 |---|---|
 | `netdocs build` | Build the site to the configured output dir (`siteDir`). |
+| `netdocs profile` | Build once (cache-bypassed) and print a tree of where build time is spent. |
 | `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
 | `netdocs watch` | Long-running publish daemon: polls a git remote and rebuilds when the tracked branch advances. |
 | `netdocs new` | Scaffold a fully-annotated `appsettings.json` (all common options + doc links). |
@@ -50,6 +52,41 @@ netdocs serve
 
 
 If no command is given, `build` is assumed.
+
+### `netdocs profile`
+
+`netdocs profile` runs a single, cache-bypassed build and prints a tree showing how long each
+build phase took, broken down by plugin where a phase runs plugin hooks. Use it to find the
+slowest part of a build — a heavy preprocessor, an expensive `OnBuildComplete` hook, or the
+markdown/template render itself.
+
+```pwsh
+netdocs profile
+```
+
+The report lists phases biggest-first. Each line shows the elapsed time and its share of its
+parent scope; nested lines are the individual plugins within that phase, and an `xN` suffix
+counts how many times a scope ran (for example, a preprocessor invoked once per page):
+
+```text
+Build profile (time by phase):
+
+  6. render markdown                        263.4 ms   30.0%
+  8. template render                        242.1 ms   27.6%
+  11. OnBuildComplete hooks                 142.2 ms   16.2%
+    search                                     81.9 ms   57.7%
+    social                                     57.6 ms   40.6%
+    tags                                        2.4 ms    1.7%
+  5. preprocess markdown                     18.0 ms    2.0%
+    calculator                                 17.6 ms   98.1% x48
+  ...
+
+Total measured: 877.8 ms
+```
+
+Because it bypasses the incremental render cache, `profile` always reflects a full cold build —
+the numbers are comparable run to run rather than skewed by cache hits.
+
 
 ## Options
 

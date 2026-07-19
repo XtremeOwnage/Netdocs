@@ -198,9 +198,13 @@ public static class PageRenderer
     {
         var trimmed = url.Trim('/');
         if (trimmed.Length == 0) return "";
-        var segments = trimmed.Split('/');
-        var depth = segments.Length;
-        if (segments[^1].Contains('.')) depth -= 1;
-        return depth == 0 ? "" : string.Concat(Enumerable.Repeat("../", depth));
+        var depth = trimmed.Split('/').Length;
+        // A URL that points directly at a file (no trailing slash, e.g. "404.html") lives in its
+        // parent directory and needs one fewer step back. Directory-style URLs (trailing slash)
+        // keep their full depth even when the final directory name contains dots
+        // (e.g. "changelogs/2025/Q2/2025.05.05/") — otherwise their assets resolve one level too
+        // shallow and 404.
+        if (!url.EndsWith('/')) depth -= 1;
+        return depth <= 0 ? "" : string.Concat(Enumerable.Repeat("../", depth));
     }
 }

@@ -1,21 +1,49 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Netdocs.Abstractions;
+using Netdocs.Core.Configuration;
 using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
-/// <summary>Generates an RSS 2.0 feed from blog posts (created-date ordering).</summary>
-public sealed class RssPlugin : IPlugin, IBuildHook
+/// <summary>
+/// Generates an RSS 2.0 feed (and, optionally, an Atom 1.0 feed) from blog posts, ordered by
+/// creation date. Supports per-post title/description/image overrides via front matter, a
+/// channel image, and full-content items. Requires the blog plugin to have collected posts.
+/// </summary>
+public sealed partial class RssPlugin : IPlugin, IBuildHook
 {
-    private string _feedFile = "feed_rss_created.xml";
+    private const string ContentNs = "http://purl.org/rss/1.0/modules/content/";
+    private const string AtomNs = "http://www.w3.org/2005/Atom";
+
+    private string _rssFile = "feed_rss_created.xml";
+    private string _atomFile = "feed_atom_created.xml";
+    private bool _atom;
     private int _limit = 20;
+    private bool _fullContent;
+    private string? _feedTitle;
+    private string? _feedDescription;
+    private string? _channelImage;
+    private int _ttl;
 
     public string Name => "rss";
 
     public void Configure(IPluginContext ctx)
     {
-        if (ctx.PluginOptions.TryGetValue("length", out var l) && l is long ll) _limit = (int)ll;
+        var o = ctx.PluginOptions;
+        // `length` (mkdocs-rss) with `limit` accepted as an alias.
+        if (o.Get("length") is { } len) _limit = len.AsInt(_limit);
+        else if (o.Get("limit") is { } lim) _limit = lim.AsInt(_limit);
+
+        if (o.Get("rss_file").AsString() is { Length: > 0 } rf) _rssFile = rf;
+        if (o.Get("atom_file").AsString() is { Length: > 0 } af) _atomFile = af;
+        _atom = o.Get("atom").AsBool(_atom);
+        _fullContent = o.Get("full_content").AsBool(_fullContent);
+        _feedTitle = o.Get("feed_title").AsString();
+        _feedDescription = o.Get("feed_description").AsString();
+        _channelImage = o.Get("image").AsString();
+        _ttl = o.Get("ttl").AsInt(0);
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
@@ -24,37 +52,205 @@ public sealed class RssPlugin : IPlugin, IBuildHook
             return;
 
         var siteUrl = (site.Config.SiteUrl ?? "").TrimEnd('/');
-        var sb = new StringBuilder();
-        var settings = new XmlWriterSettings { Indent = true, Async = true, Encoding = new UTF8Encoding(false) };
-        await using var writer = XmlWriter.Create(sb, settings);
+        var items = posts.Take(_limit).Select(p => ToItem(p, siteUrl)).ToList();
 
-        await writer.WriteStartDocumentAsync();
+        var rss = BuildRss(site, siteUrl, items);
+        await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(site.Config.AbsoluteSiteDir, _rssFile), rss, ct);
+
+        if (_atom)
+        {
+            var atom = BuildAtom(site, siteUrl, items);
+            await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(site.Config.AbsoluteSiteDir, _atomFile), atom, ct);
+        }
+    }
+
+    private FeedItem ToItem(BlogPost post, string siteUrl)
+    {
+        var page = post.Page;
+        var url = $"{siteUrl}/{page.Url}";
+        var title = FrontMatterString(page, "rss_title") ?? page.Title;
+        var description = FrontMatterString(page, "rss_description") ?? post.Excerpt;
+        var image = ResolveImage(page, url, siteUrl);
+        var content = _fullContent && page.HtmlContent.Length > 0 ? page.HtmlContent : null;
+        return new FeedItem(title, url, post.Date, post.Categories, description, image, content);
+    }
+
+    private string BuildRss(SiteContext site, string siteUrl, List<FeedItem> items)
+    {
+        var sb = new StringBuilder();
+        using var writer = XmlWriter.Create(sb, XmlSettings());
+
+        writer.WriteStartDocument();
         writer.WriteStartElement("rss");
         writer.WriteAttributeString("version", "2.0");
+        writer.WriteAttributeString("xmlns", "atom", null, AtomNs);
+        writer.WriteAttributeString("xmlns", "content", null, ContentNs);
         writer.WriteStartElement("channel");
-        writer.WriteElementString("title", site.Config.SiteName);
-        writer.WriteElementString("link", siteUrl + "/");
-        writer.WriteElementString("description", site.Config.SiteDescription ?? site.Config.SiteName);
 
-        foreach (var post in posts.Take(_limit))
+        writer.WriteElementString("title", _feedTitle ?? site.Config.SiteName);
+        writer.WriteElementString("link", siteUrl + "/");
+        writer.WriteElementString("description", _feedDescription ?? site.Config.SiteDescription ?? site.Config.SiteName);
+        if (items.Count > 0)
+            writer.WriteElementString("lastBuildDate", items[0].Date.ToString("r"));
+        if (_ttl > 0)
+            writer.WriteElementString("ttl", _ttl.ToString());
+
+        // atom:link rel="self" is recommended so readers can find the canonical feed URL.
+        writer.WriteStartElement("atom", "link", AtomNs);
+        writer.WriteAttributeString("href", $"{siteUrl}/{_rssFile}");
+        writer.WriteAttributeString("rel", "self");
+        writer.WriteAttributeString("type", "application/rss+xml");
+        writer.WriteEndElement();
+
+        if (!string.IsNullOrEmpty(_channelImage))
+        {
+            writer.WriteStartElement("image");
+            writer.WriteElementString("url", AbsoluteUrl(_channelImage!, siteUrl));
+            writer.WriteElementString("title", _feedTitle ?? site.Config.SiteName);
+            writer.WriteElementString("link", siteUrl + "/");
+            writer.WriteEndElement();
+        }
+
+        foreach (var item in items)
         {
             writer.WriteStartElement("item");
-            writer.WriteElementString("title", post.Page.Title);
-            writer.WriteElementString("link", $"{siteUrl}/{post.Page.Url}");
-            writer.WriteElementString("guid", $"{siteUrl}/{post.Page.Url}");
-            writer.WriteElementString("pubDate", post.Date.ToString("r"));
-            foreach (var category in post.Categories)
+            writer.WriteElementString("title", item.Title);
+            writer.WriteElementString("link", item.Url);
+            writer.WriteStartElement("guid");
+            writer.WriteAttributeString("isPermaLink", "true");
+            writer.WriteString(item.Url);
+            writer.WriteEndElement();
+            writer.WriteElementString("pubDate", item.Date.ToString("r"));
+            foreach (var category in item.Categories)
                 writer.WriteElementString("category", category);
-            writer.WriteElementString("description", post.Excerpt);
+            writer.WriteElementString("description", item.Description);
+            if (item.Content is { } html)
+                writer.WriteElementString("encoded", ContentNs, html);
+            if (item.Image is { } img)
+            {
+                writer.WriteStartElement("enclosure");
+                writer.WriteAttributeString("url", img);
+                writer.WriteAttributeString("type", MimeForImage(img));
+                writer.WriteAttributeString("length", "0");
+                writer.WriteEndElement();
+            }
             writer.WriteEndElement();
         }
 
         writer.WriteEndElement();
         writer.WriteEndElement();
-        await writer.WriteEndDocumentAsync();
-        await writer.FlushAsync();
-
-        var path = Path.Combine(site.Config.AbsoluteSiteDir, _feedFile);
-        await OutputWriter.WriteTextIfChangedAsync(site, path, sb.ToString(), ct);
+        writer.WriteEndDocument();
+        writer.Flush();
+        return sb.ToString();
     }
+
+    private string BuildAtom(SiteContext site, string siteUrl, List<FeedItem> items)
+    {
+        var sb = new StringBuilder();
+        using var writer = XmlWriter.Create(sb, XmlSettings());
+
+        writer.WriteStartDocument();
+        writer.WriteStartElement("feed", AtomNs);
+        writer.WriteElementString("title", _feedTitle ?? site.Config.SiteName);
+        writer.WriteElementString("subtitle", _feedDescription ?? site.Config.SiteDescription ?? site.Config.SiteName);
+        writer.WriteElementString("id", siteUrl + "/");
+        writer.WriteElementString("updated", (items.Count > 0 ? items[0].Date : DateTimeOffset.UtcNow).ToString("yyyy-MM-ddTHH:mm:sszzz"));
+
+        writer.WriteStartElement("link");
+        writer.WriteAttributeString("href", siteUrl + "/");
+        writer.WriteAttributeString("rel", "alternate");
+        writer.WriteEndElement();
+        writer.WriteStartElement("link");
+        writer.WriteAttributeString("href", $"{siteUrl}/{_atomFile}");
+        writer.WriteAttributeString("rel", "self");
+        writer.WriteEndElement();
+
+        foreach (var item in items)
+        {
+            writer.WriteStartElement("entry");
+            writer.WriteElementString("title", item.Title);
+            writer.WriteElementString("id", item.Url);
+            writer.WriteElementString("updated", item.Date.ToString("yyyy-MM-ddTHH:mm:sszzz"));
+            writer.WriteElementString("published", item.Date.ToString("yyyy-MM-ddTHH:mm:sszzz"));
+            writer.WriteStartElement("link");
+            writer.WriteAttributeString("href", item.Url);
+            writer.WriteAttributeString("rel", "alternate");
+            writer.WriteEndElement();
+            foreach (var category in item.Categories)
+            {
+                writer.WriteStartElement("category");
+                writer.WriteAttributeString("term", category);
+                writer.WriteEndElement();
+            }
+            if (item.Content is { } html)
+            {
+                writer.WriteStartElement("content");
+                writer.WriteAttributeString("type", "html");
+                writer.WriteString(html);
+                writer.WriteEndElement();
+            }
+            else
+            {
+                writer.WriteElementString("summary", item.Description);
+            }
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+        writer.Flush();
+        return sb.ToString();
+    }
+
+    private static XmlWriterSettings XmlSettings() =>
+        new() { Indent = true, Encoding = new UTF8Encoding(false) };
+
+    private static string? FrontMatterString(Page page, string key) =>
+        page.FrontMatter.TryGetValue(key, out var v) ? v?.ToString() : null;
+
+    /// <summary>
+    /// Resolves a post image: front-matter <c>image</c> when present, otherwise the first
+    /// <c>&lt;img src&gt;</c> found in the rendered content. Relative URLs are made absolute.
+    /// </summary>
+    private static string? ResolveImage(Page page, string postUrl, string siteUrl)
+    {
+        var image = FrontMatterString(page, "image");
+        if (string.IsNullOrEmpty(image))
+        {
+            var match = FirstImage().Match(page.HtmlContent);
+            if (match.Success) image = match.Groups[1].Value;
+        }
+        if (string.IsNullOrEmpty(image)) return null;
+
+        if (image.Contains("://")) return image;
+        if (image.StartsWith('/')) return siteUrl + image;
+        // Relative to the post's output directory.
+        return postUrl.TrimEnd('/') + "/" + image;
+    }
+
+    private static string AbsoluteUrl(string url, string siteUrl) =>
+        url.Contains("://") ? url : siteUrl + "/" + url.TrimStart('/');
+
+    private static string MimeForImage(string url) =>
+        Path.GetExtension(url).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
+            ".avif" => "image/avif",
+            _ => "image/jpeg",
+        };
+
+    [GeneratedRegex("""<img[^>]+src=["']([^"']+)["']""", RegexOptions.IgnoreCase)]
+    private static partial Regex FirstImage();
+
+    private sealed record FeedItem(
+        string Title,
+        string Url,
+        DateTimeOffset Date,
+        IReadOnlyList<string> Categories,
+        string Description,
+        string? Image,
+        string? Content);
 }

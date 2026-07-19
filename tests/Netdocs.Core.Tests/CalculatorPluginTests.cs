@@ -72,7 +72,7 @@ public class CalculatorPluginTests
     }
 
     [Fact]
-    public void Evaluator_RegisteredOnceGlobally_NotInContent()
+    public async Task Evaluator_RegisteredOnceGlobally_NotInContent()
     {
         // The evaluator is a site-wide inline script, never injected into page content.
         var plugin = new CalculatorPlugin();
@@ -80,7 +80,7 @@ public class CalculatorPluginTests
         plugin.Configure(ctx);
         var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
         var page = new Page { SourcePath = "x.md", RelativePath = "x.md", RawMarkdown = PowerCalc };
-        var result = plugin.ProcessAsync(page, PowerCalc, site, CancellationToken.None).GetAwaiter().GetResult();
+        var result = await plugin.ProcessAsync(page, PowerCalc, site, CancellationToken.None);
 
         Assert.Single(ctx.InlineScripts);
         Assert.Contains("function bindAll", ctx.InlineScripts[0]);

@@ -37,6 +37,22 @@ See the [installation guide]({{ fileuri("install.md") }}).
 If the file cannot be found, an HTML comment is emitted in its place so the build does
 not fail.
 
+#### Choosing the URI form
+
+Pass an optional second argument to control how the URL is written:
+
+| Mode | Example output | When to use |
+|---|---|---|
+| *(omitted)* / `absolute` / `url` | `https://site/guides/install/` (or `/guides/install/` when no `site_url`) | Default. Feeds, sitemaps, canonical/absolute links. |
+| `path` / `root` | `/guides/install/` | A root-absolute path that never bakes in the host. |
+| `relative` / `rel` | `../guides/install/` | A page-relative link that stays correct when the site is served under a base path (e.g. GitHub project Pages at `/Repo/`). |
+
+```markdown
+Absolute: {{ fileuri("install.md") }}
+Root path: {{ fileuri("install.md", "path") }}
+Relative: {{ fileuri("install.md", "relative") }}
+```
+
 ### `button("text", "url")`
 
 Renders a Material-styled call-to-action button (`.md-button`) linking to the given URL.

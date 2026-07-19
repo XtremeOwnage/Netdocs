@@ -1,8 +1,18 @@
 <style>
   /* Let highlight.js color tokens, but keep Material's code container styling. */
   .md-typeset .highlight code.hljs { background: transparent; padding: 0; }
+  /* Line numbers (highlightjs-line-numbers.js) styled to match Material. */
+  .md-typeset .hljs-ln { border-collapse: collapse; }
+  .md-typeset .hljs-ln td { padding: 0; border: 0; vertical-align: top; }
+  .md-typeset .hljs-ln-numbers {
+    user-select: none; text-align: right; color: var(--md-default-fg-color--lighter);
+    border-right: .05rem solid var(--md-default-fg-color--lightest);
+    padding-right: .8rem !important; padding-left: .2rem !important; white-space: nowrap;
+  }
+  .md-typeset .hljs-ln-code { padding-left: .8rem !important; }
 </style>
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.9.0/dist/highlightjs-line-numbers.min.js"></script>
 <script>
   (function () {
     if (!window.hljs) return;
@@ -10,7 +20,10 @@
     function run() {
       observer.disconnect();
       document.querySelectorAll("pre code:not(.hljs)").forEach(function (el) {
-        try { hljs.highlightElement(el); } catch (e) { /* unknown language */ }
+        try {
+          hljs.highlightElement(el);
+          if (hljs.lineNumbersBlock) hljs.lineNumbersBlock(el, { singleLine: true });
+        } catch (e) { /* unknown language */ }
       });
       observer.observe(document.body, { childList: true, subtree: true });
     }

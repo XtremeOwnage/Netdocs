@@ -15,6 +15,10 @@
   }
   .md-typeset .hljs-ln-numbers a { color: inherit; text-decoration: none; }
   .md-typeset .hljs-ln-code { padding-left: .8rem !important; }
+  /* When only hl_lines is used (no linenums) the numbers table still exists to
+     anchor row highlighting, but the gutter itself must stay hidden. */
+  .md-typeset code.nd-hide-linenums .hljs-ln-numbers { display: none; }
+  .md-typeset code.nd-hide-linenums .hljs-ln-code { padding-left: 0 !important; }
   /* hl_lines highlight */
   .md-typeset .hljs-ln tr.hl-line { background: var(--md-code-hl-color, rgba(255, 235, 59, .18)); }
   /* Inline code highlighting is colored by hljs like block code. */
@@ -65,8 +69,6 @@
 <script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.9.0/dist/highlightjs-line-numbers.min.js"></script>
 <script>
   (function () {
-    var anchorSeq = 0;
-
     function parseRanges(spec) {
       var set = {};
       (spec || "").split(/[\s,]+/).forEach(function (part) {
@@ -80,31 +82,24 @@
     }
 
     function decorate(el) {
-      var start = parseInt(el.getAttribute("data-linenums-start"), 10);
-      if (hljs.lineNumbersBlock) {
-        hljs.lineNumbersBlock(el, { singleLine: true, startFrom: isNaN(start) ? 1 : start });
-      }
+      var hasLineNums = el.hasAttribute("data-linenums-start");
       var hl = el.getAttribute("data-hl-lines");
+      // The row-based table produced by the line-numbers library is what both
+      // the number gutter and hl_lines highlighting hang off of. Build it when
+      // either feature is requested; hide the gutter when only hl_lines is set.
+      if ((hasLineNums || hl) && hljs.lineNumbersBlock) {
+        var start = parseInt(el.getAttribute("data-linenums-start"), 10);
+        hljs.lineNumbersBlock(el, { singleLine: true, startFrom: isNaN(start) ? 1 : start });
+        if (!hasLineNums) el.classList.add("nd-hide-linenums");
+      }
+      if (!hl) return;
       var block = el;
       // highlightjs-line-numbers replaces content asynchronously; run after a tick.
       setTimeout(function () {
         var rows = block.querySelectorAll("tr");
-        if (hl) {
-          var ranges = parseRanges(hl);
-          rows.forEach(function (row, idx) {
-            if (ranges[idx + 1]) row.classList.add("hl-line");
-          });
-        }
-        // anchor_linenums: make each line number a linkable anchor.
-        block.querySelectorAll(".hljs-ln-numbers[data-line-number]").forEach(function (cell) {
-          if (cell.querySelector("a")) return;
-          var id = "__codeline-" + (++anchorSeq);
-          cell.id = id;
-          var a = document.createElement("a");
-          a.href = "#" + id;
-          a.textContent = cell.textContent;
-          cell.textContent = "";
-          cell.appendChild(a);
+        var ranges = parseRanges(hl);
+        rows.forEach(function (row, idx) {
+          if (ranges[idx + 1]) row.classList.add("hl-line");
         });
       }, 0);
     }

@@ -17,6 +17,7 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
 
     private ILogger _log = null!;
     private bool _cache = true;
+    private bool _enabledOnServe = true;
     private Color _background = Color.ParseHex("42464e");
     private Color _accent = Color.ParseHex("ff9800");
 
@@ -26,6 +27,9 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
     {
         _log = ctx.Logger;
         if (ctx.PluginOptions.TryGetValue("cache", out var c) && c is bool cb) _cache = cb;
+        // Cards are cached by file existence, so serve only pays the cost once (on the
+        // first build). Generate on serve by default; large sites can opt out.
+        if (ctx.PluginOptions.TryGetValue("enabled_on_serve", out var eos) && eos is bool eosb) _enabledOnServe = eosb;
 
         var palette = ctx.Config.Theme.Palette.Count > 0 ? ctx.Config.Theme.Palette[0] : null;
         _background = PrimaryColor(palette?.Primary);
@@ -34,8 +38,9 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
     {
-        // Card generation is expensive; only run for real (non-serve) builds.
-        if (site.Options.IsServe) return;
+        // Cards are content-cached by file existence (see below), so a serve session only
+        // generates missing cards once. Skip only when explicitly disabled on serve.
+        if (site.Options.IsServe && !_enabledOnServe) return;
 
         var family = ResolveFontFamily();
         if (family is null)

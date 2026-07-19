@@ -10,8 +10,10 @@ palette and referenced via `og:image` / `twitter:image` meta tags.
 
 ## Behaviour
 
-- Runs on **production/build only** — skipped during `serve` because generation is
-  expensive.
+- Runs on **build and serve**. Cards are cached by file existence, so a serve session
+  only generates missing cards once (on the first build); later incremental rebuilds skip
+  them. Large sites that don't want that one-time cost on serve can set
+  `enabled_on_serve: false`.
 - Cards are **cached** so warm builds are fast.
 - Background/accent colors are derived from the theme `palette` (`primary` / `accent`).
 
@@ -20,9 +22,10 @@ palette and referenced via `og:image` / `twitter:image` meta tags.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `cache` | bool | `true` | Reuse previously generated cards when unchanged. |
+| `enabled_on_serve` | bool | `true` | Generate cards during `serve`. Set `false` to skip on serve (build/production still generates). |
 
 ```json
-{ "name": "social", "options": { "cache": true } }
+{ "name": "social", "options": { "cache": true, "enabled_on_serve": true } }
 ```
 
 !!! note

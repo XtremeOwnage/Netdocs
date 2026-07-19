@@ -81,16 +81,32 @@ public sealed class BuildEngine(
         }
 
         // 6. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
+        //    A content-hash cache reuses the (pure) render artifacts for pages whose markdown,
+        //    pipeline, and link map are unchanged since the last build.
         _log.LogDebug("Rendering markdown for {Count} pages (parallel)", site.Pages.Count);
         var linkMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in site.Pages) linkMap.TryAdd(p.RelativePath.Replace('\\', '/'), p.Url);
+
+        var cache = options.NoCache ? null : RenderCache.Load(config.ProjectRoot);
+        var pipelineSalt = ComputePipelineSalt(host);
+        var linkMapHash = ComputeLinkMapHash(linkMap);
+
         using var pipelines = new ThreadLocal<MarkdownPipeline>(
             () => MarkdownPipelineFactory.Build(site, host.MarkdigContributors), trackAllValues: false);
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
         {
+            var key = cache is null ? "" : RenderCache.ComputeKey(page, pipelineSalt, linkMapHash);
+            if (cache is not null && cache.TryRestore(page, key)) return;
+
             var renderer = new DocumentRenderer(pipelines.Value!, linkMap);
             renderer.Render(page);
+            cache?.Store(page, key);
         });
+        if (cache is not null)
+        {
+            cache.Save();
+            _log.LogInformation("Render cache: {Hits}/{Total} pages reused", cache.Hits, site.Pages.Count);
+        }
 
         // 7. Resolve navigation.
         site.Navigation = NavigationBuilder.Build(config, site.Pages);
@@ -166,6 +182,23 @@ public sealed class BuildEngine(
         sb.AppendLine("</urlset>");
         await File.WriteAllTextAsync(Path.Combine(config.AbsoluteSiteDir, "sitemap.xml"), sb.ToString(), ct);
         _log.LogDebug("Wrote sitemap.xml ({Count} urls)", site.Pages.Count);
+    }
+
+    /// <summary>Salt that invalidates the render cache when the markdown pipeline changes:
+    /// the engine assembly version, the configured markdown extensions, and the active
+    /// Markdig contributors (e.g. typeset/SmartyPants).</summary>
+    private string ComputePipelineSalt(PluginHost host)
+    {
+        var version = typeof(BuildEngine).Assembly.GetName().Version?.ToString() ?? "0";
+        var extensions = string.Join(",", config.MarkdownExtensions.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        var contributors = string.Join(",", host.MarkdigContributors.Select(c => c.GetType().FullName).OrderBy(n => n, StringComparer.Ordinal));
+        return $"{version}|{extensions}|{contributors}";
+    }
+
+    private static string ComputeLinkMapHash(IReadOnlyDictionary<string, string> linkMap)
+    {
+        var payload = string.Join('\n', linkMap.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key}={kv.Value}"));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payload)));
     }
 
     /// <summary>Merges config plugins with plugins backed by markdown_extensions (e.g. snippets).</summary>

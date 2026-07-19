@@ -105,6 +105,7 @@ public static class CliApp
             IsServe = serve,
             Strict = opts.Strict || IsTruthy(System.Environment.GetEnvironmentVariable("MKDOCS_STRICT")),
             Clean = opts.Clean || !serve,
+            NoCache = opts.NoCache,
             Environment = env,
         };
         return (config, buildOptions);
@@ -148,6 +149,7 @@ public static class CliApp
                 case "--config" or "-f" when i + 1 < args.Length: opts.ConfigPath = args[++i]; break;
                 case "--port" or "-p" when i + 1 < args.Length && int.TryParse(args[i + 1], out var port): opts.Port = port; i++; break;
                 case "--clean": opts.Clean = true; break;
+                case "--no-cache": opts.NoCache = true; break;
                 case "--strict": opts.Strict = true; break;
                 case "--prod" or "--production": opts.Production = true; break;
                 case "--verbose" or "-v": opts.Verbose = true; break;
@@ -169,6 +171,7 @@ public static class CliApp
               -f, --config <path>   Path to appsettings.json (default ./appsettings.json)
               -p, --port <port>     Dev server port (default 8000)
                   --clean           Remove existing output before building
+                  --no-cache        Ignore the incremental render cache (full re-render)
                   --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
               -v, --verbose         Verbose (Trace) logging
@@ -188,6 +191,7 @@ internal sealed class CliOptions
     public string? ConfigPath { get; set; }
     public int Port { get; set; } = 8000;
     public bool Clean { get; set; }
+    public bool NoCache { get; set; }
     public bool Strict { get; set; }
     public bool Production { get; set; }
     public bool Verbose { get; set; }

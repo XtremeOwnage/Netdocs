@@ -31,6 +31,13 @@ public static class PageRenderer
             }
         }
 
+        // Blog posts are generated outside the authored nav; sequence prev/next by date
+        // (newest-first list): "previous" is the older post, "next" is the newer one.
+        if (prev is null && next is null)
+            (prev, next) = BlogSiblings(site, page);
+
+        var breadcrumbs = Breadcrumbs(site.Navigation, page);
+
         var model = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["config"] = site.Config,
@@ -56,6 +63,7 @@ public static class PageRenderer
             ["show_source_meta"] = !page.IsGenerated && page.Updated.HasValue,
             ["prev_page"] = prev,
             ["next_page"] = next,
+            ["breadcrumbs"] = breadcrumbs,
             ["page_description"] = description,
             ["og_image"] = siteUrl.Length > 0 ? $"{siteUrl}/{socialPath}" : "/" + socialPath,
             ["og_url"] = siteUrl.Length > 0 ? $"{siteUrl}/{page.Url}" : "/" + page.Url,
@@ -65,6 +73,55 @@ public static class PageRenderer
     }
 
     private static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();
+
+    /// <summary>Newest-first blog sequence: previous = older post, next = newer post.</summary>
+    private static (Page? prev, Page? next) BlogSiblings(SiteContext site, Page page)
+    {
+        if (site.State.GetValueOrDefault("blog_posts") is not System.Collections.IList posts) return (null, null);
+
+        for (var i = 0; i < posts.Count; i++)
+        {
+            if (PostPage(posts[i]) != page) continue;
+            var newer = i > 0 ? PostPage(posts[i - 1]) : null;
+            var older = i < posts.Count - 1 ? PostPage(posts[i + 1]) : null;
+            return (older, newer);
+        }
+        return (null, null);
+    }
+
+    private static Page? PostPage(object? post) =>
+        post?.GetType().GetProperty("Page")?.GetValue(post) as Page;
+
+    /// <summary>Ancestor trail (sections + section-index pages) from the nav root to the current page.</summary>
+    private static List<Dictionary<string, object?>> Breadcrumbs(IReadOnlyList<NavNode> nav, Page page)
+    {
+        var trail = new List<Dictionary<string, object?>>();
+
+        bool Walk(IReadOnlyList<NavNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.Page == page) return true;
+
+                if (node.IsSection)
+                {
+                    var crumb = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["title"] = node.Title,
+                        ["url"] = node.SectionIndex?.Url,
+                    };
+                    trail.Add(crumb);
+                    if (node.SectionIndex == page) return true;
+                    if (Walk(node.Children)) return true;
+                    trail.RemoveAt(trail.Count - 1);
+                }
+            }
+            return false;
+        }
+
+        Walk(nav);
+        return trail;
+    }
 
     private static List<string> ResolveHrefs(IEnumerable<string> a, IEnumerable<string> b) =>
         a.Concat(b).ToList();

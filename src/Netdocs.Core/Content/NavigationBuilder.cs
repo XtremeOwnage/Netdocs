@@ -25,12 +25,29 @@ public static class NavigationBuilder
         if (item.Children.Count > 0)
         {
             var children = item.Children.Select(c => Resolve(c, byRelative)).Where(n => n is not null).Select(n => n!).ToList();
-            return new NavNode { Title = item.Title ?? "", Children = children };
+
+            // navigation.indexes: if the first child is an index/README page, promote it to the
+            // section's landing page (its title links there) and drop it from the child list.
+            Page? sectionIndex = null;
+            if (children.Count > 0 && children[0].Page is { } first && IsIndexPage(first.RelativePath))
+            {
+                sectionIndex = first;
+                children.RemoveAt(0);
+            }
+
+            return new NavNode { Title = item.Title ?? "", Children = children, SectionIndex = sectionIndex };
         }
 
         return item.Path is null && item.Title is not null
             ? new NavNode { Title = item.Title }
             : null;
+    }
+
+    private static bool IsIndexPage(string relativePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(relativePath);
+        return name.Equals("index", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("README", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<NavNode> AutoNav(IReadOnlyList<Page> pages)
@@ -49,6 +66,7 @@ public static class NavigationBuilder
         {
             foreach (var node in ns)
             {
+                if (node.SectionIndex is not null) result.Add(node.SectionIndex);
                 if (node.Page is not null) result.Add(node.Page);
                 if (node.Children.Count > 0) Walk(node.Children);
             }

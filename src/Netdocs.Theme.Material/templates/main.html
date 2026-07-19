@@ -104,8 +104,11 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
     {{ include "partials/header.html" }}
 
     <div class="md-container" data-md-component="container">
-      {{~ # Top-level navigation is rendered inline inside the header (single row).
-         # The separate `.md-tabs` bar is intentionally not included here. ~}}
+      {{~ # Top-level navigation as a separate `.md-tabs` bar below the header,
+         # matching Material for MkDocs when the navigation.tabs feature is on. ~}}
+      {{~ if (features | array.contains "navigation.tabs") && nav && (nav | array.size) > 0 ~}}
+      {{ include "partials/tabs.html" }}
+      {{~ end ~}}
       <main class="md-main" data-md-component="main">
         <div class="md-main__inner md-grid">
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">

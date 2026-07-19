@@ -1,6 +1,7 @@
-{{~ # Netdocs Material header — a SINGLE row: logo + top-level nav on the left,
-   # social links + search on the right. The top-level nav is rendered inline here
-   # (not as a separate `.md-tabs` second bar) so the whole header stays one row. ~}}
+{{~ # Netdocs Material header — logo + site title on the left, social links,
+   # palette toggle and search on the right. Top-level navigation is rendered
+   # as a separate `.md-tabs` bar (see partials/tabs.html) when navigation.tabs
+   # is enabled, exactly like Material for MkDocs. ~}}
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="{{ base_url }}" title="{{ config.site_name }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}" data-md-component="logo">
@@ -23,14 +24,6 @@
         </div>
       </div>
     </div>
-    {{~ # Inline top-level navigation (left). Only when navigation.tabs is enabled. ~}}
-    {{~ if (features | array.contains "navigation.tabs") && nav && (nav | array.size) > 0 ~}}
-    <nav class="nd-header-nav" aria-label="Main navigation">
-      {{~ for node in nav ~}}
-      <a href="{{ base_url }}{{ nav_first_url node }}" class="nd-header-nav__link{{ if nav_active node }} nd-header-nav__link--active{{ end }}">{{ node.title }}</a>
-      {{~ end ~}}
-    </nav>
-    {{~ end ~}}
     {{~ # Social links (right) — see partials/social.html. ~}}
     {{ include "partials/social.html" }}
     {{~ # Palette (light/dark) toggle (right). ~}}

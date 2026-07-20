@@ -1,0 +1,11 @@
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      {{~ for node in nav ~}}
+      <li class="md-tabs__item{{ if nav_active node }} md-tabs__item--active{{ end }}">
+        <a href="{{ base_url }}{{ nav_first_url node }}" class="md-tabs__link">{{ node.title }}</a>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </div>
+</nav>

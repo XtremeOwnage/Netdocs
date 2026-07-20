@@ -1,0 +1,15 @@
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  {{~ toc_root = toc
+  if toc && (array.size toc) > 0 && toc[0].level == 1
+    toc_root = toc[0].children
+  end ~}}
+  {{~ if toc_root && (array.size toc_root) > 0 ~}}
+  <label class="md-nav__title" for="__toc">
+    <span class="md-nav__icon md-icon"></span>
+    Contents
+  </label>
+  <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+    {{~ for entry in toc_root ~}}{{ render_toc entry }}{{~ end ~}}
+  </ul>
+  {{~ end ~}}
+</nav>

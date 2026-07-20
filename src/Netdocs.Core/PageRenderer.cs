@@ -13,6 +13,9 @@ public static class PageRenderer
             ? tpl
             : "main.html";
 
+        var palette = site.Config.Theme.Palette.Count > 0 ? site.Config.Theme.Palette[0] : null;
+        var font = site.Config.Theme.Font;
+
         var model = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["config"] = site.Config,
@@ -20,16 +23,24 @@ public static class PageRenderer
             ["nav"] = site.Navigation,
             ["pages"] = site.Pages,
             ["base_url"] = BaseUrl(page.Url),
+            ["is_homepage"] = string.IsNullOrEmpty(page.Url),
             ["features"] = new HashSet<string>(site.Config.Theme.Features, StringComparer.OrdinalIgnoreCase),
             ["extra"] = site.Config.Extra,
             ["stylesheets"] = ResolveHrefs(site.Config.ExtraCss, assets.Stylesheets),
             ["scripts"] = assets.Scripts.Select(s => s.Src).Concat(site.Config.ExtraJavaScript).ToList(),
             ["content"] = page.HtmlContent,
             ["toc"] = page.Toc,
+            ["palette_scheme"] = Sanitize(palette?.Scheme ?? "default"),
+            ["palette_primary"] = Sanitize(palette?.Primary ?? "indigo"),
+            ["palette_accent"] = Sanitize(palette?.Accent ?? "indigo"),
+            ["font_text"] = font.TryGetValue("text", out var ft) ? ft?.ToString() ?? "Roboto" : "Roboto",
+            ["font_code"] = font.TryGetValue("code", out var fc) ? fc?.ToString() ?? "Roboto Mono" : "Roboto Mono",
         };
 
         return engine.Render(template, model);
     }
+
+    private static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();
 
     private static List<string> ResolveHrefs(IEnumerable<string> a, IEnumerable<string> b) =>
         a.Concat(b).ToList();

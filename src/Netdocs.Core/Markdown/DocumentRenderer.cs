@@ -10,13 +10,16 @@ using Netdocs.Abstractions;
 namespace Netdocs.Core.Markdown;
 
 /// <summary>Renders processed markdown to HTML and extracts TOC, title, and plain text.</summary>
-public sealed class DocumentRenderer(MarkdownPipeline pipeline)
+public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDictionary<string, string>? linkMap = null)
 {
     private readonly HtmlParser _htmlParser = new();
 
     public void Render(Page page)
     {
         var document = Markdig.Markdown.Parse(page.ProcessedMarkdown, pipeline);
+
+        if (linkMap is not null)
+            RewriteMarkdownLinks(document, page.RelativePath);
 
         var sb = new StringBuilder();
         using (var writer = new StringWriter(sb))
@@ -34,6 +37,50 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline)
             page.Title = ExtractTitle(document) ?? DeriveTitleFromPath(page.RelativePath);
 
         page.PlainText = ExtractPlainText(page.HtmlContent);
+    }
+
+    /// <summary>Rewrites relative <c>*.md</c> links in content to their output URLs (mkdocs-style).</summary>
+    private void RewriteMarkdownLinks(MarkdownDocument document, string currentRelativePath)
+    {
+        foreach (var link in document.Descendants<LinkInline>())
+        {
+            if (link.IsImage || string.IsNullOrEmpty(link.Url)) continue;
+            var resolved = ResolveMarkdownLink(currentRelativePath, link.Url, linkMap!);
+            if (resolved is not null) link.Url = resolved;
+        }
+    }
+
+    internal static string? ResolveMarkdownLink(string currentRelativePath, string url, IReadOnlyDictionary<string, string> map)
+    {
+        if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
+            url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var hash = url.IndexOf('#');
+        var anchor = hash >= 0 ? url[hash..] : "";
+        var path = hash >= 0 ? url[..hash] : url;
+
+        if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase) &&
+            !path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var currentDir = Path.GetDirectoryName(currentRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
+        var combined = currentDir.Length == 0 ? path : currentDir + "/" + path;
+        var normalized = NormalizeRelative(combined);
+
+        return map.TryGetValue(normalized, out var targetUrl) ? "/" + targetUrl + anchor : null;
+    }
+
+    private static string NormalizeRelative(string path)
+    {
+        var parts = new List<string>();
+        foreach (var segment in path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".") continue;
+            if (segment == "..") { if (parts.Count > 0) parts.RemoveAt(parts.Count - 1); }
+            else parts.Add(segment);
+        }
+        return string.Join('/', parts);
     }
 
     private static IReadOnlyList<TocEntry> BuildToc(MarkdownDocument document)

@@ -28,9 +28,13 @@ public sealed class DevServer(
     {
         await RebuildAsync();
 
+        var listenPort = FindFreePort(port);
+        if (listenPort != port)
+            _log.LogWarning("Port {Requested} is in use; using {Actual} instead", port, listenPort);
+
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.UseUrls($"http://localhost:{port}");
+        builder.WebHost.UseUrls($"http://localhost:{listenPort}");
         var app = builder.Build();
 
         app.UseWebSockets();
@@ -38,8 +42,24 @@ public sealed class DevServer(
         app.Use(ServeContent);
 
         using var watcher = CreateWatcher();
-        _log.LogInformation("Serving {Site} at http://localhost:{Port} (Ctrl+C to stop)", config.SiteName, port);
+        _log.LogInformation("Serving {Site} at http://localhost:{Port} (Ctrl+C to stop)", config.SiteName, listenPort);
         await app.RunAsync();
+    }
+
+    private static int FindFreePort(int start)
+    {
+        for (var candidate = start; candidate < start + 20; candidate++)
+        {
+            try
+            {
+                var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, candidate);
+                listener.Start();
+                listener.Stop();
+                return candidate;
+            }
+            catch (System.Net.Sockets.SocketException) { /* in use, try next */ }
+        }
+        return start;
     }
 
     private async Task ServeContent(HttpContext context, RequestDelegate next)

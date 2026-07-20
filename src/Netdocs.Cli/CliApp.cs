@@ -95,6 +95,7 @@ public static class CliApp
         .Register<MetaPlugin>("meta")
         .Register<RssPlugin>("rss")
         .Register<GlightboxPlugin>("glightbox")
+        .Register<RedirectsPlugin>("redirects")
         .Register<GitRevisionDatePlugin>("git-revision-date-localized")
         .Register<FileFilterPlugin>("file-filter")
         .Register<SocialPlugin>("social")

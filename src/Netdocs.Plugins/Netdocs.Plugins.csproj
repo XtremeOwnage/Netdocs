@@ -6,5 +6,6 @@
   <ItemGroup>
     <PackageReference Include="Markdig" />
     <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="LibGit2Sharp" />
   </ItemGroup>
 </Project>

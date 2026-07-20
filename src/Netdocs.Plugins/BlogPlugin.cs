@@ -47,7 +47,9 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             page.OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url));
             page.Created = date;
 
-            _posts.Add(new BlogPost(page, date, ReadList(page, "categories"), ReadExcerpt(page)));
+            var categories = GetCategories(page);
+            _posts.Add(new BlogPost(page, date, categories, ReadExcerpt(page)));
+            page.RawMarkdown = PostMetaHtml(date, categories, page.RawMarkdown) + page.RawMarkdown;
         }
 
         _posts.Sort((a, b) => b.Date.CompareTo(a.Date));
@@ -156,6 +158,38 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         if (page.FrontMatter.TryGetValue(key, out var v) && v is IEnumerable<object?> list)
             return list.Select(x => x?.ToString() ?? "").Where(s => s.Length > 0).ToList();
         return [];
+    }
+
+    /// <summary>Categories from front matter, else derived from the post's category folder.</summary>
+    private List<string> GetCategories(Page page)
+    {
+        var fromMeta = ReadList(page, "categories");
+        if (fromMeta.Count > 0) return fromMeta;
+
+        var rel = page.RelativePath.Replace('\\', '/');
+        var prefix = _blogDir + "posts/";
+        if (rel.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var segments = rel[prefix.Length..].Split('/');
+            var folders = segments[..^1].Where(s => !int.TryParse(s, out _)).ToList();
+            if (folders.Count > 0) return [folders[0]];
+        }
+        return fromMeta;
+    }
+
+    /// <summary>Small metadata header (date · reading time · categories) prepended to a post.</summary>
+    private static string PostMetaHtml(DateTimeOffset date, IReadOnlyList<string> categories, string markdown)
+    {
+        var words = markdown.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        var minutes = Math.Max(1, (int)Math.Round(words / 238.0));
+        var cats = categories.Count > 0 ? " &middot; in " + string.Join(", ", categories) : "";
+        return $"""
+            <div class="md-post__meta md-typeset" style="color:var(--md-default-fg-color--light);font-size:.72rem;margin-bottom:1rem">
+            <time datetime="{date:yyyy-MM-dd}">{date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}</time> &middot; {minutes} min read{cats}
+            </div>
+
+
+            """;
     }
 
     private static string ReadExcerpt(Page page)

@@ -4,6 +4,19 @@ Deferred / future work, roughly prioritized. Core engine (config, discovery, Mar
 pipeline, plugin host, Scriban theme, build + serve) is implemented and builds the
 existing `Web/` blog.
 
+## Recently completed (session 2)
+- [x] Real Material theme (vendored CSS/JS + lunr search) with attribution/license.
+- [x] Client-side syntax highlighting (highlight.js).
+- [x] Built-in `sitemap.xml`; `redirects` plugin (fixes `/discord`).
+- [x] Hierarchical tag index rendered into the `<!-- material/tags -->` marker.
+- [x] Real git-revision dates (LibGit2Sharp single-pass) + page date footer.
+- [x] `exclude` config option (omit include-only files from discovery/search/sitemap).
+- [x] Blog post metadata header (date · read time · categories); folder-derived categories.
+- [x] Prev/next page navigation in footer.
+- [x] Relative `*.md` link rewriting to output URLs.
+- [x] GitHub Actions CI (build + test); cross-platform CLI paths; dev server auto-picks a free port.
+- [x] Remote + MIT LICENSE + credit to squidfunk + dependabot.
+
 ## High priority (parity)
 - [ ] **Social cards** (`social` plugin): OG image generation. Choose ImageSharp vs SkiaSharp. Cache by content hash. Prod-only.
 - [ ] **Server-side syntax highlighting** parity with Pygments/Material (currently emits `.highlight > pre > code` with a language class only; no token spans/colors). Material CSS styles the container, but tokens aren't colored. Options: port a highlighter or ship a client-side one styled to match Material.

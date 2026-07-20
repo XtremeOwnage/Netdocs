@@ -154,6 +154,9 @@ func render_toc(entry) ~}}
     {{~ for src in scripts ~}}
     <script src="{{ base_url }}{{ src }}" defer></script>
     {{~ end ~}}
+    {{~ for js in inline_scripts ~}}
+    <script>{{ js }}</script>
+    {{~ end ~}}
     {{ include "partials/highlight.html" }}
     {{ include "partials/mermaid.html" }}
   </body>

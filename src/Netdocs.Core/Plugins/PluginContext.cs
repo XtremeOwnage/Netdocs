@@ -9,6 +9,7 @@ public sealed class PluginAssets
 {
     public List<string> Stylesheets { get; } = [];
     public List<(string Src, bool Defer)> Scripts { get; } = [];
+    public List<string> InlineScripts { get; } = [];
     public List<(string Source, string Dest)> Files { get; } = [];
 }
 
@@ -28,6 +29,7 @@ internal sealed class PluginContext(
 
     public void AddStylesheet(string href) => assets.Stylesheets.Add(href);
     public void AddScript(string src, bool defer = true) => assets.Scripts.Add((src, defer));
+    public void AddInlineScript(string javascript) => assets.InlineScripts.Add(javascript);
     public void AddAsset(string sourcePath, string destRelative) => assets.Files.Add((sourcePath, destRelative));
 }
 

@@ -8,7 +8,7 @@ namespace Netdocs.Core.Plugins;
 public sealed class PluginHost
 {
     public IReadOnlyList<IPlugin> Plugins { get; }
-    public PluginAssets Assets { get; } = new();
+    public PluginAssets Assets { get; }
 
     public IReadOnlyList<IMarkdownPreprocessor> Preprocessors { get; }
     public IReadOnlyList<IMarkdigContributor> MarkdigContributors { get; }
@@ -16,9 +16,10 @@ public sealed class PluginHost
     public IReadOnlyList<IBuildHook> BuildHooks { get; }
     public IReadOnlyList<INavigationFilter> NavigationFilters { get; }
 
-    private PluginHost(List<IPlugin> plugins)
+    private PluginHost(List<IPlugin> plugins, PluginAssets assets)
     {
         Plugins = plugins;
+        Assets = assets;
         Preprocessors = plugins.OfType<IMarkdownPreprocessor>().OrderBy(p => p.Order).ToList();
         MarkdigContributors = plugins.OfType<IMarkdigContributor>().ToList();
         ContentGenerators = plugins.OfType<IContentGenerator>().ToList();
@@ -37,7 +38,7 @@ public sealed class PluginHost
     {
         var log = loggerFactory.CreateLogger("PluginHost");
         var plugins = new List<IPlugin>();
-        var host = new PluginHost(plugins);
+        var assets = new PluginAssets();
 
         foreach (var entry in pluginConfigs)
         {
@@ -54,7 +55,7 @@ public sealed class PluginHost
             }
 
             var ctx = new PluginContext(config, options, loggerFactory.CreateLogger(plugin.Name),
-                serviceCollection, entry.Options, host.Assets);
+                serviceCollection, entry.Options, assets);
             try
             {
                 plugin.Configure(ctx);
@@ -68,6 +69,6 @@ public sealed class PluginHost
             }
         }
 
-        return new PluginHost(plugins);
+        return new PluginHost(plugins, assets);
     }
 }

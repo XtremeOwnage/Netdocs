@@ -1,0 +1,89 @@
+using Markdig;
+using Microsoft.Extensions.Logging.Abstractions;
+using Netdocs.Abstractions;
+using Netdocs.Core.Content;
+using Netdocs.Core.Markdown;
+using Xunit;
+
+namespace Netdocs.Core.Tests;
+
+public class UrlTests
+{
+    [Theory]
+    [InlineData("index.md", "")]
+    [InlineData("about.md", "about/")]
+    [InlineData("blog/index.md", "blog/")]
+    [InlineData("blog/posts/hello.md", "blog/posts/hello/")]
+    [InlineData("guides/setup/install.md", "guides/setup/install/")]
+    public void UrlFor_ProducesDirectoryUrls(string relative, string expected)
+        => Assert.Equal(expected, ContentDiscovery.UrlFor(relative));
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("about/", "../")]
+    [InlineData("blog/posts/hello/", "../../../")]
+    [InlineData("404.html", "")]
+    public void BaseUrl_ComputesRelativePrefix(string url, string expected)
+        => Assert.Equal(expected, PageRenderer.BaseUrl(url));
+}
+
+public class MarkdownTests
+{
+    private static string Render(string markdown)
+    {
+        var site = new SiteContext
+        {
+            Config = new SiteConfig(),
+            Options = new BuildOptions(),
+            LoggerFactory = NullLoggerFactory.Instance,
+        };
+        var pipeline = MarkdownPipelineFactory.Build(site, []);
+        var page = new Page { SourcePath = "x", RelativePath = "x.md", ProcessedMarkdown = markdown };
+        new DocumentRenderer(pipeline).Render(page);
+        return page.HtmlContent;
+    }
+
+    [Fact]
+    public void Admonition_RendersMaterialMarkup()
+    {
+        var html = Render("!!! note \"Heads up\"\n    Body text here\n");
+        Assert.Contains("class=\"admonition note\"", html);
+        Assert.Contains("admonition-title\">Heads up", html);
+        Assert.Contains("Body text here", html);
+    }
+
+    [Fact]
+    public void CollapsibleAdmonition_RendersDetails()
+    {
+        var html = Render("???+ tip \"Open me\"\n    Hidden\n");
+        Assert.Contains("<details class=\"admonition tip\" open>", html);
+        Assert.Contains("<summary>Open me</summary>", html);
+    }
+
+    [Fact]
+    public void ContentTabs_RenderTabbedSet()
+    {
+        var html = Render("=== \"A\"\n    Alpha\n\n=== \"B\"\n    Beta\n");
+        Assert.Contains("tabbed-set", html);
+        Assert.Contains("<label for=\"__tabbed_1_1\">A</label>", html);
+        Assert.Contains("<label for=\"__tabbed_1_2\">B</label>", html);
+    }
+
+    [Fact]
+    public void MermaidFence_RendersPreMermaid()
+    {
+        var html = Render("```mermaid\ngraph TD; A-->B;\n```\n");
+        Assert.Contains("<pre class=\"mermaid\">", html);
+        Assert.Contains("A-->B", html);
+    }
+
+    [Fact]
+    public void Title_ExtractedFromFirstHeading()
+    {
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var pipeline = MarkdownPipelineFactory.Build(site, []);
+        var page = new Page { SourcePath = "x", RelativePath = "x.md", ProcessedMarkdown = "# Hello World\n\ntext" };
+        new DocumentRenderer(pipeline).Render(page);
+        Assert.Equal("Hello World", page.Title);
+    }
+}

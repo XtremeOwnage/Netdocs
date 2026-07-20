@@ -1,0 +1,27 @@
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="{{ base_url }}" class="md-header__button md-logo" aria-label="{{ config.site_name }}">
+      {{ if config.theme.logo }}<img src="{{ base_url }}{{ strip_slash config.theme.logo }}" alt="logo">{{ end }}
+    </a>
+    <div class="md-header__title">
+      <span class="md-header__topic">{{ config.site_name }}</span>
+    </div>
+    <form class="md-search" role="search">
+      <input type="text" class="md-search__input" name="query" placeholder="Search"
+             aria-label="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
+             data-md-component="search-query">
+      <div class="md-search__output" data-md-component="search-output"></div>
+    </form>
+  </nav>
+  {{ if features | array.contains "navigation.tabs" }}
+  <nav class="md-tabs" aria-label="Tabs">
+    <ul class="md-tabs__list">
+      {{ for item in nav }}
+      <li class="md-tabs__item">
+        <a class="md-tabs__link" href="{{ base_url }}{{ item.url }}">{{ item.title }}</a>
+      </li>
+      {{ end }}
+    </ul>
+  </nav>
+  {{ end }}
+</header>

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Netdocs.Abstractions/Netdocs.Abstractions.csproj" />
+    <Project Path="src/Netdocs.Core/Netdocs.Core.csproj" />
+    <Project Path="src/Netdocs.Plugins/Netdocs.Plugins.csproj" />
+    <Project Path="src/Netdocs.Theme.Material/Netdocs.Theme.Material.csproj" />
+    <Project Path="src/Netdocs.Cli/Netdocs.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Netdocs.Core.Tests/Netdocs.Core.Tests.csproj" />
+  </Folder>
+</Solution>

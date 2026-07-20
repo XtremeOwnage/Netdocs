@@ -37,6 +37,7 @@ public static class JsonConfigLoader
             Plugins = ParsePlugins(root.Get("plugins")),
             ExtraCss = StringList(root.Get("extraCss")),
             ExtraJavaScript = StringList(root.Get("extraJavaScript")),
+            Exclude = StringList(root.Get("exclude")),
             Extra = root.Get("extra").AsMap(),
         };
     }

@@ -118,7 +118,7 @@ public sealed class DevServer(
     {
         try
         {
-            var freshConfig = ConfigLoader.Load(configPath);
+            var freshConfig = JsonConfigLoader.Load(configPath);
             var engine = new BuildEngine(freshConfig, options, registry, loggerFactory);
             await engine.BuildAsync();
         }

@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "Netdocs: serve Web": {
+      "commandName": "Project",
+      "commandLineArgs": "serve --verbose",
+      "workingDirectory": "..\\..\\..\\Web"
+    },
+    "Netdocs: build Web": {
+      "commandName": "Project",
+      "commandLineArgs": "build --verbose",
+      "workingDirectory": "..\\..\\..\\Web"
+    }
+  }
+}

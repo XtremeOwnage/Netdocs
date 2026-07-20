@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
 using Netdocs.Core;
@@ -15,19 +16,28 @@ public static class CliApp
         var command = args.FirstOrDefault() ?? "build";
         var opts = ParseOptions(args);
 
-        using var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.SetMinimumLevel(opts.Verbose ? LogLevel.Debug : LogLevel.Information);
-            builder.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
-        });
-        var log = loggerFactory.CreateLogger("netdocs");
-
         var configPath = ResolveConfigPath(opts.ConfigPath);
         if (configPath is null)
         {
-            log.LogError("Could not find mkdocs.yml. Use --config <path>.");
+            Console.Error.WriteLine("Could not find appsettings.json. Use --config <path> or run from the site directory.");
             return 1;
         }
+
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Path.GetDirectoryName(configPath)!)
+            .AddJsonFile(Path.GetFileName(configPath), optional: false, reloadOnChange: false)
+            .AddEnvironmentVariables("NETDOCS_")
+            .Build();
+
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddConfiguration(configuration.GetSection("Logging"));
+            builder.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
+            builder.SetMinimumLevel(opts.Verbose ? LogLevel.Trace : LogLevel.Information);
+            if (opts.Verbose) builder.AddFilter(null, LogLevel.Trace);
+        });
+        var log = loggerFactory.CreateLogger("netdocs");
+        log.LogDebug("Using config file {ConfigPath}", configPath);
 
         try
         {
@@ -65,7 +75,7 @@ public static class CliApp
 
     private static (SiteConfig, BuildOptions) LoadConfig(string configPath, CliOptions opts, bool serve)
     {
-        var config = ConfigLoader.Load(configPath);
+        var config = JsonConfigLoader.Load(configPath);
         var buildOptions = new BuildOptions
         {
             IsProduction = opts.Production,
@@ -95,7 +105,7 @@ public static class CliApp
     private static string? ResolveConfigPath(string? provided)
     {
         if (provided is not null) return File.Exists(provided) ? Path.GetFullPath(provided) : null;
-        var candidate = Path.Combine(Directory.GetCurrentDirectory(), "mkdocs.yml");
+        var candidate = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
         return File.Exists(candidate) ? candidate : null;
     }
 
@@ -127,12 +137,12 @@ public static class CliApp
               netdocs serve [options]     Serve with live reload
 
             Options:
-              -f, --config <path>   Path to mkdocs.yml
+              -f, --config <path>   Path to appsettings.json (default ./appsettings.json)
               -p, --port <port>     Dev server port (default 8000)
                   --clean           Remove existing output before building
                   --strict          Fail on plugin/template errors
                   --prod            Production build (enables prod-only plugins)
-              -v, --verbose         Verbose logging
+              -v, --verbose         Verbose (Trace) logging
             """);
         return 0;
     }

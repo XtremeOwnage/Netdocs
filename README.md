@@ -2,18 +2,22 @@
 
 A fast, flexible static site generator in **.NET 11** — a reimplementation of the
 [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) experience with a
-first-class C# plugin system. It reads existing `mkdocs.yml` projects and builds the
-Markdown in `docs/` with little to no change.
+first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and
+the Markdown in `docs/` builds with little to no change.
 
 ## Quick start
 
 ```pwsh
-# Build a site (looks for mkdocs.yml in the current dir, or pass --config)
-dotnet run --project src/Netdocs.Cli -- build --config ..\Web\mkdocs.yml
+# Build a site (looks for ./appsettings.json, or pass --config)
+dotnet run --project src/Netdocs.Cli -- build --config ..\Web\appsettings.json
 
 # Serve with live reload
-dotnet run --project src/Netdocs.Cli -- serve --config ..\Web\mkdocs.yml --port 8000
+dotnet run --project src/Netdocs.Cli -- serve --config ..\Web\appsettings.json --port 8000
 ```
+
+In Visual Studio / VS Code, press **F5** — the `Netdocs: serve Web` launch profile builds
+and serves the `Web/` site with the debugger attached (a `Netdocs: build Web` profile is
+also provided).
 
 ## Commands
 
@@ -23,6 +27,13 @@ dotnet run --project src/Netdocs.Cli -- serve --config ..\Web\mkdocs.yml --port 
 | `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
 
 Options: `--config/-f`, `--port/-p`, `--clean`, `--strict`, `--prod`, `--verbose/-v`.
+
+## Configuration & logging
+
+Site config is the `Netdocs` section of `appsettings.json` (site name, theme, nav,
+plugins, markdown extensions, extra). Logging is the standard .NET `Logging` section —
+set per-category levels (e.g. `"Build": "Debug"`, `"Netdocs": "Trace"`). The
+`--verbose` flag forces Trace globally.
 
 ## Architecture
 
@@ -41,7 +52,7 @@ Netdocs.slnx
 ### Build pipeline
 
 ```
-Load mkdocs.yml → SiteConfig
+Load appsettings.json (Netdocs section) → SiteConfig
   → Discover docs/** (respect .mkdocsignore + NavigationFilters)
   → Load plugins (config plugins + markdown-extension-backed like snippets)
   → OnBuildStart hooks
@@ -65,7 +76,7 @@ Implement `IPlugin` plus any hook interfaces you need:
 - `IBuildHook` — lifecycle (`OnBuildStart` / `OnPageRendered` / `OnBuildComplete`).
 - `INavigationFilter` — include/exclude pages.
 
-Plugins are matched to `mkdocs.yml` plugin names via the CLI's `PluginRegistry`.
+Plugins are matched to `appsettings.json` plugin names via the CLI's `PluginRegistry`.
 
 ## Theming
 

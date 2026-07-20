@@ -54,24 +54,58 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         return Task.CompletedTask;
     }
 
-    /// <summary>Replaces the <c>&lt;!-- material/tags --&gt;</c> marker with a rendered tag index.</summary>
+    /// <summary>Replaces the <c>&lt;!-- material/tags --&gt;</c> marker with a rendered, hierarchical tag index.</summary>
     private static void RenderTagIndex(SiteContext site, SortedDictionary<string, List<Page>> index)
     {
         const string marker = "<!-- material/tags -->";
-        var markdown = new System.Text.StringBuilder();
+
+        // Build a tree from '/'-separated tag paths so parents nest their children.
+        var root = new TagNode();
         foreach (var (tag, pages) in index)
         {
-            markdown.Append("## ").AppendLine(tag).AppendLine();
-            foreach (var page in pages.DistinctBy(p => p.Url).OrderBy(GetDisplayTitle, StringComparer.OrdinalIgnoreCase))
-                markdown.Append("- [").Append(GetDisplayTitle(page)).Append("](/").Append(page.Url).AppendLine(")");
-            markdown.AppendLine();
+            var node = root;
+            var path = "";
+            foreach (var segment in tag.Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                path = path.Length == 0 ? segment : path + "/" + segment;
+                if (!node.Children.TryGetValue(segment, out var child))
+                    node.Children[segment] = child = new TagNode { FullPath = path };
+                node = child;
+            }
+            node.Pages = pages;
         }
+
+        var markdown = new System.Text.StringBuilder();
+        RenderNode(root, 0, markdown);
 
         foreach (var page in site.Pages)
         {
             if (page.RawMarkdown.Contains(marker, StringComparison.Ordinal))
                 page.RawMarkdown = page.RawMarkdown.Replace(marker, markdown.ToString());
         }
+    }
+
+    private static void RenderNode(TagNode node, int depth, System.Text.StringBuilder markdown)
+    {
+        foreach (var child in node.Children.Values)
+        {
+            var level = Math.Min(2 + depth, 6);
+            markdown.Append('\n').Append(new string('#', level)).Append(' ').AppendLine(child.FullPath).AppendLine();
+            if (child.Pages is { Count: > 0 })
+            {
+                foreach (var page in child.Pages.DistinctBy(p => p.Url).OrderBy(GetDisplayTitle, StringComparer.OrdinalIgnoreCase))
+                    markdown.Append("- [").Append(GetDisplayTitle(page)).Append("](/").Append(page.Url).AppendLine(")");
+                markdown.AppendLine();
+            }
+            RenderNode(child, depth + 1, markdown);
+        }
+    }
+
+    private sealed class TagNode
+    {
+        public string FullPath = "";
+        public SortedDictionary<string, TagNode> Children { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<Page>? Pages { get; set; }
     }
 
     /// <summary>Title known before render: front matter, else first H1 in markdown, else filename.</summary>

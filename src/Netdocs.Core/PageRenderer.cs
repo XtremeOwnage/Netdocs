@@ -35,6 +35,9 @@ public static class PageRenderer
             ["palette_accent"] = Sanitize(palette?.Accent ?? "indigo"),
             ["font_text"] = font.TryGetValue("text", out var ft) ? ft?.ToString() ?? "Roboto" : "Roboto",
             ["font_code"] = font.TryGetValue("code", out var fc) ? fc?.ToString() ?? "Roboto Mono" : "Roboto Mono",
+            ["updated_display"] = page.Updated?.ToString("MMMM d, yyyy"),
+            ["created_display"] = page.Created?.ToString("MMMM d, yyyy"),
+            ["show_source_meta"] = !page.IsGenerated && page.Updated.HasValue,
         };
 
         return engine.Render(template, model);

@@ -107,6 +107,16 @@ func render_toc(entry) ~}}
           <div class="md-content" data-md-component="content">
             <article class="md-content__inner md-typeset">
               {{ content }}
+              {{~ if show_source_meta ~}}
+              <hr>
+              <div class="md-source-file">
+                <span class="md-source-file__fact">
+                  <span class="md-icon"></span>
+                  Last updated: {{ updated_display }}
+                  {{~ if created_display ~}} &middot; Created: {{ created_display }}{{~ end ~}}
+                </span>
+              </div>
+              {{~ end ~}}
             </article>
           </div>
         </div>

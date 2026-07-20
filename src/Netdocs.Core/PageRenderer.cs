@@ -16,6 +16,17 @@ public static class PageRenderer
         var palette = site.Config.Theme.Palette.Count > 0 ? site.Config.Theme.Palette[0] : null;
         var font = site.Config.Theme.Font;
 
+        Page? prev = null, next = null;
+        if (site.State.GetValueOrDefault("nav_pages") is List<Page> navPages)
+        {
+            var i = navPages.IndexOf(page);
+            if (i >= 0)
+            {
+                if (i > 0) prev = navPages[i - 1];
+                if (i < navPages.Count - 1) next = navPages[i + 1];
+            }
+        }
+
         var model = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["config"] = site.Config,
@@ -38,6 +49,8 @@ public static class PageRenderer
             ["updated_display"] = page.Updated?.ToString("MMMM d, yyyy"),
             ["created_display"] = page.Created?.ToString("MMMM d, yyyy"),
             ["show_source_meta"] = !page.IsGenerated && page.Updated.HasValue,
+            ["prev_page"] = prev,
+            ["next_page"] = next,
         };
 
         return engine.Render(template, model);

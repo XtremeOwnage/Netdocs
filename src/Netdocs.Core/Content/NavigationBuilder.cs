@@ -40,4 +40,20 @@ public static class NavigationBuilder
             .Select(p => new NavNode { Title = p.Title, Page = p })
             .ToList();
     }
+
+    /// <summary>Depth-first flatten of the nav tree to the linear order of real pages.</summary>
+    public static List<Page> Flatten(IReadOnlyList<NavNode> nodes)
+    {
+        var result = new List<Page>();
+        void Walk(IReadOnlyList<NavNode> ns)
+        {
+            foreach (var node in ns)
+            {
+                if (node.Page is not null) result.Add(node.Page);
+                if (node.Children.Count > 0) Walk(node.Children);
+            }
+        }
+        Walk(nodes);
+        return result;
+    }
 }

@@ -2,7 +2,9 @@ name: Packages
 
 on:
   push:
-    tags: ["v*"]
+    # Only full semver tags publish release binaries. The moving `v1` alias tag
+    # (used for `XtremeOwnage/Netdocs@v1`) must not create a stray `v1` release.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
     inputs:
       version:

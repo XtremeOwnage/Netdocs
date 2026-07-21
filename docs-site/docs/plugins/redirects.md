@@ -27,3 +27,7 @@ for vanity links and for preserving inbound links after restructuring.
 
 Each key becomes an HTML page (e.g. `site/discord/index.html`) that immediately redirects
 to the mapped destination. Destinations may be absolute URLs or site-relative paths.
+
+## Attribution
+
+Behavior is modeled on [mkdocs-redirects](https://github.com/mkdocs/mkdocs-redirects) (MIT). See [Attributions](../about/attributions.md).

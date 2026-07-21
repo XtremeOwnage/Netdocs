@@ -59,3 +59,7 @@ render_macros: true
 ```json
 { "name": "macros" }
 ```
+
+## Attribution
+
+Behavior is modeled on [mkdocs-macros-plugin](https://github.com/fralau/mkdocs-macros-plugin) by @fralau (MIT). See [Attributions](../about/attributions.md).

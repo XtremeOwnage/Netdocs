@@ -1,6 +1,7 @@
 using Markdig;
 using Netdocs.Abstractions;
 using Netdocs.Core.Markdown.Admonitions;
+using Netdocs.Core.Markdown.Emoji;
 using Netdocs.Core.Markdown.Tabs;
 
 namespace Netdocs.Core.Markdown;
@@ -20,7 +21,6 @@ public static class MarkdownPipelineFactory
             .UseAutoIdentifiers()     // toc permalink ids
             .UseGenericAttributes()   // attr_list {target=_blank}
             .UseAbbreviations()
-            .UseEmojiAndSmiley(false)
             .UseDefinitionLists()
             .UseAutoLinks()
             .UseListExtras()
@@ -30,10 +30,21 @@ public static class MarkdownPipelineFactory
         builder.Extensions.AddIfNotAlready(new AdmonitionExtension());
         builder.Extensions.AddIfNotAlready(new TabbedExtension());
         builder.Extensions.AddIfNotAlready(new MaterialCodeBlockExtension());
+        builder.Extensions.AddIfNotAlready(new TwemojiExtension(ResolveTwemojiBase(site.Config)));
 
         foreach (var contributor in contributors)
             contributor.Extend(builder, site);
 
         return builder.Build();
+    }
+
+    private static string ResolveTwemojiBase(SiteConfig config)
+    {
+        foreach (var key in (ReadOnlySpan<string>)["pymdownx.emoji", "emoji"])
+            if (config.MarkdownExtensions.TryGetValue(key, out var opts)
+                && opts.TryGetValue("base", out var value)
+                && value?.ToString() is { Length: > 0 } custom)
+                return custom;
+        return TwemojiExtension.DefaultBaseUrl;
     }
 }

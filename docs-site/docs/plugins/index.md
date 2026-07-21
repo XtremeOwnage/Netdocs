@@ -15,6 +15,50 @@ Netdocs has a first-class C# plugin system. Plugins are enabled and configured i
 ]
 ```
 
+!!! info "Plugins are opt-in"
+    Unlike the theme and Markdown extensions, **no plugin runs unless you list it** in the
+    `plugins` array. There is no implicit default set — this keeps builds predictable and fast,
+    and means a plugin can never surprise you by activating on its own. The trade-off is that a
+    fresh `appsettings.json` starts minimal; use the recommended set below as a starting point.
+
+## Recommended configuration
+
+Most sites want the majority of plugins enabled — they are inexpensive and only act on the
+content that uses them (for example [table-reader](table-reader.md) is a no-op on pages with no
+`read_csv` directive). A good general-purpose starting point:
+
+```json
+"plugins": [
+  { "name": "search", "options": { "lang": "en" } },
+  { "name": "meta" },
+  { "name": "tags", "options": { "export": true } },
+  { "name": "snippets" },
+  { "name": "abbreviations" },
+  { "name": "macros" },
+  { "name": "table-reader" },
+  { "name": "glightbox" },
+  { "name": "git-revision-date", "options": { "enabled": true } },
+  { "name": "redirects" },
+  { "name": "rss" },
+  { "name": "social" }
+]
+```
+
+Add [`blog`](blog.md) if you publish posts, [`file-filter`](file-filter.md) for
+environment-driven content gating, and [`affiliate-links`](affiliate-links.md) if you use
+affiliate links. A few plugins are intentionally left out of the "enable everything" default:
+
+| Plugin | Why it's opt-in |
+|---|---|
+| [blog](blog.md) | Only meaningful for sites with a `blog/` posts directory. |
+| [social](social.md) | Generates images (slower); best gated behind `netdocs build --prod`. |
+| [file-filter](file-filter.md) | Needs a `.file-filter.yml` and env vars to do anything. |
+| [affiliate-links](affiliate-links.md) | Requires you to declare your affiliate programs. |
+| [arithmatex](arithmatex.md) / [b64](b64.md) | Enable when you actually use math or inline-image embedding. |
+
+Ordering only matters for Markdown preprocessors (they transform source text in sequence);
+see each plugin page for its order. Plugins that emit assets or pages are order-independent.
+
 ## Built-in plugins
 
 | Plugin | Purpose |

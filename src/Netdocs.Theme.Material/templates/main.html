@@ -105,6 +105,8 @@ func render_toc(entry) ~}}
               <div class="md-sidebar__inner">
                 {{~ if page.meta.is_post ~}}
                 {{ include "partials/post-meta.html" }}
+                {{~ else if page.meta.is_blog_listing ~}}
+                {{ include "partials/blog-nav.html" }}
                 {{~ else ~}}
                 {{ include "partials/nav.html" }}
                 {{~ end ~}}

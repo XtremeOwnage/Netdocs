@@ -1,59 +1,89 @@
-# Netdocs — Master TODO
+# Netdocs — Consolidated TODO
 
-Deferred / future work, roughly prioritized. Core engine (config, discovery, Markdig
-pipeline, plugin host, Scriban theme, build + serve) is implemented and builds the
-existing `Web/` blog.
+Single source of truth for remaining work, consolidated from everything under `plan/`
+(`dotnet-ssg-plan.md`, `Deployment-Docs.md`, `Search.md`, `tags-page.md`, `Set-Remote.md`).
 
-## Recently completed (session 2)
-- [x] Real Material theme (vendored CSS/JS + lunr search) with attribution/license.
-- [x] Client-side syntax highlighting (highlight.js).
-- [x] Built-in `sitemap.xml`; `redirects` plugin (fixes `/discord`).
-- [x] Hierarchical tag index rendered into the `<!-- material/tags -->` marker.
-- [x] Real git-revision dates (LibGit2Sharp single-pass) + page date footer.
-- [x] `exclude` config option (omit include-only files from discovery/search/sitemap).
-- [x] Blog post metadata header (date · read time · categories); folder-derived categories.
-- [x] Prev/next page navigation in footer.
-- [x] Relative `*.md` link rewriting to output URLs.
-- [x] GitHub Actions CI (build + test); cross-platform CLI paths; dev server auto-picks a free port.
-- [x] Remote + MIT LICENSE + credit to squidfunk + dependabot.
+The core engine (config, discovery, Markdig pipeline, plugin host, Scriban Material
+theme, build + serve) is implemented and builds the existing `Web/` blog with real
+Material look, working lunr search, and social cards. Repo is on GitHub with CI.
 
-## High priority (parity)
-- [ ] **Social cards** (`social` plugin): OG image generation. Choose ImageSharp vs SkiaSharp. Cache by content hash. Prod-only.
-- [ ] **Server-side syntax highlighting** parity with Pygments/Material (currently emits `.highlight > pre > code` with a language class only; no token spans/colors). Material CSS styles the container, but tokens aren't colored. Options: port a highlighter or ship a client-side one styled to match Material.
-- [x] **Search parity**: DONE — vendored Material's compiled lunr search worker + UI; `Search` plugin emits the Material index schema (config.fields/pipeline/separator + per-section docs). Verified relevant ranked results.
-- [x] **Real Material CSS/JS assets**: DONE — vendored Material's compiled `main`/`palette` CSS + `bundle.js` + search worker + lunr under `assets/vendor/material` (MIT attribution + `THIRD_PARTY_LICENSES/`). Base template ported to Material DOM.
-- [x] **Relative `*.md` link rewriting** in content to output URLs (mkdocs-style). DONE (root-relative). Note: assumes site served at domain root.
-- [ ] **Jinja→Scriban override porting**: `docs/overrides/**` (Material Jinja) is ignored. Port `partials/header.html` and any others to Scriban so custom_dir works.
+---
 
-## Markdown extension gaps
-- [ ] **Keys** (`++ctrl+c++`) inline extension.
-- [ ] **Critic** markup (`{++ ++}`, `{-- --}`, `{~~ ~>~~}`).
-- [ ] **Highlight line numbers / anchors / inline linenums** (pymdownx.highlight options: anchor_linenums, line_spans, linenums_style).
-- [ ] **Content tabs linked** (`content.tabs.link`) — sync tabs with same label across a page.
-- [ ] **Emoji**: map to Twemoji SVG (currently Markdig unicode emoji). Material uses twemoji SVG.
-- [ ] **Abbreviations tooltips** styling (`content.tooltips`) and footnote tooltips.
+## ✅ Done
 
-## Plugins
-- [ ] **Macros** (`main.py` port): implement `fileuri()` and `ebay()` via Scriban; honor `render_by_default: false` (opt-in per page).
-- [ ] **Tags**: dedicated tag listing pages + hierarchical tags (`/` separator) + in-page tag chips + `[TAGS]` marker injection. (Currently: collect, shadow filtering, `tags.json` export.)
-- [ ] **Blog**: authors (`.authors.yml`), author pages, `post_excerpt` modes, `categories_allowed` enforcement, drafts, related links, proper excerpt HTML. (Currently: URL rewrite, paginated index, category + archive pages, RSS.)
-- [ ] **file-filter**: implement `.file-filter.yml` env-driven label include/exclude + nav pruning. (Currently: pass-through; `.mkdocsignore` honored.)
-- [ ] **git-revision-date**: real git created/updated via LibGit2Sharp. (Currently: filesystem timestamps.)
-- [ ] **table-reader**: embed CSV/data as tables.
-- [ ] **redirects**: client-side redirect map (e.g. `/discord`).
-- [ ] **typeset**: smart typography.
+**Engine & CLI**
+- `netdocs build` / `serve` (Kestrel + WebSocket live reload + FileSystemWatcher; auto-picks a free port).
+- Config from **`appsettings.json`** (`Netdocs` section) via `Microsoft.Extensions.Configuration`.
+- Logging via the standard `Logging` section; `--verbose` = Trace; Debug/Trace across pipeline stages.
+- Parallel render pipeline; `exclude` glob option; content-page discovery honoring `.mkdocsignore`.
+- Relative `*.md` link rewriting to output URLs.
+- Built-in **`sitemap.xml`**.
+- F5 debug (VS Code `launch.json`/`tasks.json` + VS `launchSettings.json`).
 
-## Engine / infra
-- [ ] **Incremental build cache**: content-hash sources/templates/plugin inputs; skip unchanged (`.cache/` manifest).
-- [ ] **Sitemap.xml** generation (built-in).
-- [ ] **External plugin loading** from `./plugins/*.dll` via AssemblyLoadContext.
-- [ ] **Navigation**: breadcrumbs (`navigation.path`), section index pages (`navigation.indexes`), prune, active-trail expansion, prev/next.
-- [ ] **Instant navigation / prefetch / progress / TOC-follow** client behavior.
-- [ ] **Config**: honor all env flags (IS_LOCAL_BUILD, MKDOCS_* etc.), strict mode, `!!python/...` slugify mapping.
-- [ ] **Scriban security advisories**: review Scriban 6.2.1 GHSA advisories / pin a patched version; `NuGetAudit` currently disabled to reduce noise.
-- [ ] **Unit + golden-file tests**: Markdig extensions, config parser, slugify, search shaping; parity diff vs MkDocs output.
-- [ ] **CI**: GitHub Actions build + deploy `site/`.
+**Theme (real Material, vendored MIT-attributed assets)**
+- Ported base + partials (header/nav/toc/tabs/footer/search) to Material DOM with `#__config`.
+- Vendored Material `main`/`palette` CSS, `bundle.js`, lunr search worker + languages.
+- Client-side **syntax highlighting** (highlight.js) **with line numbers**.
+- Page date footer; prev/next footer navigation; OG/twitter meta tags.
+
+**Plugins**
+- **search** — Material index schema (fields/pipeline/separator + per-section docs); lunr search verified.
+- **social** — ImageSharp 1200×630 OG cards (palette-colored), cached, build/prod only.
+- **blog** — post URL rewrite, paginated index, category + archive pages, RSS, post meta header (date · read-time · categories), folder-derived categories.
+- **tags** — hierarchical index into `<!-- material/tags -->` marker, shadow-tag filtering, `tags.json` export.
+- **abbreviations** — dedicated plugin appending abbreviation files (`<abbr>` tooltips).
+- **snippets** — `--8<--` includes + base paths.
+- **git-revision-date** — real dates via single-pass LibGit2Sharp walk (filesystem fallback; skipped on serve).
+- **redirects** — client-side redirect map (fixes `/discord`).
+- **meta** — per-directory `.meta.yml` defaults.
+- **glightbox** — image lightbox (assets + init).
+
+**Repo / infra**
+- Pushed to `git@github.com:XtremeOwnage/Netdocs.git` (SSH key `~/.ssh/xo`).
+- MIT `LICENSE` + full credit to squidfunk; `THIRD_PARTY_LICENSES/`; README with attribution + AI-derivative disclaimer.
+- `dependabot.yml` (nuget + github-actions); **CI** workflow (build + test).
+
+---
+
+## 🚧 Remaining work
+
+### Documentation & distribution (from `Deployment-Docs.md`)
+- [ ] **Usage docs** — how to install, configure (`appsettings.json` schema), run (`build`/`serve`), and theme/override.
+- [ ] **Publish workflow** — example GitHub Actions workflow that builds the site and deploys to `gh-pages` (or artifact).
+- [ ] **Packaging** — workflow to build **apt** (`.deb`) and **yum** (`.rpm`) packages of the `netdocs` CLI.
+- [ ] **Docker** — workflow/Dockerfile to build a container image of the CLI.
+
+### Tags page (from `tags-page.md`)
+- [ ] Keep the current tags layout (liked). Add **per-page custom display name** on the tags page via metadata
+      (e.g. a front-matter `tags_title` / `title` override) so authors control how a post shows in the tag list.
+
+### Search (from `Search.md`)
+- [ ] **Reconsider lunr** — user flagged lunr "might not be the best idea" (ref: squidfunk/mkdocs-material#6307).
+      Evaluate alternatives / prebuilt index / server-side search; keep the Material UI either way.
+
+### Content / theme features
+- [ ] **Blog authors** — `.authors.yml`, author avatar/name on posts, author pages (currently 1 author, 0 post usage).
+- [ ] **file-filter** — env-driven label include/exclude + nav pruning (currently pass-through).
+- [ ] **table-reader** — embed CSV/data as tables.
+- [ ] **typeset** — smart typography (currently no-op).
+- [ ] **Jinja→Scriban override porting** — `docs/overrides/**` is Material Jinja and is auto-ignored; port to Scriban to re-enable `custom_dir`.
+- [ ] **Emoji** → Twemoji SVG (currently Markdig unicode emoji).
+- [ ] **Keys** (`++ctrl+c++`) and **Critic** (`{++ ++}`/`{-- --}`/`{~~ ~>~~}`) inline extensions (low usage).
+- [ ] **Content tabs linked** (`content.tabs.link`).
+- [ ] **Navigation** polish — breadcrumbs (`navigation.path`), section index pages (`navigation.indexes`), active-trail expansion; extend prev/next to blog posts.
+- [ ] **Highlight extras** — anchor linenums / inline linenums parity (pymdownx options).
+- [ ] **Macros** (`main.py` port) — `fileuri()` / `ebay()` via Scriban, honor `render_by_default:false` (currently 0 usage in content).
+
+### Engine / infra
+- [ ] **Incremental build cache** — content-hash sources/templates/plugin inputs; skip unchanged (`.cache/` manifest). Speeds warm builds (currently ~13s prod with git dates + social cards).
+- [ ] **External plugin loading** — `./plugins/*.dll` via `AssemblyLoadContext`.
+- [ ] **Config** — honor all env flags (`IS_LOCAL_BUILD`, `MKDOCS_*`), strict mode, `!!python/...` slugify mapping.
+- [ ] **Scriban advisories** — review Scriban 6.2.1 GHSA advisories / pin a patched version (`NuGetAudit` currently disabled to reduce noise).
+- [ ] **Tests** — golden-file Markdown extension tests + parity diff vs MkDocs output (search index, sitemap, RSS).
+
+---
 
 ## Notes
-- `.NET 11` (preview) SDK pinned via `global.json`. Solution is `.slnx`.
-- Build output centralized under `artifacts/` (UseArtifactsOutput).
+- `.NET 11` (preview) pinned via `global.json`; solution is `.slnx`; output centralized under `artifacts/` (`UseArtifactsOutput`).
+- Build ~2.2s (serve/dev) / ~13s (prod, git dates + social cards; both cached & build-only).
+- `Web/appsettings.json` (in the separate `Web` repo) carries the site's plugin/theme config.

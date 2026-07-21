@@ -62,6 +62,81 @@ public class SearchPluginTests
         }
     }
 
+    private static JsonElement EmitIndex(Page page)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-search-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var plugin = new SearchPlugin();
+            plugin.Configure(new FakeContext(new Dictionary<string, object?>()));
+
+            var config = new SiteConfig { ProjectRoot = dir };
+            var site = new SiteContext
+            {
+                Config = config,
+                Options = new BuildOptions(),
+                LoggerFactory = NullLoggerFactory.Instance,
+            };
+            site.Pages.Add(page);
+
+            plugin.OnBuildCompleteAsync(site, CancellationToken.None).GetAwaiter().GetResult();
+            var json = File.ReadAllText(Path.Combine(config.AbsoluteSiteDir, "search", "search_index.json"));
+            return JsonDocument.Parse(json).RootElement.Clone();
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PageLevelDoc_CarriesTextAfterH1_ForTeaser()
+    {
+        // Material shows the page-level doc's text as the teaser on each result's main line.
+        // The H1 is the page title, so the paragraph beneath it must land in the page-level doc,
+        // not be swallowed by an H1 "section" (which leaves the teaser empty).
+        var page = new Page
+        {
+            SourcePath = "",
+            RelativePath = "guide.md",
+            Url = "guide/",
+            Title = "Guide",
+            HtmlContent = "<h1 id=\"guide\">Guide</h1><p>Intro paragraph here.</p><h2 id=\"details\">Details</h2><p>Section body.</p>",
+            PlainText = "Guide Intro paragraph here. Details Section body.",
+        };
+
+        var index = EmitIndex(page);
+        var docs = index.GetProperty("docs").EnumerateArray().ToList();
+
+        var pageDoc = docs.First(d => d.GetProperty("location").GetString() == "guide/");
+        Assert.Contains("Intro paragraph here.", pageDoc.GetProperty("text").GetString());
+
+        // The H1 must not become its own anchored section.
+        Assert.DoesNotContain(docs, d => d.GetProperty("location").GetString() == "guide/#guide");
+        // The H2 still produces a section doc.
+        Assert.Contains(docs, d => d.GetProperty("location").GetString() == "guide/#details");
+    }
+
+    [Fact]
+    public void SearchText_PreservesBlockHtml()
+    {
+        var page = new Page
+        {
+            SourcePath = "",
+            RelativePath = "index.md",
+            Url = "",
+            Title = "Home",
+            HtmlContent = "<h1 id=\"home\">Home</h1><p>Hello <strong>world</strong>.</p>",
+            PlainText = "Home Hello world.",
+        };
+
+        var index = EmitIndex(page);
+        var pageDoc = index.GetProperty("docs").EnumerateArray()
+            .First(d => d.GetProperty("location").GetString() == "");
+
+        Assert.Contains("<p>Hello <strong>world</strong>.</p>", pageDoc.GetProperty("text").GetString());
+    }
+
     [Fact]
     public void Defaults_MatchMaterialLunrConfig()
     {

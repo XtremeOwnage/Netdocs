@@ -44,6 +44,12 @@ A link such as `[HBA card](https://ebay.us/abc123)` becomes, in the rendered pag
 with a small footnote marker; hovering it reveals the disclosure, and the same text appears
 in the page's footnote list.
 
+!!! tip "Just write a normal link"
+    You do **not** need a snippet or macro for affiliate links. Prefer an ordinary Markdown
+    link — `[used APC PDU](https://ebay.us/bSAxHF)` — and let this plugin add the disclosure.
+    That keeps posts readable and avoids per-link markup such as
+    `--8<-- "ebay.html" text="..." url="..."`, which is noisier and easy to get wrong.
+
 ## Matching by query parameter
 
 Some programs only treat a link as an affiliate link when it carries a specific query

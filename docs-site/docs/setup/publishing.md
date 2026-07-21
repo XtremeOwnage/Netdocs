@@ -74,6 +74,76 @@ Use the same pattern: point the `--config` at your site's `appsettings.json` and
 its `siteDir`. For a project-page URL under a subpath, make sure `siteUrl` includes the
 subpath so links, the sitemap, and social cards resolve correctly.
 
+## Built-in deploy targets
+
+Instead of wiring up a workflow, `netdocs` can publish the build itself. Add a `deploy`
+section to the `Netdocs` block of `appsettings.json` and run `netdocs deploy` (which builds
+first, then publishes), or `netdocs build --deploy`.
+
+### Filesystem
+
+Copy the built site to a local (or mounted) directory — handy for nginx web roots or a
+synced folder:
+
+```json
+{
+  "Netdocs": {
+    "deploy": {
+      "target": "filesystem",
+      "path": "/var/www/docs",
+      "clean": true
+    }
+  }
+}
+```
+
+- `path` — destination directory (absolute, or relative to the project root).
+- `clean` — when `true` (default), files at the destination that the build no longer
+  produces are pruned.
+
+### Git branch
+
+Publish the output to a branch (e.g. `gh-pages`) using a temporary git worktree, so your
+main working tree is never touched:
+
+```json
+{
+  "Netdocs": {
+    "deploy": {
+      "target": "git",
+      "branch": "gh-pages",
+      "remote": "origin",
+      "message": "Deploy docs",
+      "push": true
+    }
+  }
+}
+```
+
+- The branch is created (as an orphan) on first deploy if it does not exist.
+- Set `push` to `false` to commit locally without pushing.
+- Requires `git` on `PATH` and the project to be inside a git repository.
+
+```bash
+# Build and publish in one step
+netdocs deploy --config appsettings.json
+```
+
+## Optimization
+
+Enable HTML minification to shrink emitted pages (whitespace collapse + comment removal,
+preserving `pre`/`code`/`script`/`style`):
+
+```json
+{
+  "Netdocs": {
+    "optimize": {
+      "minifyHtml": true
+    }
+  }
+}
+```
+
 ## Other hosts
 
 The `site/` output is static HTML/CSS/JS. Upload it to any static host (Netlify, S3 +

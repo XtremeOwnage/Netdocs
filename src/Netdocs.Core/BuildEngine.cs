@@ -118,9 +118,11 @@ public sealed class BuildEngine(
         Directory.CreateDirectory(config.AbsoluteSiteDir);
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
+        var minify = config.Optimize.MinifyHtml;
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
         {
             var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
+            if (minify) html = Optimization.HtmlMinifier.Minify(html);
             rendered.Add((page.OutputPath, html));
         });
         var changed = 0;
@@ -140,6 +142,7 @@ public sealed class BuildEngine(
             var notFound = new Page { SourcePath = "", RelativePath = "404.md", Url = "404.html", Title = "404" };
             notFound.Meta["template"] = "404.html";
             var html404 = PageRenderer.Render(templateEngine, site, notFound, host.Assets);
+            if (config.Optimize.MinifyHtml) html404 = Optimization.HtmlMinifier.Minify(html404);
             await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(config.AbsoluteSiteDir, "404.html"), html404, ct);
         }
 

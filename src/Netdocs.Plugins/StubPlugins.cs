@@ -103,9 +103,3 @@ public sealed class TypesetPlugin : IPlugin, IMarkdigContributor
     public void Extend(Markdig.MarkdownPipelineBuilder builder, SiteContext site)
         => builder.UseSmartyPants();
 }
-
-public sealed class MacrosPlugin : IPlugin
-{
-    public string Name => "macros";
-    public void Configure(IPluginContext ctx) { }
-}

@@ -27,6 +27,13 @@ public static class OutputWriter
         return await WriteBytesIfChangedAsync(dest, await File.ReadAllBytesAsync(source, ct), ct);
     }
 
+    /// <summary>Writes bytes if changed and tracks the output. Returns true when written.</summary>
+    public static async Task<bool> WriteBytesTrackedAsync(SiteContext site, string path, byte[] content, CancellationToken ct = default)
+    {
+        site.TrackOutput(path);
+        return await WriteBytesIfChangedAsync(path, content, ct);
+    }
+
     /// <summary>Writes UTF-8 text if it differs from the existing file. Returns true when written.</summary>
     public static Task<bool> WriteTextIfChangedAsync(string path, string content, CancellationToken ct = default)
         => WriteBytesIfChangedAsync(path, Encoding.UTF8.GetBytes(content), ct);

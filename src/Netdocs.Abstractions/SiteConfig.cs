@@ -144,6 +144,16 @@ public sealed class OptimizeConfig
 
     /// <summary>Collapse whitespace/comments in emitted JavaScript assets.</summary>
     public bool MinifyJs { get; set; }
+
+    /// <summary>
+    /// Generate a <c>.webp</c> sibling for each raster image (png/jpg) and wrap
+    /// <c>&lt;img&gt;</c> tags in a <c>&lt;picture&gt;</c> so browsers prefer webp with the
+    /// original as fallback. Non-destructive: originals are kept.
+    /// </summary>
+    public bool ConvertImagesToWebp { get; set; }
+
+    /// <summary>Quality (1-100) for generated webp images. Default 80.</summary>
+    public int WebpQuality { get; set; } = 80;
 }
 
 /// <summary>An authored navigation entry: either a link to a page or a titled section.</summary>

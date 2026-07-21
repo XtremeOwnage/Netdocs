@@ -90,13 +90,13 @@ func render_toc(entry) ~}}
     <meta name="twitter:image" content="{{ og_image }}">
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
-    <link rel="stylesheet" href="{{ base_url }}assets/netdocs.css">
+    <link rel="stylesheet" href="{{ base_url }}{{ asset "assets/netdocs.css" }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family={{ string.replace font_text ' ' '+' }}:300,300i,400,400i,700,700i%7C{{ string.replace font_code ' ' '+' }}:400,400i,700,700i&display=fallback">
     <style>:root{--md-text-font:"{{ font_text }}";--md-code-font:"{{ font_code }}"}</style>
     {{~ for href in stylesheets ~}}
-    <link rel="stylesheet" href="{{ base_url }}{{ href }}">
+    <link rel="stylesheet" href="{{ base_url }}{{ asset href }}">
     {{~ end ~}}
   </head>
   <body dir="ltr" data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}" data-base="{{ base_url }}">
@@ -198,7 +198,7 @@ func render_toc(entry) ~}}
     </script>
     <script src="{{ base_url }}assets/vendor/material/javascripts/bundle.d7400e89.min.js"></script>
     {{~ for src in scripts ~}}
-    <script src="{{ base_url }}{{ src }}" defer></script>
+    <script src="{{ base_url }}{{ asset src }}" defer></script>
     {{~ end ~}}
     {{~ for js in inline_scripts ~}}
     <script>{{ js }}</script>

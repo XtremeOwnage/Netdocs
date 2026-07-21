@@ -20,6 +20,9 @@ jobs:
       - name: Restore
         run: dotnet restore Netdocs.slnx
 
+      - name: Format check (lint)
+        run: dotnet format Netdocs.slnx --verify-no-changes --no-restore
+
       - name: Build
         run: dotnet build Netdocs.slnx -c Release --no-restore
 

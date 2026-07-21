@@ -130,6 +130,29 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void Keys_RendersKbdMarkup()
+    {
+        var html = Render("Press ++ctrl+alt+del++ now\n");
+        Assert.Contains("<span class=\"keys\">", html);
+        Assert.Contains("<kbd class=\"key-control\">Ctrl</kbd>", html);
+        Assert.Contains("<kbd class=\"key-alt\">Alt</kbd>", html);
+        Assert.Contains("<kbd class=\"key-delete\">Del</kbd>", html);
+        Assert.Contains("<span>+</span>", html);
+    }
+
+    [Fact]
+    public void Critic_RendersInsDelMarkSub()
+    {
+        Assert.Contains("<ins class=\"critic\">added</ins>", Render("{++added++}\n"));
+        Assert.Contains("<del class=\"critic\">gone</del>", Render("{--gone--}\n"));
+        Assert.Contains("<mark class=\"critic\">hi</mark>", Render("{==hi==}\n"));
+        Assert.Contains("<span class=\"critic comment\">note</span>", Render("{>>note<<}\n"));
+        var sub = Render("{~~old~>new~~}\n");
+        Assert.Contains("<del class=\"critic\">old</del>", sub);
+        Assert.Contains("<ins class=\"critic\">new</ins>", sub);
+    }
+
+    [Fact]
     public void Admonition_RendersMaterialMarkup()
     {
         var html = Render("!!! note \"Heads up\"\n    Body text here\n");

@@ -1,5 +1,12 @@
 # Netdocs
 
+[![CI](https://github.com/XtremeOwnage/Netdocs/actions/workflows/ci.yml/badge.svg)](https://github.com/XtremeOwnage/Netdocs/actions/workflows/ci.yml)
+[![Docs](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docs.yml/badge.svg)](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docs.yml)
+[![Packages](https://github.com/XtremeOwnage/Netdocs/actions/workflows/packages.yml/badge.svg)](https://github.com/XtremeOwnage/Netdocs/actions/workflows/packages.yml)
+[![Docker](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docker.yml/badge.svg)](https://github.com/XtremeOwnage/Netdocs/actions/workflows/docker.yml)
+[![Release](https://img.shields.io/github/v/release/XtremeOwnage/Netdocs?sort=semver)](https://github.com/XtremeOwnage/Netdocs/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A fast, flexible static site generator in **.NET 11** — a reimplementation of the
 [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) experience with a
 first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and
@@ -60,7 +67,7 @@ Netdocs targets **near drop-in compatibility with an existing Material for MkDoc
 the Markdown in `docs/` builds with little to no change. If you want a supported,
 production-grade tool, use Material for MkDocs directly.
 
-
+## Credits & attribution
 
 - **Material for MkDocs** — © 2016-2025 Martin Donath. MIT. https://github.com/squidfunk/mkdocs-material
   Vendored: compiled `main`/`palette` CSS, `bundle.js`, the search worker, and lunr.
@@ -70,19 +77,58 @@ production-grade tool, use Material for MkDocs directly.
 See [`src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md`](src/Netdocs.Theme.Material/assets/vendor/material/NOTICE.md)
 for the full list of vendored files and their origins.
 
-## Quick start
+## Install
 
-```pwsh
-# Build a site (looks for ./appsettings.json, or pass --config)
-dotnet run --project src/Netdocs.Cli -- build --config ..\Web\appsettings.json
+Most users should grab a prebuilt binary from the
+**[releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest)** — no .NET
+SDK required.
 
-# Serve with live reload
-dotnet run --project src/Netdocs.Cli -- serve --config ..\Web\appsettings.json --port 8000
+**Linux (Debian/Ubuntu — `.deb`):**
+
+```bash
+curl -LO https://github.com/XtremeOwnage/Netdocs/releases/latest/download/netdocs_amd64.deb
+sudo apt install ./netdocs_amd64.deb
 ```
 
-In Visual Studio / VS Code, press **F5** — the `Netdocs: serve Web` launch profile builds
-and serves the `Web/` site with the debugger attached (a `Netdocs: build Web` profile is
-also provided).
+**Linux (Fedora/RHEL — `.rpm`):**
+
+```bash
+sudo yum install https://github.com/XtremeOwnage/Netdocs/releases/latest/download/netdocs_x86_64.rpm
+```
+
+**Linux (portable, no package manager):** download the self-contained `netdocs` binary
+from the releases page, `chmod +x netdocs`, and put it on your `PATH`.
+
+**Windows:** download `netdocs.exe` from the
+[releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest) and run it
+directly (optionally add its folder to `PATH`).
+
+**Docker:**
+
+```bash
+docker run --rm -v ${PWD}:/site ghcr.io/xtremeownage/netdocs build --config /site/appsettings.json
+```
+
+> Exact asset file names may vary by release — check the
+> [releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest) for the build
+> that matches your platform.
+
+## Quick start
+
+Once installed, run the `netdocs` binary directly:
+
+```bash
+# Build a site (looks for ./appsettings.json, or pass --config)
+netdocs build --config ./appsettings.json
+
+# Serve with live reload
+netdocs serve --config ./appsettings.json --port 8000
+```
+
+Building from source instead? See [CONTRIBUTING.md](CONTRIBUTING.md) — contributors use
+`dotnet run --project src/Netdocs.Cli -- build --config <path>`, and in Visual Studio /
+VS Code the **F5** launch profiles build and serve the sample site with the debugger
+attached.
 
 ## Commands
 
@@ -148,9 +194,12 @@ Plugins are matched to `appsettings.json` plugin names via the CLI's `PluginRegi
 Templates are [Scriban](https://github.com/scriban/scriban) (`.html`) in
 `Netdocs.Theme.Material/templates`. Member access is snake_case (`page.title`,
 `config.site_name`). Override templates by pointing `theme.custom_dir` at a folder of
-**Scriban** templates. (Material's Jinja2 overrides are detected and ignored — see `TODO.md`.)
+**Scriban** templates. (Material's Jinja2 overrides are detected and ignored — see the
+[theme reference](https://xtremeownage.github.io/Netdocs/reference/theme/).)
 
 ## Status
 
-Core engine works end-to-end and builds the existing `Web/` blog (200+ pages in seconds).
-See [plan/TODO.md](plan/TODO.md) for parity gaps and roadmap, and [plan/dotnet-ssg-plan.md](plan/dotnet-ssg-plan.md) for the design.
+Core engine works end-to-end and powers a real 200+ page blog —
+[static.xtremeownage.com/blog](https://static.xtremeownage.com/blog) — building in
+seconds. See the [documentation site](https://xtremeownage.github.io/Netdocs/) for the
+full reference, plugin guides, and the build lifecycle.

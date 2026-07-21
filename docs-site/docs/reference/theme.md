@@ -55,9 +55,10 @@ Feature flags mirror Material for MkDocs. Commonly used flags:
 |---|---|
 | `navigation.tabs` | Top-level sections become header tabs. |
 | `navigation.sections` | Render top-level sections as groups in the sidebar. |
-| `navigation.indexes` | Section landing pages (`index.md`). |
+| `navigation.indexes` | Section landing pages (first `index.md`/`README.md` child links the section title). |
+| `navigation.path` | Breadcrumb trail above page content. |
 | `navigation.top` | Back-to-top button. |
-| `navigation.footer` | Prev/next footer navigation. |
+| `navigation.footer` | Prev/next footer navigation (also sequences blog posts by date). |
 | `search.suggest` | Search-as-you-type suggestions. |
 | `search.highlight` | Highlight matches on the target page. |
 | `search.share` | Shareable search-result deep links. |

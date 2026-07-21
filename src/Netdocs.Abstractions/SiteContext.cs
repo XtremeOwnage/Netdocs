@@ -42,4 +42,7 @@ public sealed class NavNode
     public string? Url => Page?.Url;
     public IReadOnlyList<NavNode> Children { get; set; } = [];
     public bool IsSection => Page is null;
+
+    /// <summary>For a section, the index page it links to (navigation.indexes), if any.</summary>
+    public Page? SectionIndex { get; set; }
 }

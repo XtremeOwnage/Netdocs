@@ -21,8 +21,12 @@
   <div class="md-post__meta" style="font-size:.75rem;color:var(--md-default-fg-color--light)">
     <div style="font-weight:700;color:var(--md-default-fg-color);margin-bottom:.5rem">Metadata</div>
     <div style="margin:.35rem 0">📅 {{ page.meta.post_date }}</div>
-    {{~ if page.meta.post_categories && (array.size page.meta.post_categories) > 0 ~}}
-    <div style="margin:.35rem 0">🏷 in {{ array.join page.meta.post_categories ", " }}</div>
+    {{~ if page.meta.post_categories_links && (array.size page.meta.post_categories_links) > 0 ~}}
+    <div style="margin:.35rem 0">🏷 in
+      {{~ for cat in page.meta.post_categories_links ~}}
+      <a href="{{ base_url }}{{ strip_slash cat.url }}">{{ cat.name }}</a>{{~ if !for.last ~}}, {{~ end ~}}
+      {{~ end ~}}
+    </div>
     {{~ end ~}}
     <div style="margin:.35rem 0">🕐 {{ page.meta.post_readtime }} min read</div>
   </div>

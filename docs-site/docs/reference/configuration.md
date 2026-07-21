@@ -85,6 +85,32 @@ Two mechanisms exclude content from a build:
 - **`exclude`** — glob patterns in `appsettings.json` (e.g. `"_include/**"`).
 - **`.mkdocsignore`** — a gitignore-style file honored during content discovery.
 
+## Slugify
+
+Generated URLs — blog post slugs, category pages, author pages, and tag pages — are
+produced by a configurable slugifier. Add a `slugify` block to control it:
+
+```json
+{
+  "Netdocs": {
+    "slugify": {
+      "case": "lower",
+      "separator": "-",
+      "ascii": false
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `case` | `lower` | Letter casing: `lower`, `upper`, or `none` (preserve). |
+| `separator` | `-` | String inserted between words (e.g. `_` or `.`). |
+| `ascii` | `false` | When `true`, drop non-ASCII letters/digits instead of keeping them. |
+
+With the defaults, `"Hello World!"` becomes `hello-world`. Set `"separator": "_"` to get
+`hello_world`, or `"case": "none"` to keep the original casing.
+
 ## Environment overrides
 
 Any key can be overridden with an environment variable prefixed `NETDOCS_`, using `__`

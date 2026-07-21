@@ -63,6 +63,27 @@ The shared pipeline enables these by default:
 Enable `content.tabs.link` in theme features to link tabs with the same label across the
 page.
 
+### Keyboard keys
+
+Wrap a key combination in `++…++` to render Material keyboard keys:
+
+```markdown
+Save with ++ctrl+s++ · quit with ++ctrl+alt+del++
+```
+
+Common key names (`ctrl`, `alt`, `shift`, `cmd`, `tab`, `esc`, `enter`, arrows, `f1`–`f24`,
+…) get their Material glyph and label; anything else renders as a `key-<name>` `<kbd>`.
+
+### CriticMarkup
+
+| Syntax | Renders |
+| --- | --- |
+| `{++added++}` | inserted text |
+| `{--removed--}` | deleted text |
+| `{==highlight==}` | highlighted text |
+| `{>>comment<<}` | editorial comment |
+| `{~~old~>new~~}` | substitution (delete + insert) |
+
 ### Emoji
 
 Emoji shortcodes render as [Twemoji](https://github.com/jdecked/twemoji) SVG images

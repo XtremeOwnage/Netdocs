@@ -1,0 +1,42 @@
+name: Action Self-Test
+
+# Exercises the composite action end-to-end (container pull + docker run) against
+# the repo's own docs-site, so the exact path consumers hit is observable in CI.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "action.yml"
+      - ".github/workflows/action-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build docs-site via the Netdocs action
+        uses: ./
+        with:
+          command: build
+          config: docs-site/appsettings.json
+
+      - name: Verify output
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="docs-site/site"
+          if [ ! -d "${out}" ]; then
+            echo "::error::Expected build output at ${out} was not produced." >&2
+            exit 1
+          fi
+          count="$(find "${out}" -name '*.html' | wc -l)"
+          echo "Generated ${count} HTML pages in ${out}."
+          test "${count}" -gt 0

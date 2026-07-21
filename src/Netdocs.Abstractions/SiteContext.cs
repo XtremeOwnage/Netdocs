@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 
 namespace Netdocs.Abstractions;
@@ -33,6 +34,20 @@ public sealed class SiteContext
 
     /// <summary>Cross-plugin shared state (e.g. tag index, author map).</summary>
     public Dictionary<string, object?> State { get; } = [];
+
+    /// <summary>
+    /// Absolute paths of every file this build intends to have in the output directory.
+    /// Every writer (pages, assets, plugin outputs) must register its files here via
+    /// <see cref="TrackOutput"/> so the build can prune stale files without wiping the
+    /// whole directory — that is what preserves unchanged files (and their timestamps)
+    /// for incremental publishing.
+    /// </summary>
+    public ConcurrentDictionary<string, byte> WrittenOutputs { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Records a produced output file so it survives stale-file pruning.</summary>
+    public void TrackOutput(string fullPath) =>
+        WrittenOutputs[Path.GetFullPath(fullPath)] = 0;
 }
 
 /// <summary>A resolved navigation node pointing at a real page or a section of nodes.</summary>

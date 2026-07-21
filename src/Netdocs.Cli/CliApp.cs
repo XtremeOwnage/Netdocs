@@ -47,6 +47,7 @@ public static class CliApp
             {
                 "build" => await BuildAsync(configPath, opts, loggerFactory, warnings),
                 "serve" => await ServeAsync(configPath, opts, loggerFactory),
+                "watch" => await WatchAsync(configPath, opts, loggerFactory),
                 "--help" or "-h" or "help" => PrintHelp(),
                 _ => Unknown(log, command),
             };
@@ -79,6 +80,19 @@ public static class CliApp
         var server = new DevServer(configPath, config, buildOptions, BuildRegistry(), loggerFactory, opts.Port);
         await server.RunAsync();
         return 0;
+    }
+
+    private static async Task<int> WatchAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory)
+    {
+        // A publish daemon builds like a production/CI run (prod-only plugins on unless --prod is omitted),
+        // but always writes a full, cache-accelerated build in place.
+        var (config, buildOptions) = LoadConfig(configPath, opts, serve: false);
+        var daemon = new GitSyncDaemon(configPath, config, buildOptions, BuildRegistry, loggerFactory,
+            opts.Remote, opts.Branch, opts.Interval);
+
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+        return await daemon.RunAsync(opts.Once, cts.Token);
     }
 
     private static (SiteConfig, BuildOptions) LoadConfig(string configPath, CliOptions opts, bool serve)
@@ -150,6 +164,10 @@ public static class CliApp
                 case "--port" or "-p" when i + 1 < args.Length && int.TryParse(args[i + 1], out var port): opts.Port = port; i++; break;
                 case "--clean": opts.Clean = true; break;
                 case "--no-cache": opts.NoCache = true; break;
+                case "--remote" when i + 1 < args.Length: opts.Remote = args[++i]; break;
+                case "--branch" when i + 1 < args.Length: opts.Branch = args[++i]; break;
+                case "--interval" when i + 1 < args.Length && int.TryParse(args[i + 1], out var iv): opts.Interval = iv; i++; break;
+                case "--once": opts.Once = true; break;
                 case "--strict": opts.Strict = true; break;
                 case "--prod" or "--production": opts.Production = true; break;
                 case "--verbose" or "-v": opts.Verbose = true; break;
@@ -166,6 +184,7 @@ public static class CliApp
             Usage:
               netdocs build [options]     Build the site to the output directory
               netdocs serve [options]     Serve with live reload
+              netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
 
             Options:
               -f, --config <path>   Path to appsettings.json (default ./appsettings.json)
@@ -174,6 +193,10 @@ public static class CliApp
                   --no-cache        Ignore the incremental render cache (full re-render)
                   --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
+                  --remote <name>   Git remote to watch (watch; default origin)
+                  --branch <name>   Git branch to track (watch; default current branch)
+                  --interval <sec>  Poll interval in seconds (watch; default 30)
+                  --once            Run a single watch check and exit (watch)
               -v, --verbose         Verbose (Trace) logging
             """);
         return 0;
@@ -192,6 +215,10 @@ internal sealed class CliOptions
     public int Port { get; set; } = 8000;
     public bool Clean { get; set; }
     public bool NoCache { get; set; }
+    public string Remote { get; set; } = "origin";
+    public string? Branch { get; set; }
+    public int Interval { get; set; } = 30;
+    public bool Once { get; set; }
     public bool Strict { get; set; }
     public bool Production { get; set; }
     public bool Verbose { get; set; }

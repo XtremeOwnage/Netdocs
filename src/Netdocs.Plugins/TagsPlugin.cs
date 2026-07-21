@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -135,9 +136,8 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
             kvp => kvp.Value.Select(p => new { title = GetDisplayTitle(p), url = p.Url }).ToArray());
 
         var path = Path.Combine(site.Config.AbsoluteSiteDir, _exportFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var json = JsonSerializer.Serialize(export, new JsonSerializerOptions { WriteIndented = true });
-        await File.WriteAllTextAsync(path, json, ct);
+        await OutputWriter.WriteTextIfChangedAsync(site, path, json, ct);
     }
 
     private bool IsShadow(string tag)

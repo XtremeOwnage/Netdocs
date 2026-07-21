@@ -44,5 +44,16 @@ public sealed class PluginRegistry
         return this;
     }
 
+    /// <summary>Registers a plugin type discovered at runtime (e.g. an external assembly).</summary>
+    public PluginRegistry Register(Type pluginType, params string[] names)
+    {
+        if (!typeof(IPlugin).IsAssignableFrom(pluginType))
+            throw new ArgumentException($"{pluginType} does not implement IPlugin", nameof(pluginType));
+        foreach (var name in names) _map[name] = pluginType;
+        return this;
+    }
+
+    public bool Contains(string name) => _map.ContainsKey(name);
+
     public bool TryResolve(string name, out Type type) => _map.TryGetValue(name, out type!);
 }

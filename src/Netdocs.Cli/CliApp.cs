@@ -16,10 +16,22 @@ public static class CliApp
         var command = args.FirstOrDefault() ?? "build";
         var opts = ParseOptions(args);
 
+        // Commands that do not require an existing appsettings.json.
+        switch (command)
+        {
+            case "import":
+                return await ImportAsync(args);
+            case "--help" or "-h" or "help":
+                return PrintHelp();
+        }
+
         var configPath = ResolveConfigPath(opts.ConfigPath);
         if (configPath is null)
         {
             Console.Error.WriteLine("Could not find appsettings.json. Use --config <path> or run from the site directory.");
+            var mkdocs = Path.Combine(Directory.GetCurrentDirectory(), "mkdocs.yml");
+            if (File.Exists(mkdocs))
+                Console.Error.WriteLine("Found mkdocs.yml — run 'netdocs import' to convert it to appsettings.json.");
             return 1;
         }
 
@@ -49,7 +61,6 @@ public static class CliApp
                 "deploy" => await DeployAsync(configPath, opts, loggerFactory, warnings),
                 "serve" => await ServeAsync(configPath, opts, loggerFactory),
                 "watch" => await WatchAsync(configPath, opts, loggerFactory),
-                "--help" or "-h" or "help" => PrintHelp(),
                 _ => Unknown(log, command),
             };
         }
@@ -158,6 +169,49 @@ public static class CliApp
         value is not null && (value.Equals("true", StringComparison.OrdinalIgnoreCase)
             || value == "1" || value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 
+    private static async Task<int> ImportAsync(string[] args)
+    {
+        // netdocs import [path/to/mkdocs.yml] [--out appsettings.json] [--force]
+        var source = args.Skip(1).FirstOrDefault(a => !a.StartsWith('-')) ?? "mkdocs.yml";
+        source = Path.GetFullPath(source);
+        if (!File.Exists(source))
+        {
+            Console.Error.WriteLine($"mkdocs config not found: {source}");
+            Console.Error.WriteLine("Usage: netdocs import [path/to/mkdocs.yml] [--out appsettings.json] [--force]");
+            return 1;
+        }
+
+        var outPath = FlagValue(args, "--out")
+            ?? Path.Combine(Path.GetDirectoryName(source)!, "appsettings.json");
+        outPath = Path.GetFullPath(outPath);
+        var force = args.Contains("--force");
+        if (File.Exists(outPath) && !force)
+        {
+            Console.Error.WriteLine($"Refusing to overwrite existing {outPath}. Pass --force to replace it.");
+            return 1;
+        }
+
+        try
+        {
+            var json = Netdocs.Core.Configuration.MkDocsImporter.ConvertToJson(source);
+            await File.WriteAllTextAsync(outPath, json);
+            Console.WriteLine($"Converted {Path.GetFileName(source)} -> {outPath}");
+            Console.WriteLine("Review the generated appsettings.json, then run: netdocs build");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Import failed: {ex.Message}");
+            return 1;
+        }
+    }
+
+    private static string? FlagValue(string[] args, string flag)
+    {
+        var idx = Array.IndexOf(args, flag);
+        return idx >= 0 && idx + 1 < args.Length ? args[idx + 1] : null;
+    }
+
     private static PluginRegistry BuildRegistry() => new PluginRegistry()
         .Register<SnippetsPlugin>("snippets", "pymdownx.snippets")
         .Register<AbbreviationsPlugin>("abbreviations")
@@ -218,6 +272,11 @@ public static class CliApp
               netdocs deploy [options]    Build, then publish to the configured deploy target
               netdocs serve [options]     Serve with live reload
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
+              netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
+
+            Import options:
+                  --out <path>      Output appsettings.json path (default next to mkdocs.yml)
+                  --force           Overwrite an existing appsettings.json
 
             Options:
               -f, --config <path>   Path to appsettings.json (default ./appsettings.json)

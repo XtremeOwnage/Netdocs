@@ -35,6 +35,9 @@ public sealed class SiteConfig
     /// <summary>extra: block, kept as a raw tree for templates.</summary>
     public IReadOnlyDictionary<string, object?> Extra { get; set; } = new Dictionary<string, object?>();
 
+    /// <summary>Controls how titles/ids are turned into URL slugs (blog, categories, authors, tags).</summary>
+    public SlugifyConfig Slugify { get; set; } = new();
+
     /// <summary>Absolute path to the project root (folder containing mkdocs.yml).</summary>
     public string ProjectRoot { get; set; } = "";
 
@@ -67,6 +70,22 @@ public sealed class PluginConfig
 {
     public required string Name { get; init; }
     public IReadOnlyDictionary<string, object?> Options { get; init; } = new Dictionary<string, object?>();
+}
+
+/// <summary>
+/// Configurable slugify behavior for generated URLs (blog posts, categories, authors, tags).
+/// Mirrors the common knobs of mkdocs/pymdownx slugify without requiring a Python callable.
+/// </summary>
+public sealed class SlugifyConfig
+{
+    /// <summary>Casing applied to letters: <c>lower</c> (default), <c>upper</c>, or <c>none</c>.</summary>
+    public string Case { get; set; } = "lower";
+
+    /// <summary>Word separator inserted between tokens (default <c>-</c>).</summary>
+    public string Separator { get; set; } = "-";
+
+    /// <summary>When true, drop non-ASCII letters/digits entirely instead of keeping them.</summary>
+    public bool Ascii { get; set; }
 }
 
 /// <summary>An authored navigation entry: either a link to a page or a titled section.</summary>

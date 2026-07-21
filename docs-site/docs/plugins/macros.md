@@ -4,8 +4,8 @@ title: macros
 
 # macros
 
-A minimal port of [mkdocs-macros] covering the two custom macros the source site
-defines in its `main.py`: `fileuri` and `ebay`. Macros are expanded as a Markdown
+A minimal port of [mkdocs-macros] with two example macros that show the pattern you can
+extend for your own site: `fileuri` and `button`. Macros are expanded as a Markdown
 **preprocessor**, before the page is parsed.
 
 [mkdocs-macros]: https://mkdocs-macros-plugin.readthedocs.io/
@@ -25,13 +25,12 @@ See the [installation guide]({{ fileuri("install.md") }}).
 If the file cannot be found, an HTML comment is emitted in its place so the build does
 not fail.
 
-### `ebay("text", "url")`
+### `button("text", "url")`
 
-Renders an eBay affiliate link with a hover-over affiliate-disclosure tooltip
-(`.ebay-affiliate-wrapper` / `.ebay-affiliate-link` / `.ebay-affiliate-tooltip`).
+Renders a Material-styled call-to-action button (`.md-button`) linking to the given URL.
 
 ```markdown
-Grab a {{ ebay("40GbE NIC", "https://www.ebay.com/itm/123") }} on the cheap.
+{{ button("Get started", "getting-started/") }}
 ```
 
 ## Controlling where macros run

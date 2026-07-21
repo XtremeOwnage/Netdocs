@@ -4,11 +4,11 @@ using Netdocs.Abstractions;
 namespace Netdocs.Plugins;
 
 /// <summary>
-/// Minimal mkdocs-macros port. Expands the two custom macros the XO site defines in
-/// <c>main.py</c>: <c>{{ fileuri("name") }}</c> (resolves a file to its published URL,
-/// prefixed with <c>site_url</c>) and <c>{{ ebay("text", "url") }}</c> (an affiliate link
-/// with a hover disclosure). Honors mkdocs-macros' <c>render_by_default</c> option and the
-/// per-page <c>render_macros</c> / <c>ignore_macros</c> front-matter overrides.
+/// Minimal mkdocs-macros port. Expands two example macros to show the pattern users can
+/// extend: <c>{{ fileuri("name") }}</c> resolves a doc or asset to its published URL
+/// (prefixed with <c>site_url</c>), and <c>{{ button("text", "url") }}</c> renders a
+/// Material-styled call-to-action button. Honors mkdocs-macros' <c>render_by_default</c>
+/// option and the per-page <c>render_macros</c> / <c>ignore_macros</c> front-matter overrides.
 /// </summary>
 public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 {
@@ -41,8 +41,8 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
             return url ?? $"<!-- macros: fileuri('{m.Groups["file"].Value}') not found -->";
         });
 
-        result = EbayRegex().Replace(result, m =>
-            RenderEbay(m.Groups["text"].Value, m.Groups["url"].Value));
+        result = ButtonRegex().Replace(result, m =>
+            RenderButton(m.Groups["text"].Value, m.Groups["url"].Value));
 
         return Task.FromResult(result);
     }
@@ -107,24 +107,8 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
         return d.Replace('\\', '/');
     }
 
-    private static string RenderEbay(string text, string url)
-    {
-        const string tooltipTitle = "Affiliate Link Disclosure";
-        const string tooltipBody = "This is an eBay affiliate link. If you found this content useful, " +
-            "please consider buying the products displayed using the provided links. You will pay the same " +
-            "amount as normal, however, it does provide a small benefit to me, typically used to purchase " +
-            "other products and hardware for review and to support content creation (blogging, etc.).";
-
-        return $"""
-            <span class="ebay-affiliate-wrapper">
-                <a href="{Attr(url)}" target="_blank" class="ebay-affiliate-link">{Attr(text)}</a>
-                <span class="ebay-affiliate-tooltip">
-                    <span class="tooltip-title">{tooltipTitle}</span>
-                    <span class="tooltip-content">{tooltipBody}</span>
-                </span>
-            </span>
-            """;
-    }
+    private static string RenderButton(string text, string url) =>
+        $"""<a class="md-button" href="{Attr(url)}">{Attr(text)}</a>""";
 
     private static string Attr(string text) => text
         .Replace("&", "&amp;")
@@ -136,6 +120,6 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
     [GeneratedRegex("""\{\{\s*fileuri\s*\(\s*["'](?<file>[^"']+)["']\s*\)\s*\}\}""")]
     private static partial Regex FileUriRegex();
 
-    [GeneratedRegex("""\{\{\s*ebay\s*\(\s*["'](?<text>[^"']*)["']\s*,\s*["'](?<url>[^"']+)["']\s*\)\s*\}\}""")]
-    private static partial Regex EbayRegex();
+    [GeneratedRegex("""\{\{\s*button\s*\(\s*["'](?<text>[^"']*)["']\s*,\s*["'](?<url>[^"']+)["']\s*\)\s*\}\}""")]
+    private static partial Regex ButtonRegex();
 }

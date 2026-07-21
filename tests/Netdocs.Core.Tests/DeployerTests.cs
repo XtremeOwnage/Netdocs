@@ -81,6 +81,25 @@ public class DeployerTests : IDisposable
         Assert.Equal(0, result);
     }
 
+    [Fact]
+    public async Task S3_MissingBucket_Fails()
+    {
+        var config = NewConfig(Path.Combine(_root, "out"));
+        config.Deploy.Target = "s3";
+        config.Deploy.Bucket = null;
+        var result = await new Deployer(config, NullLogger.Instance).DeployAsync();
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task UnknownTarget_Fails()
+    {
+        var config = NewConfig(Path.Combine(_root, "out"));
+        config.Deploy.Target = "bogus";
+        var result = await new Deployer(config, NullLogger.Instance).DeployAsync();
+        Assert.Equal(1, result);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))

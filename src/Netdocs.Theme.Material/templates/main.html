@@ -117,17 +117,28 @@ func render_toc(entry) ~}}
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
-                {{~ if page.meta.is_post ~}}
-                {{ include "partials/post-meta.html" }}
-                {{~ else if page.meta.is_blog_listing ~}}
-                {{ include "partials/blog-nav.html" }}
-                {{~ else ~}}
                 {{ include "partials/nav.html" }}
-                {{~ end ~}}
               </div>
             </div>
           </div>
-          {{~ if !page.meta.is_blog_listing && !page.meta.is_post ~}}
+          {{~ if page.meta.is_blog_listing ~}}
+          <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+            <div class="md-sidebar__scrollwrap">
+              <div class="md-sidebar__inner">
+                {{ include "partials/blog-nav.html" }}
+              </div>
+            </div>
+          </div>
+          {{~ else if page.meta.is_post ~}}
+          <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+            <div class="md-sidebar__scrollwrap">
+              <div class="md-sidebar__inner">
+                {{ include "partials/post-meta.html" }}
+                {{ include "partials/toc.html" }}
+              </div>
+            </div>
+          </div>
+          {{~ else ~}}
           <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">

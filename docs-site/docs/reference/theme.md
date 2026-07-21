@@ -73,5 +73,35 @@ theme. Files there take precedence over the bundled theme, letting you replace p
 such as `partials/footer.html` or the base `main.html`.
 
 !!! note
-    Netdocs templates use **Scriban**, not Jinja2. Material's `overrides/**` Jinja
-    templates are auto-ignored; port them to Scriban to re-enable `customDir`.
+    Netdocs templates use **Scriban**, not Jinja2. If any `.html` file under `customDir`
+    still contains Jinja constructs (`{% %}`, `lang.t`, `super()`), the whole directory is
+    ignored with a warning — port those files to Scriban to re-enable `customDir`.
+
+### Porting a Material override to Scriban
+
+Material's Jinja partials map fairly directly onto Scriban. The common substitutions:
+
+| Jinja | Scriban |
+|---|---|
+| `{% if x %}…{% endif %}` | `{{ if x }}…{{ end }}` |
+| `{% for x in xs %}…{% endfor %}` | `{{ for x in xs }}…{{ end }}` |
+| `{% include "partials/p.html" %}` | `{{ include "partials/p.html" }}` |
+| `{% set c = "a" %}` | `{{ c = "a" }}` |
+| `"feature" in features` | `features | array.contains "feature"` |
+| `{{ config.site_name }}` | `{{ config.site_name }}` (unchanged) |
+
+Use the trim markers `{{~` / `~}}` to strip surrounding whitespace, and the theme helpers
+(`social_icon`, `strip_slash`, `base_url`) instead of Material's Jinja filters. For example,
+an override that renders the configured social links in the header:
+
+```html
+{{~ if extra.social ~}}
+<div class="header-social">
+  {{~ for link in extra.social ~}}
+  <a href="{{ link.link }}" class="md-social__link md-header__button md-icon"
+     title="{{ link.icon }}" target="_blank" rel="noopener">{{ social_icon link.icon }}</a>
+  {{~ end ~}}
+</div>
+{{~ end ~}}
+```
+

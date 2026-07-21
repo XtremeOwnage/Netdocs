@@ -32,6 +32,8 @@ Netdocs has a first-class C# plugin system. Plugins are enabled and configured i
 | [rss](rss.md) | RSS feed of blog posts. |
 | [file-filter](file-filter.md) | Env-driven label include/exclude. |
 | [macros](macros.md) | `fileuri()` / `button()` Markdown macros (mkdocs-macros subset). |
+| [table-reader](table-reader.md) | Expand `read_csv()` / `read_table()` into Markdown tables. |
+| [affiliate-links](affiliate-links.md) | Auto tooltip + footer disclosure for affiliate links. |
 | [b64](b64.md) | Embed local images as inline `data:` URIs (pymdownx.b64). |
 | [arithmatex](arithmatex.md) | LaTeX math typeset with MathJax (pymdownx.arithmatex). |
 

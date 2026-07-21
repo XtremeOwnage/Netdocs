@@ -79,16 +79,23 @@ runs:
         asset="netdocs-${version}-${rid}${ext}"
         url="https://github.com/${repo}/releases/download/v${version}/${asset}"
 
-        dest_dir="${RUNNER_TEMP:-/tmp}/netdocs-bin"
+        # Download into the workspace disk rather than RUNNER_TEMP. On some runners
+        # RUNNER_TEMP is backed by a small tmpfs, and writing the ~100MB self-contained
+        # binary there fails with 'curl: (23) Failure writing output to destination'
+        # (and likewise breaks `gh release download`).
+        base_dir="${GITHUB_WORKSPACE:-${RUNNER_TEMP:-/tmp}}"
+        dest_dir="${base_dir}/.netdocs-bin"
         mkdir -p "${dest_dir}"
         dest="${dest_dir}/netdocs${ext}"
 
-        echo "Downloading ${asset} (v${version})"
+        echo "Downloading ${asset} (v${version}) -> ${dest}"
+        echo "Disk space at download target:"
+        df -h "${dest_dir}" || true
+
         download_ok=""
 
         # Prefer the GitHub CLI when available: it authenticates, follows the asset
-        # redirect and retries transient failures far more reliably than raw curl
-        # (which can fail with 'curl: (23)' part-way through large binary downloads).
+        # redirect and retries transient failures more reliably than raw curl.
         if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
           if gh release download "v${version}" --repo "${repo}" \
                --pattern "${asset}" --output "${dest}" --clobber; then
@@ -116,6 +123,7 @@ runs:
         # Guard against a zero-byte / truncated download slipping through.
         if [ ! -s "${dest}" ]; then
           echo "::error::Downloaded Netdocs binary is missing or empty: ${dest}" >&2
+          df -h "${dest_dir}" || true
           exit 1
         fi
 

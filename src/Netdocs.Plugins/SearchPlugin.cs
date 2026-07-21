@@ -3,6 +3,7 @@ using System.Text.Json;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -60,9 +61,8 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
             docs);
 
         var dir = Path.Combine(site.Config.AbsoluteSiteDir, "search");
-        Directory.CreateDirectory(dir);
         var json = JsonSerializer.Serialize(index, SearchJson.Options);
-        await File.WriteAllTextAsync(Path.Combine(dir, "search_index.json"), json, ct);
+        await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(dir, "search_index.json"), json, ct);
     }
 
     /// <summary>Splits a page into its intro (text before the first heading) and per-section docs.

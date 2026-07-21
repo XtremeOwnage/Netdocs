@@ -1,4 +1,5 @@
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 using Netdocs.Core.Plugins;
 
 namespace Netdocs.Core;
@@ -8,13 +9,14 @@ public static class AssetPipeline
 {
     private static readonly string[] SkipExtensions = [".md", ".markdown"];
 
-    public static async Task CopyAllAsync(SiteConfig config, PluginAssets assets, CancellationToken ct)
+    public static async Task CopyAllAsync(SiteContext site, PluginAssets assets, CancellationToken ct)
     {
+        var config = site.Config;
         var siteDir = config.AbsoluteSiteDir;
 
         // 1. Theme assets -> site/assets
         if (Directory.Exists(ThemePaths.AssetsDir))
-            CopyDirectory(ThemePaths.AssetsDir, Path.Combine(siteDir, "assets"));
+            await CopyDirectoryAsync(site, ThemePaths.AssetsDir, Path.Combine(siteDir, "assets"), ct);
 
         // 2. Docs static files (everything that isn't markdown) -> mirror into site.
         var docsDir = config.AbsoluteDocsDir;
@@ -29,8 +31,7 @@ public static class AssetPipeline
             if (relative.Split(Path.DirectorySeparatorChar, '/').Any(seg => seg.StartsWith('.'))) continue;
             if (customDir is not null && file.StartsWith(customDir, StringComparison.OrdinalIgnoreCase)) continue;
             var dest = Path.Combine(siteDir, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.Copy(file, dest, overwrite: true);
+            await OutputWriter.CopyIfChangedAsync(site, file, dest, ct);
         }
 
         // 3. Plugin-registered files.
@@ -38,21 +39,17 @@ public static class AssetPipeline
         {
             if (!File.Exists(source)) continue;
             var dest = Path.Combine(siteDir, destRelative);
-            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.Copy(source, dest, overwrite: true);
+            await OutputWriter.CopyIfChangedAsync(site, source, dest, ct);
         }
-
-        await Task.CompletedTask;
     }
 
-    private static void CopyDirectory(string source, string dest)
+    private static async Task CopyDirectoryAsync(SiteContext site, string source, string dest, CancellationToken ct)
     {
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, file);
             var target = Path.Combine(dest, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            File.Copy(file, target, overwrite: true);
+            await OutputWriter.CopyIfChangedAsync(site, file, target, ct);
         }
     }
 }

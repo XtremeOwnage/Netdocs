@@ -56,6 +56,7 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
         {
             var relative = SocialImagePath.For(page);
             var dest = Path.Combine(site.Config.AbsoluteSiteDir, relative.Replace('/', Path.DirectorySeparatorChar));
+            site.TrackOutput(dest);
             if (_cache && File.Exists(dest)) return;
 
             var title = string.IsNullOrWhiteSpace(page.Title) ? site.Config.SiteName : page.Title;

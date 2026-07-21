@@ -116,7 +116,6 @@ public sealed class BuildEngine(
         // 8. Template render (parallel) + emit.
         var templateEngine = CreateTemplateEngine();
         Directory.CreateDirectory(config.AbsoluteSiteDir);
-        if (options.Clean) { CleanOutput(config.AbsoluteSiteDir); _log.LogDebug("Cleaned output directory {Dir}", config.AbsoluteSiteDir); }
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
@@ -124,13 +123,16 @@ public sealed class BuildEngine(
             var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
             rendered.Add((page.OutputPath, html));
         });
+        var changed = 0;
         foreach (var (path, html) in rendered)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, html, ct);
-            _log.LogTrace("Wrote {Path}", path);
+            if (await OutputWriter.WriteTextIfChangedAsync(site, path, html, ct))
+            {
+                changed++;
+                _log.LogTrace("Wrote {Path}", path);
+            }
         }
-        _log.LogDebug("Emitted {Count} HTML pages", rendered.Count);
+        _log.LogInformation("Emitted {Count} HTML pages ({Changed} changed)", rendered.Count, changed);
 
         // 8b. 404 page.
         if (templateEngine.TryResolve("404.html", out _))
@@ -138,7 +140,7 @@ public sealed class BuildEngine(
             var notFound = new Page { SourcePath = "", RelativePath = "404.md", Url = "404.html", Title = "404" };
             notFound.Meta["template"] = "404.html";
             var html404 = PageRenderer.Render(templateEngine, site, notFound, host.Assets);
-            await File.WriteAllTextAsync(Path.Combine(config.AbsoluteSiteDir, "404.html"), html404, ct);
+            await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(config.AbsoluteSiteDir, "404.html"), html404, ct);
         }
 
         // 9. OnPageRendered hooks (search docs, etc.).
@@ -147,7 +149,7 @@ public sealed class BuildEngine(
                 await hook.OnPageRenderedAsync(page, site, ct);
 
         // 10. Copy assets (theme + docs static + plugin-registered).
-        await AssetPipeline.CopyAllAsync(config, host.Assets, ct);
+        await AssetPipeline.CopyAllAsync(site, host.Assets, ct);
         _log.LogDebug("Copied theme, static, and plugin assets to {Dir}", config.AbsoluteSiteDir);
 
         // 11. OnBuildComplete hooks (search index, rss, sitemap).
@@ -159,6 +161,12 @@ public sealed class BuildEngine(
 
         // 12. Built-in sitemap.xml.
         await EmitSitemapAsync(site, ct);
+
+        // 13. Prune stale files: anything in the output dir this build did not (re)produce.
+        // This replaces an up-front wipe so unchanged files keep their bytes and timestamps,
+        // which is what makes incremental republishing cheap for the watch daemon.
+        var pruned = OutputWriter.PruneStale(site, config.AbsoluteSiteDir);
+        if (pruned > 0) _log.LogInformation("Pruned {Count} stale output files", pruned);
 
         sw.Stop();
         _log.LogInformation("Built {Count} pages in {Ms} ms", site.Pages.Count, sw.ElapsedMilliseconds);
@@ -180,7 +188,7 @@ public sealed class BuildEngine(
             sb.AppendLine("</url>");
         }
         sb.AppendLine("</urlset>");
-        await File.WriteAllTextAsync(Path.Combine(config.AbsoluteSiteDir, "sitemap.xml"), sb.ToString(), ct);
+        await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(config.AbsoluteSiteDir, "sitemap.xml"), sb.ToString(), ct);
         _log.LogDebug("Wrote sitemap.xml ({Count} urls)", site.Pages.Count);
     }
 
@@ -240,14 +248,5 @@ public sealed class BuildEngine(
                 return false;
         }
         return true;
-    }
-
-    private static void CleanOutput(string siteDir)
-    {
-        foreach (var entry in Directory.EnumerateFileSystemEntries(siteDir))
-        {
-            if (Directory.Exists(entry)) Directory.Delete(entry, recursive: true);
-            else File.Delete(entry);
-        }
     }
 }

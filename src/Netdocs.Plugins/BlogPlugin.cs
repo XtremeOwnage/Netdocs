@@ -165,8 +165,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     /// <summary>Sets blog-post metadata on the page for the theme to render (sidebar + tag chips).</summary>
     private void ApplyPostMeta(Page page, DateTimeOffset date, IReadOnlyList<string> categories)
     {
-        var words = page.RawMarkdown.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        var minutes = Math.Max(1, (int)Math.Round(words / 238.0));
+        var minutes = ReadTimeMinutes(page);
 
         page.Meta["is_post"] = true;
         page.Meta["post_date"] = date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
@@ -302,13 +301,30 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             sb.Append("## [").Append(post.Page.Title).Append("](").Append(rootUrl).AppendLine(")");
             sb.Append("*").Append(post.Date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)).Append("*");
             if (post.Categories.Count > 0)
-                sb.Append(" &middot; ").Append(string.Join(", ", post.Categories));
+            {
+                sb.Append(" &middot; in ");
+                for (var i = 0; i < post.Categories.Count; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    var cat = post.Categories[i];
+                    sb.Append('[').Append(cat).Append("](/").Append(_blogDir)
+                      .Append("category/").Append(Slug.Make(cat, _config.Slugify)).Append("/)");
+                }
+            }
+            sb.Append(" &middot; ").Append(ReadTimeMinutes(post.Page)).Append(" min read");
             sb.AppendLine().AppendLine();
             if (post.Excerpt.Length > 0) sb.AppendLine(RewriteExcerptLinks(post.Excerpt, post.Page.RelativePath)).AppendLine();
             sb.Append("[Continue reading](").Append(rootUrl).AppendLine(")").AppendLine();
         }
         if (nextPageUrl is not null)
             sb.Append("[Older posts →](/").Append(nextPageUrl).AppendLine(")");
+    }
+
+    /// <summary>Estimated reading time in minutes (~238 wpm), shared by post pages and listings.</summary>
+    private static int ReadTimeMinutes(Page page)
+    {
+        var words = page.RawMarkdown.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        return Math.Max(1, (int)Math.Round(words / 238.0));
     }
 
     private static DateTimeOffset ReadDate(Page page)

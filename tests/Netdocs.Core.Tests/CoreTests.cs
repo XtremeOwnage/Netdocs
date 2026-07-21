@@ -27,6 +27,50 @@ public class UrlTests
         => Assert.Equal(expected, PageRenderer.BaseUrl(url));
 }
 
+public class FrontMatterTests
+{
+    [Fact]
+    public void Split_WithCrlf_DoesNotLeakTailIntoBody()
+    {
+        var md = "---\r\ntitle: Hello\r\nimage: /assets/cover.webP\r\n---\r\n# Heading\r\n\r\nBody paragraph.\r\n";
+        var (meta, body) = FrontMatter.Split(md);
+
+        Assert.Equal("Hello", meta["title"]);
+        Assert.DoesNotContain("webP", body);
+        Assert.DoesNotContain("---", body);
+        Assert.StartsWith("# Heading", body);
+    }
+
+    [Fact]
+    public void Split_WithLf_ParsesBodyCleanly()
+    {
+        var md = "---\ntitle: T\n---\nBody\n";
+        var (meta, body) = FrontMatter.Split(md);
+
+        Assert.Equal("T", meta["title"]);
+        Assert.Equal("Body\n", body);
+    }
+
+    [Fact]
+    public void Split_NoFrontMatter_ReturnsWholeBody()
+    {
+        var md = "# Just content\n\nNo front matter.\n";
+        var (meta, body) = FrontMatter.Split(md);
+
+        Assert.Empty(meta);
+        Assert.Equal(md, body);
+    }
+
+    [Fact]
+    public void Split_UnterminatedFrontMatter_ReturnsWholeBody()
+    {
+        var md = "---\ntitle: T\nno closing delimiter\n";
+        var (_, body) = FrontMatter.Split(md);
+
+        Assert.Equal(md, body);
+    }
+}
+
 public class MarkdownTests
 {
     private static string Render(string markdown)

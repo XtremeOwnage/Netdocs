@@ -6,7 +6,7 @@ namespace Netdocs.Core.Deploy;
 
 /// <summary>
 /// Publishes an already-built output directory to a deployment target
-/// (<c>filesystem</c> copy or <c>git</c> branch). Runs after a successful build.
+/// (<c>filesystem</c> copy, <c>git</c> branch, or <c>s3</c> bucket sync). Runs after a successful build.
 /// </summary>
 public sealed class Deployer(SiteConfig config, ILogger log)
 {
@@ -27,6 +27,7 @@ public sealed class Deployer(SiteConfig config, ILogger log)
             "none" or "" => NothingToDo(),
             "filesystem" or "fs" or "local" => DeployToFilesystem(source, deploy),
             "git" or "git-branch" or "ghpages" or "gh-pages" => await DeployToGitAsync(source, deploy, ct),
+            "s3" or "aws" or "aws-s3" => await DeployToS3Async(source, deploy, ct),
             _ => UnknownTarget(deploy.Target),
         };
     }
@@ -39,7 +40,7 @@ public sealed class Deployer(SiteConfig config, ILogger log)
 
     private int UnknownTarget(string target)
     {
-        log.LogError("Unknown deploy target '{Target}'. Use 'filesystem' or 'git'.", target);
+        log.LogError("Unknown deploy target '{Target}'. Use 'filesystem', 'git', or 's3'.", target);
         return 1;
     }
 
@@ -171,9 +172,46 @@ public sealed class Deployer(SiteConfig config, ILogger log)
         }
     }
 
-    private async Task<int> RunGitAsync(string workingDir, CancellationToken ct, params string[] args)
+    private async Task<int> DeployToS3Async(string source, DeployConfig deploy, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo("git")
+        if (string.IsNullOrWhiteSpace(deploy.Bucket))
+        {
+            log.LogError("S3 deploy requires 'deploy.bucket' to be set.");
+            return 1;
+        }
+
+        // s3://bucket[/prefix]
+        var prefix = (deploy.Prefix ?? "").Trim('/');
+        var destination = prefix.Length > 0
+            ? $"s3://{deploy.Bucket}/{prefix}"
+            : $"s3://{deploy.Bucket}";
+
+        var args = new List<string> { "s3", "sync", source, destination };
+        if (deploy.Clean) args.Add("--delete");
+        if (!string.IsNullOrWhiteSpace(deploy.Region)) { args.Add("--region"); args.Add(deploy.Region); }
+
+        var exit = await RunProcessAsync("aws", source, ct, [.. args]);
+        if (exit == 127 || exit == -1)
+        {
+            log.LogError("S3 deploy requires the AWS CLI ('aws') on PATH. Install it or use a different deploy target.");
+            return 1;
+        }
+        if (exit != 0)
+        {
+            log.LogError("S3 deploy: 'aws s3 sync' to '{Dest}' failed (exit {Exit}).", destination, exit);
+            return 1;
+        }
+
+        log.LogInformation("Deployed to '{Dest}'.", destination);
+        return 0;
+    }
+
+    private async Task<int> RunGitAsync(string workingDir, CancellationToken ct, params string[] args)
+        => await RunProcessAsync("git", workingDir, ct, args);
+
+    private async Task<int> RunProcessAsync(string fileName, string workingDir, CancellationToken ct, params string[] args)
+    {
+        var psi = new ProcessStartInfo(fileName)
         {
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,
@@ -182,12 +220,26 @@ public sealed class Deployer(SiteConfig config, ILogger log)
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
-        using var proc = Process.Start(psi);
-        if (proc is null) { log.LogError("Failed to start git."); return 1; }
-        var stderr = await proc.StandardError.ReadToEndAsync(ct);
-        await proc.WaitForExitAsync(ct);
-        if (proc.ExitCode != 0 && stderr.Length > 0)
-            log.LogTrace("git {Args}: {Err}", string.Join(' ', args), stderr.Trim());
-        return proc.ExitCode;
+        Process? proc;
+        try
+        {
+            proc = Process.Start(psi);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Executable not found on PATH.
+            log.LogTrace("{File} not found on PATH.", fileName);
+            return 127;
+        }
+        if (proc is null) { log.LogError("Failed to start {File}.", fileName); return 1; }
+
+        using (proc)
+        {
+            var stderr = await proc.StandardError.ReadToEndAsync(ct);
+            await proc.WaitForExitAsync(ct);
+            if (proc.ExitCode != 0 && stderr.Length > 0)
+                log.LogTrace("{File} {Args}: {Err}", fileName, string.Join(' ', args), stderr.Trim());
+            return proc.ExitCode;
+        }
     }
 }

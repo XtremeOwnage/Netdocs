@@ -54,6 +54,9 @@ public static class JsonConfigLoader
         Remote = m.Get("remote").AsString() ?? "origin",
         Message = m.Get("message").AsString() ?? "Deploy docs",
         Push = m.Get("push").AsBool(true),
+        Bucket = m.Get("bucket").AsString(),
+        Prefix = m.Get("prefix").AsString(),
+        Region = m.Get("region").AsString(),
     };
 
     private static OptimizeConfig ParseOptimize(IReadOnlyDictionary<string, object?> m) => new()

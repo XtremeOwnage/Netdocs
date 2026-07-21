@@ -96,12 +96,13 @@ public sealed class SlugifyConfig
 
 /// <summary>
 /// Post-build deployment. <see cref="Target"/> selects the publish mechanism:
-/// <c>none</c> (default), <c>filesystem</c> (copy output to <see cref="Path"/>), or
-/// <c>git</c> (commit and push the output to <see cref="Branch"/> on <see cref="Remote"/>).
+/// <c>none</c> (default), <c>filesystem</c> (copy output to <see cref="Path"/>),
+/// <c>git</c> (commit and push the output to <see cref="Branch"/> on <see cref="Remote"/>),
+/// or <c>s3</c> (sync output to <see cref="Bucket"/> via the AWS CLI).
 /// </summary>
 public sealed class DeployConfig
 {
-    /// <summary><c>none</c> | <c>filesystem</c> | <c>git</c>.</summary>
+    /// <summary><c>none</c> | <c>filesystem</c> | <c>git</c> | <c>s3</c>.</summary>
     public string Target { get; set; } = "none";
 
     /// <summary>Destination directory for the <c>filesystem</c> target.</summary>
@@ -121,6 +122,15 @@ public sealed class DeployConfig
 
     /// <summary>When true (default), push the branch to the remote after committing.</summary>
     public bool Push { get; set; } = true;
+
+    /// <summary>Target S3 bucket name for the <c>s3</c> target.</summary>
+    public string? Bucket { get; set; }
+
+    /// <summary>Optional key prefix (sub-path) within the bucket for the <c>s3</c> target.</summary>
+    public string? Prefix { get; set; }
+
+    /// <summary>Optional AWS region for the <c>s3</c> target (otherwise the AWS CLI default).</summary>
+    public string? Region { get; set; }
 }
 
 /// <summary>Output optimization toggles applied while writing rendered pages.</summary>

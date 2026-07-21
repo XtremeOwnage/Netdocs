@@ -24,7 +24,6 @@
 <script src="https://cdn.jsdelivr.net/npm/highlightjs-line-numbers.js@2.9.0/dist/highlightjs-line-numbers.min.js"></script>
 <script>
   (function () {
-    if (!window.hljs) return;
     var anchorSeq = 0;
 
     function parseRanges(spec) {
@@ -69,9 +68,10 @@
       }, 0);
     }
 
-    var observer = new MutationObserver(run);
-    function run() {
-      observer.disconnect();
+    // Highlight every not-yet-processed block. Idempotent, so it is safe to call
+    // on each page load (including Material's instant navigation swaps).
+    function highlightAll() {
+      if (!window.hljs) return;
       document.querySelectorAll("pre code:not(.hljs)").forEach(function (el) {
         try {
           hljs.highlightElement(el);
@@ -82,9 +82,19 @@
       document.querySelectorAll("code.language-\\*, :not(pre) > code[class^='language-']:not(.hljs)").forEach(function (el) {
         try { hljs.highlightElement(el); } catch (e) { /* ignore */ }
       });
-      observer.observe(document.body, { childList: true, subtree: true });
     }
-    if (document.readyState !== "loading") run();
-    else document.addEventListener("DOMContentLoaded", run);
+
+    // Material exposes the `document$` observable which emits on first load and on
+    // every instant-navigation page swap. Subscribing keeps code blocks highlighted
+    // without a hard refresh. Fall back to DOMContentLoaded when it is unavailable.
+    if (window.__netdocsHljsBound) return;
+    window.__netdocsHljsBound = true;
+    if (window.document$ && typeof window.document$.subscribe === "function") {
+      window.document$.subscribe(highlightAll);
+    } else if (document.readyState !== "loading") {
+      highlightAll();
+    } else {
+      document.addEventListener("DOMContentLoaded", highlightAll);
+    }
   })();
 </script>

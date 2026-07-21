@@ -1,3 +1,4 @@
+using Markdig;
 using Netdocs.Abstractions;
 using Netdocs.Core.Configuration;
 
@@ -89,16 +90,18 @@ public sealed class NoopPlugin(string name) : IPlugin
     public void Configure(IPluginContext ctx) { }
 }
 
-public sealed class TypesetPlugin : IPlugin
+/// <summary>
+/// Smart typography: enables Markdig's SmartyPants so straight quotes become curly,
+/// <c>--</c>/<c>---</c> become en/em dashes, and <c>...</c> becomes an ellipsis. Code
+/// spans and fenced blocks are left untouched.
+/// </summary>
+public sealed class TypesetPlugin : IPlugin, IMarkdigContributor
 {
     public string Name => "typeset";
     public void Configure(IPluginContext ctx) { }
-}
 
-public sealed class TableReaderPlugin : IPlugin
-{
-    public string Name => "table-reader";
-    public void Configure(IPluginContext ctx) { }
+    public void Extend(Markdig.MarkdownPipelineBuilder builder, SiteContext site)
+        => builder.UseSmartyPants();
 }
 
 public sealed class MacrosPlugin : IPlugin

@@ -26,6 +26,29 @@ includes/footer.md
 
 Paths are resolved against the configured `base_path` entries (and the project root).
 
+## Named sections
+
+Include only a marked region of a file by appending `:section` to the path. In the
+source file, wrap the region in start/end markers:
+
+```markdown
+<!-- in includes/sample.py -->
+# --8<-- [start:setup]
+import os
+config = os.environ
+# --8<-- [end:setup]
+```
+
+Then include just that section from any page:
+
+```markdown
+--8<-- "includes/sample.py:setup"
+```
+
+Only the lines between the matching `[start:setup]` and `[end:setup]` markers are
+included; the marker lines themselves are stripped. This mirrors
+[pymdownx.snippets sections](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/#snippet-sections).
+
 ## Options
 
 | Option | Type | Default | Description |

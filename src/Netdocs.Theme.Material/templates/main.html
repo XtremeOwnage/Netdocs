@@ -117,28 +117,14 @@ func render_toc(entry) ~}}
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
-                {{ include "partials/nav.html" }}
-              </div>
-            </div>
-          </div>
-          {{~ if page.meta.is_blog_listing ~}}
-          <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
+                {{~ if page.meta.is_blog_listing || page.meta.is_post ~}}
                 {{ include "partials/blog-nav.html" }}
+                {{~ else ~}}
+                {{ include "partials/nav.html" }}
+                {{~ end ~}}
               </div>
             </div>
           </div>
-          {{~ else if page.meta.is_post ~}}
-          <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
-            <div class="md-sidebar__scrollwrap">
-              <div class="md-sidebar__inner">
-                {{ include "partials/post-meta.html" }}
-                {{ include "partials/toc.html" }}
-              </div>
-            </div>
-          </div>
-          {{~ else ~}}
           <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
@@ -146,8 +132,10 @@ func render_toc(entry) ~}}
               </div>
             </div>
           </div>
-          {{~ end ~}}
           <div class="md-content" data-md-component="content">
+            {{~ if page.meta.is_post ~}}
+            {{ include "partials/post-meta.html" }}
+            {{~ end ~}}
             <article class="md-content__inner md-typeset">
 {{~ if (features | array.contains "navigation.path") && breadcrumbs && (array.size breadcrumbs) > 0 ~}}
 <nav class="md-path" aria-label="Breadcrumb">

@@ -1,33 +1,69 @@
-<nav class="md-nav md-nav--primary" aria-label="Post metadata">
-  <a href="{{ page.meta.blog_index_url }}" class="md-nav__link" style="font-weight:700">
-    <span class="md-nav__icon md-icon"></span> Back to index
-  </a>
-
-  {{~ if page.meta.post_authors && (array.size page.meta.post_authors) > 0 ~}}
-  {{~ for author in page.meta.post_authors ~}}
-  <div class="md-post__authors" style="display:flex;align-items:center;gap:.7rem;margin:1.2rem 0 1rem">
-    {{~ if author.avatar ~}}
-    <img src="{{ base_url }}{{ strip_slash author.avatar }}" alt="{{ author.name }}"
-         style="width:2.4rem;height:2.4rem;border-radius:50%;object-fit:cover">
-    {{~ end ~}}
-    <div>
-      <div style="font-weight:700"><a href="{{ base_url }}{{ strip_slash author.url }}">{{ author.name }}</a></div>
-      {{~ if author.role ~}}<div style="color:var(--md-default-fg-color--light);font-size:.72rem">{{ author.role }}</div>{{~ end ~}}
+{{~ # Post metadata rendered as Material's `md-sidebar--post` block: a full-width strip
+   # at the top of the content column (back-link, author profile, date/category/reading time).
+   # Mirrors mkdocs-material's blog post layout so the vendored CSS styles it correctly. ~}}
+<div class="md-sidebar md-sidebar--post" data-md-component="sidebar" data-md-type="navigation">
+  <div class="md-sidebar__scrollwrap">
+    <div class="md-sidebar__inner md-post">
+      <nav class="md-nav md-nav--primary" aria-label="Post metadata">
+        <div class="md-post__back">
+          <div class="md-nav__title md-nav__container">
+            <a href="{{ base_url }}{{ strip_slash page.meta.blog_index_url }}" class="md-nav__link">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              <span class="md-ellipsis"> Back to index </span>
+            </a>
+          </div>
+        </div>
+        {{~ if page.meta.post_authors && (array.size page.meta.post_authors) > 0 ~}}
+        {{~ for author in page.meta.post_authors ~}}
+        <div class="md-post__authors md-typeset">
+          <div class="md-profile md-post__profile">
+            {{~ if author.avatar ~}}
+            <span class="md-author md-author--long">
+              <img src="{{ base_url }}{{ strip_slash author.avatar }}" alt="{{ author.name }}">
+            </span>
+            {{~ end ~}}
+            <span class="md-profile__description">
+              <strong>{{ author.name }}</strong>
+              {{~ if author.role ~}}<br>{{ author.role }}{{~ end ~}}
+            </span>
+          </div>
+        </div>
+        {{~ end ~}}
+        {{~ end ~}}
+        <ul class="md-post__meta md-nav__list">
+          <li class="md-nav__item md-nav__item--section">
+            <div class="md-post__title"><span class="md-ellipsis"> Metadata </span></div>
+            <nav class="md-nav">
+              <ul class="md-nav__list">
+                <li class="md-nav__item">
+                  <div class="md-nav__link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
+                    <span class="md-ellipsis">{{ page.meta.post_date }}</span>
+                  </div>
+                </li>
+                {{~ if page.meta.post_categories_links && (array.size page.meta.post_categories_links) > 0 ~}}
+                <li class="md-nav__item">
+                  <div class="md-nav__link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9 3v15h3V3zm3 2 4 13 3-1-4-13zM5 5v13h3V5zM3 19v2h18v-2z"/></svg>
+                    <span class="md-ellipsis"> in
+                      {{~ for cat in page.meta.post_categories_links ~}}
+                      <a href="{{ base_url }}{{ strip_slash cat.url }}">{{ cat.name }}</a>{{~ if !for.last ~}}, {{~ end ~}}
+                      {{~ end ~}}
+                    </span>
+                  </div>
+                </li>
+                {{~ end ~}}
+                <li class="md-nav__item">
+                  <div class="md-nav__link">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
+                    <span class="md-ellipsis"> {{ page.meta.post_readtime }} min read </span>
+                  </div>
+                </li>
+              </ul>
+            </nav>
+          </li>
+        </ul>
+      </nav>
     </div>
   </div>
-  {{~ end ~}}
-  {{~ end ~}}
-
-  <div class="md-post__meta" style="font-size:.75rem;color:var(--md-default-fg-color--light)">
-    <div style="font-weight:700;color:var(--md-default-fg-color);margin-bottom:.5rem">Metadata</div>
-    <div style="margin:.35rem 0">📅 {{ page.meta.post_date }}</div>
-    {{~ if page.meta.post_categories_links && (array.size page.meta.post_categories_links) > 0 ~}}
-    <div style="margin:.35rem 0">🏷 in
-      {{~ for cat in page.meta.post_categories_links ~}}
-      <a href="{{ base_url }}{{ strip_slash cat.url }}">{{ cat.name }}</a>{{~ if !for.last ~}}, {{~ end ~}}
-      {{~ end ~}}
-    </div>
-    {{~ end ~}}
-    <div style="margin:.35rem 0">🕐 {{ page.meta.post_readtime }} min read</div>
-  </div>
-</nav>
+</div>

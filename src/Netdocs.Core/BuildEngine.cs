@@ -119,6 +119,7 @@ public sealed class BuildEngine(
         // 8. Template render (parallel) + emit.
         var templateEngine = CreateTemplateEngine();
         Directory.CreateDirectory(config.AbsoluteSiteDir);
+        site.State["asset_versioner"] = new AssetVersioner(ThemePaths.AssetsDir, config.AbsoluteDocsDir);
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
         var minify = config.Optimize.MinifyHtml;

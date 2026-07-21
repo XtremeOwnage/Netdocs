@@ -70,6 +70,9 @@ public static class PageRenderer
             ["og_url"] = siteUrl.Length > 0 ? $"{siteUrl}/{page.Url}" : "/" + page.Url,
         };
 
+        var versioner = site.State.GetValueOrDefault("asset_versioner") as AssetVersioner ?? AssetVersioner.NoOp;
+        model["asset_versioner"] = versioner;
+
         return engine.Render(template, model);
     }
 

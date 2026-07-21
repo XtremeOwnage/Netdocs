@@ -31,7 +31,7 @@ Netdocs has a first-class C# plugin system. Plugins are enabled and configured i
 | [glightbox](glightbox.md) | Image lightbox. |
 | [rss](rss.md) | RSS feed of blog posts. |
 | [file-filter](file-filter.md) | Env-driven label include/exclude. |
-| [macros](macros.md) | `fileuri()` / `ebay()` Markdown macros (mkdocs-macros subset). |
+| [macros](macros.md) | `fileuri()` / `button()` Markdown macros (mkdocs-macros subset). |
 
 ## How plugins hook into the build
 

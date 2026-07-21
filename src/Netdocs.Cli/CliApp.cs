@@ -23,6 +23,9 @@ public static class CliApp
                 return await ImportAsync(args);
             case "--help" or "-h" or "help":
                 return PrintHelp();
+            case "--version" or "-V" or "version":
+                Console.WriteLine(GetVersion());
+                return 0;
         }
 
         var configPath = ResolveConfigPath(opts.ConfigPath);
@@ -273,6 +276,7 @@ public static class CliApp
               netdocs serve [options]     Serve with live reload
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
               netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
+              netdocs --version            Print the Netdocs version and exit
 
             Import options:
                   --out <path>      Output appsettings.json path (default next to mkdocs.yml)
@@ -293,6 +297,20 @@ public static class CliApp
               -v, --verbose         Verbose (Trace) logging
             """);
         return 0;
+    }
+
+    private static string GetVersion()
+    {
+        var asm = typeof(CliApp).Assembly;
+        var info = asm.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false);
+        if (info.Length > 0)
+        {
+            var v = ((System.Reflection.AssemblyInformationalVersionAttribute)info[0]).InformationalVersion;
+            // Strip the build metadata (e.g. "+<commit sha>") appended by the SDK.
+            var plus = v.IndexOf('+');
+            return plus >= 0 ? v[..plus] : v;
+        }
+        return asm.GetName().Version?.ToString() ?? "0.0.0";
     }
 
     private static int Unknown(ILogger log, string command)

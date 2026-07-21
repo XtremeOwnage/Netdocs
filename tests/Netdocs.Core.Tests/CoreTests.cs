@@ -234,6 +234,22 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void Emoji_RendersAsTwemojiImage()
+    {
+        var html = Render("Launch :rocket:");
+        Assert.Contains("class=\"twemoji\"", html);
+        Assert.Contains("<img", html);
+    }
+
+    [Fact]
+    public void Footnotes_RenderReferenceAndDefinition()
+    {
+        var html = Render("Claim.[^a]\n\n[^a]: Supporting detail.\n");
+        Assert.Contains("footnote-ref", html);
+        Assert.Contains("Supporting detail.", html);
+    }
+
+    [Fact]
     public void Title_ExtractedFromFirstHeading()
     {
         var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };

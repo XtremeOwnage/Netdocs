@@ -105,3 +105,60 @@ an override that renders the configured social links in the header:
 {{~ end ~}}
 ```
 
+## Social links & icons
+
+Configure the links shown in the header and footer under `extra.social`. Each entry has an
+`icon` name (Material/FontAwesome-style, e.g. `fontawesome/brands/github`) and a `link`:
+
+```json
+{
+  "Netdocs": {
+    "extra": {
+      "social": [
+        { "icon": "fontawesome/brands/github", "link": "https://github.com/you/repo" },
+        { "icon": "fontawesome/brands/mastodon", "link": "https://fosstodon.org/@you" },
+        { "icon": "material/rss", "link": "feed_rss_created.xml" }
+      ]
+    }
+  }
+}
+```
+
+The `social_icon` helper maps an icon name to an inline SVG. Built-in glyphs are matched by
+substring, so both the Material (`material/github`) and FontAwesome
+(`fontawesome/brands/github`) naming styles work:
+
+| Matches | Renders |
+|---|---|
+| `github` | GitHub |
+| `discord` | Discord |
+| `reddit` | Reddit |
+| `rss` | RSS |
+| `x-twitter` / `twitter` | X / Twitter |
+| `mastodon` | Mastodon |
+| `linkedin` | LinkedIn |
+| `youtube` | YouTube |
+| `mail` / `email` / `envelope` | Email |
+| *(anything else)* | Globe (generic link) |
+
+### Custom icons
+
+Add or override glyphs without editing the theme by supplying `extra.social_icons` — a map
+of icon-name substring to an SVG `path` (using a `0 0 24 24` viewBox). Custom entries take
+precedence over the built-ins:
+
+```json
+{
+  "Netdocs": {
+    "extra": {
+      "social_icons": {
+        "bluesky": "M12 10.8C10.7 8.3 7.2 3.6 3.9 ... Z"
+      },
+      "social": [
+        { "icon": "fontawesome/brands/bluesky", "link": "https://bsky.app/profile/you" }
+      ]
+    }
+  }
+}
+```
+

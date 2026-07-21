@@ -71,9 +71,10 @@ Full body…
 - `blog/` — paginated index (page 1); `blog/page/2/`, `blog/page/3/`, …
 - `blog/category/<slug>/` — one per category.
 - `blog/archive/<year>/` — one per year.
+- `blog/author/<id>/` — one per author who has posts.
 
 Each post page also gets a metadata header (date · read-time · categories) and, on
-listing pages, an Archive/Categories sidebar.
+listing pages, an Archive/Categories/Authors sidebar.
 
 ## Authors
 
@@ -86,3 +87,14 @@ authors:
     description: Maintainer
     avatar: /assets/authors/jane.png
 ```
+
+Reference authors from a post's front matter (multiple are supported):
+
+```yaml
+authors: [jane, john]
+```
+
+Each post shows its authors (avatar, name, role) with the name linking to that
+author's page at `blog/author/<id>/`, which lists every post they wrote. When a blog
+defines exactly one author, posts without an explicit `authors` entry fall back to it.
+Author pages and the Authors sidebar entry are generated automatically.

@@ -3,17 +3,19 @@
     <span class="md-nav__icon md-icon"></span> Back to index
   </a>
 
-  {{~ if page.meta.post_author_name ~}}
+  {{~ if page.meta.post_authors && (array.size page.meta.post_authors) > 0 ~}}
+  {{~ for author in page.meta.post_authors ~}}
   <div class="md-post__authors" style="display:flex;align-items:center;gap:.7rem;margin:1.2rem 0 1rem">
-    {{~ if page.meta.post_author_avatar ~}}
-    <img src="{{ base_url }}{{ strip_slash page.meta.post_author_avatar }}" alt="{{ page.meta.post_author_name }}"
+    {{~ if author.avatar ~}}
+    <img src="{{ base_url }}{{ strip_slash author.avatar }}" alt="{{ author.name }}"
          style="width:2.4rem;height:2.4rem;border-radius:50%;object-fit:cover">
     {{~ end ~}}
     <div>
-      <div style="font-weight:700">{{ page.meta.post_author_name }}</div>
-      {{~ if page.meta.post_author_role ~}}<div style="color:var(--md-default-fg-color--light);font-size:.72rem">{{ page.meta.post_author_role }}</div>{{~ end ~}}
+      <div style="font-weight:700"><a href="{{ base_url }}{{ strip_slash author.url }}">{{ author.name }}</a></div>
+      {{~ if author.role ~}}<div style="color:var(--md-default-fg-color--light);font-size:.72rem">{{ author.role }}</div>{{~ end ~}}
     </div>
   </div>
+  {{~ end ~}}
   {{~ end ~}}
 
   <div class="md-post__meta" style="font-size:.75rem;color:var(--md-default-fg-color--light)">

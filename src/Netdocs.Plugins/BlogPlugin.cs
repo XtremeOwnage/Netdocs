@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Netdocs.Abstractions;
+using Netdocs.Core.Configuration;
 using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
@@ -19,6 +20,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     private SiteConfig _config = null!;
 
     private readonly List<BlogPost> _posts = [];
+    private readonly Dictionary<string, Author> _authors = new(StringComparer.OrdinalIgnoreCase);
 
     public string Name => "blog";
 
@@ -31,6 +33,23 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         if (o.TryGetValue("pagination_per_page", out var pp) && pp is long ppl) _perPage = (int)ppl;
         if (o.TryGetValue("categories", out var c) && c is bool cb) _categoriesEnabled = cb;
         if (o.TryGetValue("archive", out var a) && a is bool ab) _archiveEnabled = ab;
+
+        LoadAuthors(ctx);
+    }
+
+    private void LoadAuthors(IPluginContext ctx)
+    {
+        var path = Path.Combine(ctx.Config.AbsoluteDocsDir, _blogDir.Replace('/', Path.DirectorySeparatorChar), ".authors.yml");
+        if (!File.Exists(path)) return;
+        var root = YamlTree.Parse(File.ReadAllText(path)).AsMap();
+        foreach (var (id, value) in root.Get("authors").AsMap())
+        {
+            var a = value.AsMap();
+            _authors[id] = new Author(
+                a.Get("name").AsString() ?? id,
+                a.Get("description").AsString() ?? "",
+                a.Get("avatar").AsString() ?? "");
+        }
     }
 
     public Task OnBuildStartAsync(SiteContext site, CancellationToken ct)
@@ -49,7 +68,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 
             var categories = GetCategories(page);
             _posts.Add(new BlogPost(page, date, categories, ReadExcerpt(page)));
-            page.RawMarkdown = PostMetaHtml(date, categories, page.RawMarkdown) + page.RawMarkdown;
+            ApplyPostMeta(page, date, categories);
         }
 
         _posts.Sort((a, b) => b.Date.CompareTo(a.Date));
@@ -66,6 +85,37 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>Sets blog-post metadata on the page for the theme to render (sidebar + tag chips).</summary>
+    private void ApplyPostMeta(Page page, DateTimeOffset date, IReadOnlyList<string> categories)
+    {
+        var words = page.RawMarkdown.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        var minutes = Math.Max(1, (int)Math.Round(words / 238.0));
+
+        page.Meta["is_post"] = true;
+        page.Meta["post_date"] = date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
+        page.Meta["post_readtime"] = minutes;
+        page.Meta["post_categories"] = categories;
+        page.Meta["post_tags"] = ReadList(page, "tags");
+        page.Meta["blog_index_url"] = "/" + _blogDir;
+
+        var author = ResolveAuthor(page);
+        if (author is not null)
+        {
+            page.Meta["post_author_name"] = author.Name;
+            page.Meta["post_author_role"] = author.Role;
+            page.Meta["post_author_avatar"] = author.Avatar;
+        }
+    }
+
+    private Author? ResolveAuthor(Page page)
+    {
+        var ids = ReadList(page, "authors");
+        foreach (var id in ids)
+            if (_authors.TryGetValue(id, out var a)) return a;
+        // Default to the sole author when a post doesn't specify one.
+        return _authors.Count == 1 ? _authors.Values.First() : null;
     }
 
     public async IAsyncEnumerable<Page> GenerateAsync(
@@ -178,20 +228,6 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
     }
 
     /// <summary>Small metadata header (date · reading time · categories) prepended to a post.</summary>
-    private static string PostMetaHtml(DateTimeOffset date, IReadOnlyList<string> categories, string markdown)
-    {
-        var words = markdown.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        var minutes = Math.Max(1, (int)Math.Round(words / 238.0));
-        var cats = categories.Count > 0 ? " &middot; in " + string.Join(", ", categories) : "";
-        return $"""
-            <div class="md-post__meta md-typeset" style="color:var(--md-default-fg-color--light);font-size:.72rem;margin-bottom:1rem">
-            <time datetime="{date:yyyy-MM-dd}">{date.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)}</time> &middot; {minutes} min read{cats}
-            </div>
-
-
-            """;
-    }
-
     private static string ReadExcerpt(Page page)
     {
         var md = page.RawMarkdown;
@@ -247,3 +283,5 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
 }
 
 public sealed record BlogPost(Page Page, DateTimeOffset Date, IReadOnlyList<string> Categories, string Excerpt);
+
+public sealed record Author(string Name, string Role, string Avatar);

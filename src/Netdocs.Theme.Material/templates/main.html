@@ -103,7 +103,11 @@ func render_toc(entry) ~}}
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
+                {{~ if page.meta.is_post ~}}
+                {{ include "partials/post-meta.html" }}
+                {{~ else ~}}
                 {{ include "partials/nav.html" }}
+                {{~ end ~}}
               </div>
             </div>
           </div>
@@ -116,8 +120,11 @@ func render_toc(entry) ~}}
           </div>
           <div class="md-content" data-md-component="content">
             <article class="md-content__inner md-typeset">
+{{~ if page.meta.is_post && page.meta.post_tags && (array.size page.meta.post_tags) > 0 ~}}
+<nav class="md-tags">{{~ for tag in page.meta.post_tags ~}}<a href="{{ base_url }}pages/tags/" class="md-tag">{{ tag }}</a> {{~ end ~}}</nav>
+{{~ end ~}}
 {{ content }}
-              {{~ if show_source_meta ~}}
+              {{~ if show_source_meta && !page.meta.is_post ~}}
               <hr>
               <div class="md-source-file">
                 <span class="md-source-file__fact">

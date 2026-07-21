@@ -112,6 +112,24 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void Emoji_RendersTwemojiImage()
+    {
+        var html = Render("Nice work :smile:\n");
+        Assert.Contains("class=\"twemoji\"", html);
+        Assert.Contains("1f604.svg", html);      // :smile: => U+1F604
+        Assert.Contains("title=\":smile:\"", html);
+    }
+
+    [Fact]
+    public void Emoji_ZwjSequenceKeepsVariationSelector()
+    {
+        // Family/zwj sequences keep FE0F; simple emoji strip it.
+        Assert.Equal("1f604", Netdocs.Core.Markdown.Emoji.TwemojiRenderer.ToFileName("\U0001F604"));
+        Assert.Equal("2764-fe0f-200d-1f525",
+            Netdocs.Core.Markdown.Emoji.TwemojiRenderer.ToFileName("\u2764\ufe0f\u200d\U0001F525"));
+    }
+
+    [Fact]
     public void Admonition_RendersMaterialMarkup()
     {
         var html = Render("!!! note \"Heads up\"\n    Body text here\n");

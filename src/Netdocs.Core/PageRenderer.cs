@@ -145,13 +145,18 @@ public static class PageRenderer
 
                 if (node.IsSection)
                 {
+                    // The current page is this section's own index: its ancestors are
+                    // already on the trail, so stop here without adding a self-referential
+                    // crumb (a breadcrumb pointing at the current page is useless and is
+                    // what Material omits — e.g. no "Blog" crumb on the blog index).
+                    if (node.SectionIndex == page) return true;
+
                     var crumb = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["title"] = node.Title,
                         ["url"] = node.SectionIndex?.Url,
                     };
                     trail.Add(crumb);
-                    if (node.SectionIndex == page) return true;
                     if (Walk(node.Children)) return true;
                     trail.RemoveAt(trail.Count - 1);
                 }

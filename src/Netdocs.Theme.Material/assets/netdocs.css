@@ -27,3 +27,22 @@ body {
   height: 1rem;
   fill: currentColor;
 }
+
+/* Breadcrumbs (`.md-path`) are emitted inside the `.md-typeset` article, where the
+   generic `.md-typeset ul { list-style: disc }` rule would otherwise paint a bullet
+   in front of the first crumb. Reassert the breadcrumb's own list reset with higher
+   specificity so it always renders as a clean inline trail (no stray bullet). */
+.md-typeset .md-path__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md-typeset .md-path__item {
+  display: inline-flex;
+}
+
+.md-typeset .md-path__item::before {
+  content: none;
+}
+

@@ -218,6 +218,22 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void BlockMath_RendersAsMathDiv_NotCodeBlock()
+    {
+        var html = Render("$$\n\\int_0^1 x\\,dx\n$$\n");
+        Assert.Contains("<div class=\"math\">\\[", html);
+        Assert.Contains("\\]</div>", html);
+        Assert.DoesNotContain("language-math", html);
+    }
+
+    [Fact]
+    public void InlineMath_RendersAsMathSpan()
+    {
+        var html = Render("Energy $E=mc^2$ here.");
+        Assert.Contains("<span class=\"math\">\\(E=mc^2\\)</span>", html);
+    }
+
+    [Fact]
     public void Title_ExtractedFromFirstHeading()
     {
         var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };

@@ -108,9 +108,12 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         public List<Page>? Pages { get; set; }
     }
 
-    /// <summary>Title known before render: front matter, else first H1 in markdown, else filename.</summary>
+    /// <summary>Display name for a page on the tags page: an explicit <c>tags_title</c> front-matter
+    /// override wins, then the resolved title, then the first H1, then the filename.</summary>
     private static string GetDisplayTitle(Page page)
     {
+        if (page.FrontMatter.TryGetValue("tags_title", out var tt) && tt is string tts && tts.Length > 0)
+            return tts;
         if (!string.IsNullOrEmpty(page.Title)) return page.Title;
         if (page.FrontMatter.TryGetValue("title", out var t) && t is string ft && ft.Length > 0) return ft;
         foreach (var line in page.RawMarkdown.Split('\n'))
@@ -129,7 +132,7 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
 
         var export = index.ToDictionary(
             kvp => kvp.Key,
-            kvp => kvp.Value.Select(p => new { title = p.Title, url = p.Url }).ToArray());
+            kvp => kvp.Value.Select(p => new { title = GetDisplayTitle(p), url = p.Url }).ToArray());
 
         var path = Path.Combine(site.Config.AbsoluteSiteDir, _exportFile);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

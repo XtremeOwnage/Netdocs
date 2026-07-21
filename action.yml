@@ -83,9 +83,41 @@ runs:
         mkdir -p "${dest_dir}"
         dest="${dest_dir}/netdocs${ext}"
 
-        echo "Downloading ${url}"
-        curl -fsSL -o "${dest}" "${url}"
+        echo "Downloading ${asset} (v${version})"
+        download_ok=""
+
+        # Prefer the GitHub CLI when available: it authenticates, follows the asset
+        # redirect and retries transient failures far more reliably than raw curl
+        # (which can fail with 'curl: (23)' part-way through large binary downloads).
+        if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
+          if gh release download "v${version}" --repo "${repo}" \
+               --pattern "${asset}" --output "${dest}" --clobber; then
+            download_ok="1"
+          else
+            echo "::warning::gh release download failed; falling back to curl."
+          fi
+        fi
+
+        # Fallback (and default when gh is unavailable): curl with retries. Write to a
+        # temp file first and move it into place only on success, so a partial transfer
+        # never leaves a truncated 'netdocs' behind.
+        if [ -z "${download_ok}" ]; then
+          tmp="${dest}.partial"
+          rm -f "${tmp}"
+          curl --fail --location --show-error --silent \
+               --retry 5 --retry-delay 3 --retry-all-errors \
+               --connect-timeout 30 \
+               -o "${tmp}" "${url}"
+          mv -f "${tmp}" "${dest}"
+        fi
+
         chmod +x "${dest}" || true
+
+        # Guard against a zero-byte / truncated download slipping through.
+        if [ ! -s "${dest}" ]; then
+          echo "::error::Downloaded Netdocs binary is missing or empty: ${dest}" >&2
+          exit 1
+        fi
 
         echo "path=${dest}" >> "${GITHUB_OUTPUT}"
         echo "version=${version}" >> "${GITHUB_OUTPUT}"

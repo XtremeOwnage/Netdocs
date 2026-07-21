@@ -60,12 +60,15 @@ public static class ConfigLoader
         foreach (var item in node.AsList())
         {
             var m = item.AsMap();
+            var toggle = m.Get("toggle").AsMap();
             result.Add(new PaletteConfig
             {
                 Media = m.Get("media").AsString(),
                 Scheme = m.Get("scheme").AsString(),
                 Primary = m.Get("primary").AsString(),
                 Accent = m.Get("accent").AsString(),
+                ToggleIcon = toggle.Get("icon").AsString(),
+                ToggleName = toggle.Get("name").AsString(),
             });
         }
         return result;

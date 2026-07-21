@@ -43,6 +43,7 @@ jobs:
             echo "::group::publish $rid"
             dotnet publish src/Netdocs.Cli -c Release -r "$rid" --self-contained \
               -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:EnableCompressionInSingleFile=true \
               -p:Version="${VERSION:-0.0.0}" -o "dist/$rid"
             echo "::endgroup::"
           done

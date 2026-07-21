@@ -23,52 +23,65 @@ inputs:
     required: false
     default: ""
   working-directory:
-    description: "Directory to run netdocs in."
+    description: "Directory (relative to the workspace) to run netdocs in."
     required: false
     default: "."
 
 outputs:
-  netdocs-path:
-    description: "Absolute path to the downloaded netdocs executable."
-    value: ${{ steps.install.outputs.path }}
+  image:
+    description: "The container image reference that was used."
+    value: ${{ steps.run.outputs.image }}
   version:
-    description: "The resolved Netdocs version that was installed."
-    value: ${{ steps.install.outputs.version }}
+    description: "The resolved Netdocs version that was used."
+    value: ${{ steps.run.outputs.version }}
 
 runs:
   using: "composite"
   steps:
-    - id: install
+    - id: run
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
         INPUT_VERSION: ${{ inputs.version }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_ARGS: ${{ inputs.args }}
+        INPUT_WORKDIR: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
+
+        # Netdocs runs from its published container image. This avoids downloading
+        # and writing a ~100MB self-contained binary onto the runner (a fragile step
+        # that could fail with 'curl: (23) Failure writing output to destination'),
+        # and pins the whole toolchain -- CLI, theme, and dependencies -- to one image.
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "::error::The Netdocs action runs via a Linux container and requires Docker on the runner. Use a Linux runner (e.g. ubuntu-latest)." >&2
+          exit 1
+        fi
+
         repo="XtremeOwnage/Netdocs"
+        image="ghcr.io/xtremeownage/netdocs"
         version="${INPUT_VERSION}"
 
-        # Map the GitHub runner OS/arch onto a published release asset name.
-        os="${RUNNER_OS}"
-        arch="${RUNNER_ARCH}"
-        case "${os}-${arch}" in
-          Linux-X64)   rid="linux-x64";   ext="" ;;
-          Windows-X64) rid="win-x64";     ext=".exe" ;;
-          macOS-X64)   rid="osx-x64";     ext="" ;;
-          macOS-ARM64) rid="osx-arm64";   ext="" ;;
-          *)
-            echo "::error::Netdocs does not publish a binary for ${os}/${arch}. Supported: Linux-X64, Windows-X64, macOS-X64, macOS-ARM64." >&2
-            exit 1
-            ;;
-        esac
-
-        # Resolve 'latest' to a concrete version via the GitHub API.
-        if [ "${version}" = "latest" ] || [ -z "${version}" ]; then
-          auth=()
-          if [ -n "${GH_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer ${GH_TOKEN}"); fi
-          tag="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${repo}/releases/latest" \
-            | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+        # Resolve 'latest' to a concrete released version so the image tag is always a
+        # real, published vX.Y.Z.
+        #
+        # NOTE: never pipe a streaming `curl` into `grep -m1` under `set -o pipefail`:
+        # grep exits on first match and closes the pipe, so curl fails its next write
+        # with exit 23 and pipefail fails the step. Resolve via `gh`, and only fall
+        # back to curl by capturing the full response into a variable first.
+        if [ -z "${version}" ] || [ "${version}" = "latest" ]; then
+          tag=""
+          if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
+            tag="$(gh release view --repo "${repo}" --json tagName --jq '.tagName' 2>/dev/null || true)"
+          fi
+          if [ -z "${tag}" ]; then
+            auth=()
+            if [ -n "${GH_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer ${GH_TOKEN}"); fi
+            json="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${repo}/releases/latest")"
+            tag="$(printf '%s\n' "${json}" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+          fi
           if [ -z "${tag}" ]; then
             echo "::error::Could not resolve the latest Netdocs release. Pin an explicit 'version:' instead." >&2
             exit 1
@@ -76,77 +89,13 @@ runs:
           version="${tag#v}"
         fi
 
-        asset="netdocs-${version}-${rid}${ext}"
-        url="https://github.com/${repo}/releases/download/v${version}/${asset}"
+        ref="${image}:v${version}"
+        echo "Using Netdocs image ${ref}"
+        docker pull "${ref}"
 
-        # Download into the workspace disk rather than RUNNER_TEMP. On some runners
-        # RUNNER_TEMP is backed by a small tmpfs, and writing the ~100MB self-contained
-        # binary there fails with 'curl: (23) Failure writing output to destination'
-        # (and likewise breaks `gh release download`).
-        base_dir="${GITHUB_WORKSPACE:-${RUNNER_TEMP:-/tmp}}"
-        dest_dir="${base_dir}/.netdocs-bin"
-        mkdir -p "${dest_dir}"
-        dest="${dest_dir}/netdocs${ext}"
-
-        echo "Downloading ${asset} (v${version}) -> ${dest}"
-        echo "Disk space at download target:"
-        df -h "${dest_dir}" || true
-
-        download_ok=""
-
-        # Prefer the GitHub CLI when available: it authenticates, follows the asset
-        # redirect and retries transient failures more reliably than raw curl.
-        if command -v gh >/dev/null 2>&1 && [ -n "${GH_TOKEN:-}" ]; then
-          if gh release download "v${version}" --repo "${repo}" \
-               --pattern "${asset}" --output "${dest}" --clobber; then
-            download_ok="1"
-          else
-            echo "::warning::gh release download failed; falling back to curl."
-          fi
-        fi
-
-        # Fallback (and default when gh is unavailable): curl with retries. Write to a
-        # temp file first and move it into place only on success, so a partial transfer
-        # never leaves a truncated 'netdocs' behind.
-        if [ -z "${download_ok}" ]; then
-          tmp="${dest}.partial"
-          rm -f "${tmp}"
-          if ! curl --fail --location --show-error --silent \
-               --retry 5 --retry-delay 3 --retry-all-errors \
-               --connect-timeout 30 \
-               -o "${tmp}" "${url}"; then
-            echo "::error::Failed to download ${url}." >&2
-            echo "Partial file size:"; ls -l "${tmp}" 2>/dev/null || true
-            echo "Filesystem usage (all mounts):"; df -h || true
-            exit 1
-          fi
-          mv -f "${tmp}" "${dest}"
-        fi
-
-        chmod +x "${dest}" || true
-
-        # Guard against a zero-byte / truncated download slipping through.
-        if [ ! -s "${dest}" ]; then
-          echo "::error::Downloaded Netdocs binary is missing or empty: ${dest}" >&2
-          echo "Filesystem usage (all mounts):"; df -h || true
-          exit 1
-        fi
-
-        echo "path=${dest}" >> "${GITHUB_OUTPUT}"
-        echo "version=${version}" >> "${GITHUB_OUTPUT}"
-        echo "${dest_dir}" >> "${GITHUB_PATH}"
-        "${dest}" --version || true
-
-    - shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      env:
-        NETDOCS_BIN: ${{ steps.install.outputs.path }}
-        INPUT_COMMAND: ${{ inputs.command }}
-        INPUT_CONFIG: ${{ inputs.config }}
-        INPUT_ARGS: ${{ inputs.args }}
-      run: |
-        set -euo pipefail
-        cmd=("${NETDOCS_BIN}" "${INPUT_COMMAND}")
+        # Assemble the netdocs command. The image ENTRYPOINT is `netdocs`, so only its
+        # arguments are supplied here.
+        cmd=("${INPUT_COMMAND}")
         if [ -n "${INPUT_CONFIG}" ]; then
           cmd+=(--config "${INPUT_CONFIG}")
         fi
@@ -155,5 +104,20 @@ runs:
           extra=(${INPUT_ARGS})
           cmd+=("${extra[@]}")
         fi
-        echo "Running: ${cmd[*]}"
-        "${cmd[@]}"
+
+        workdir="${INPUT_WORKDIR:-.}"
+        run_dir="/github/workspace/${workdir}"
+
+        echo "Running: netdocs ${cmd[*]} (in ${run_dir})"
+
+        # Mount the checked-out workspace and run as the runner user so generated
+        # files (e.g. ./site) are owned by the runner and readable by later steps.
+        docker run --rm \
+          -v "${GITHUB_WORKSPACE}:/github/workspace" \
+          -w "${run_dir}" \
+          -u "$(id -u):$(id -g)" \
+          -e HOME=/tmp \
+          "${ref}" "${cmd[@]}"
+
+        echo "image=${ref}" >> "${GITHUB_OUTPUT}"
+        echo "version=${version}" >> "${GITHUB_OUTPUT}"

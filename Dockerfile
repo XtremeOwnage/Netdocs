@@ -12,6 +12,12 @@ RUN dotnet publish src/Netdocs.Cli -c Release -r linux-x64 --self-contained \
 
 FROM mcr.microsoft.com/dotnet/runtime-deps:11.0-preview
 WORKDIR /site
+# Ship a font so the social-cards plugin can render text. The minimal runtime-deps
+# image has no fonts, which otherwise makes SixLabors.Fonts fail with
+# "Cannot use the default value type instance to create a font".
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core fontconfig \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app /opt/netdocs
 RUN ln -s /opt/netdocs/netdocs /usr/local/bin/netdocs
 EXPOSE 8000

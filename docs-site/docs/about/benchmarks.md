@@ -59,19 +59,39 @@ log `Render cache: <reused>/<total> pages reused`.
 ## How this compares to mkdocs-material
 
 [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) is the reference this
-project is modelled on. A like-for-like comparison depends heavily on the Python
-interpreter, enabled plugins (especially social-card generation, which shells out to a
-headless browser), and image-optimization pipeline, so we publish the **methodology**
-rather than a single contested number:
+project is modelled on, so we benchmark against it directly on the **same content set** —
+the XO blog repository — with social-card generation disabled on both sides (it shells out
+to a headless browser / Cairo and is not equivalent work).
+
+| Generator | Cold build (same content) | Relative |
+|---|---:|---:|
+| **Netdocs** (`netdocs build`, Release) | **~6 s** | **1×** |
+| Material for MkDocs 9.x (`mkdocs build`) | ~97 s (best) – ~146 s (under load) | ~16–24× slower |
+
+Both were run on the same machine (see [Test environment](#test-environment)) against the
+same Markdown + images, with the Material `social` plugin disabled so neither tool pays for
+social-card rendering. Material for MkDocs reported `Documentation built in 96.92 seconds`
+on its fastest run; Netdocs reports `Built 243 pages in ~6 s` for the equivalent content.
+
+The gap comes from architecture, not tuning: Material for MkDocs starts a Python interpreter,
+loads plugins, and renders every page through Jinja in a single process, while Netdocs is a
+single compiled .NET binary that renders pages in parallel with an incremental render cache.
+
+### Reproducing the mkdocs-material number
+
+```pwsh
+# From the MkDocs content repo (with mkdocs-material installed):
+python -m mkdocs build -d site_mkdocs
+```
+
+We publish the **methodology** as well, because a like-for-like comparison depends heavily on
+the Python interpreter, enabled plugins (especially social-card generation), and the
+image-optimization pipeline:
 
 1. Point both generators at the same content set (same Markdown, same images).
 2. Disable non-equivalent plugins on both sides so you compare the same work.
 3. Measure a cold build (clear each tool's cache) and a warm build.
 4. Compare wall-clock time and peak memory.
 
-In practice Netdocs' advantage comes from being a single compiled binary with no
-per-page interpreter startup and parallel page rendering. For the 243-page image-heavy
-blog above it completes a full cold build in ~6 seconds; equivalent Material builds of
-comparable image-heavy sites are typically dominated by image processing and social-card
-rendering and run substantially longer. Run the reproduction steps above against your own
-content to get numbers that reflect your plugins and hardware.
+Run the reproduction steps above against your own content to get numbers that reflect your
+plugins and hardware.

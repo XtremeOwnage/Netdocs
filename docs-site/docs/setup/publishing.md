@@ -132,17 +132,25 @@ netdocs deploy --config appsettings.json
 ## Optimization
 
 Enable HTML minification to shrink emitted pages (whitespace collapse + comment removal,
-preserving `pre`/`code`/`script`/`style`):
+preserving `pre`/`code`/`script`/`style`), plus optional CSS and JavaScript minification of
+copied assets:
 
 ```json
 {
   "Netdocs": {
     "optimize": {
-      "minifyHtml": true
+      "minifyHtml": true,
+      "minifyCss": true,
+      "minifyJs": true
     }
   }
 }
 ```
+
+`minifyCss`/`minifyJs` strip comments and collapse whitespace in `.css`/`.js` assets as they
+are copied into the output. The minifier is conservative — it never renames identifiers or
+reorders rules, and it preserves string, template, and URL contents verbatim. Files that are
+already minified (`*.min.css`, `*.min.js`) are copied through untouched.
 
 ## Other hosts
 

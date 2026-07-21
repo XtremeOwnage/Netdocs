@@ -69,3 +69,7 @@ without leaving Material:
 **Pagefind** is the recommended migration path if in-browser indexing ever becomes the
 bottleneck for a very large site; it is tracked as a future, opt-in alternative rather
 than a replacement for the default Material search.
+
+## Attribution
+
+Behavior is modeled on the [Material for MkDocs](https://github.com/squidfunk/mkdocs-material) search plugin and [lunr](https://lunrjs.com/) (MIT). See [Attributions](../about/attributions.md).

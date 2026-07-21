@@ -28,3 +28,7 @@ Generates an RSS feed of blog posts, ordered by creation date. Requires the
   ]
 }
 ```
+
+## Attribution
+
+Behavior is modeled on [mkdocs-rss-plugin](https://github.com/Guts/mkdocs-rss-plugin) by @Guts (MIT). See [Attributions](../about/attributions.md).

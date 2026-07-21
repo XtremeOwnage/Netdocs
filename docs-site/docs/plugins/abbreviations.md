@@ -33,3 +33,7 @@ Netdocs is an SSG that outputs HTML and CSS.
 ```json
 { "name": "abbreviations", "options": { "files": [ "_include/abbv.md" ] } }
 ```
+
+## Attribution
+
+Behavior is modeled on Python-Markdown `abbr` / [PyMdown Extensions](https://facelessuser.github.io/pymdown-extensions/) (BSD-3-Clause). See [Attributions](../about/attributions.md).

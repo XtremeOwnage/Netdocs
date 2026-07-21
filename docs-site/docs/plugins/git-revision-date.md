@@ -27,3 +27,7 @@ such as the blog and RSS.
 !!! note
     The plugin is registered under the name `git-revision-date-localized` for MkDocs
     compatibility.
+
+## Attribution
+
+Behavior is modeled on [mkdocs-git-revision-date-localized-plugin](https://github.com/timvink/mkdocs-git-revision-date-localized-plugin) by @timvink (MIT). See [Attributions](../about/attributions.md).

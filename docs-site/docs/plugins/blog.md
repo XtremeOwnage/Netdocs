@@ -98,3 +98,7 @@ Each post shows its authors (avatar, name, role) with the name linking to that
 author's page at `blog/author/<id>/`, which lists every post they wrote. When a blog
 defines exactly one author, posts without an explicit `authors` entry fall back to it.
 Author pages and the Authors sidebar entry are generated automatically.
+
+## Attribution
+
+Behavior is modeled on the [Material for MkDocs](https://github.com/squidfunk/mkdocs-material) blog plugin (MIT). See [Attributions](../about/attributions.md).

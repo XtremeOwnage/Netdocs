@@ -54,3 +54,73 @@ public class ConfigTests
         finally { File.Delete(path); }
     }
 }
+
+public class NavigationTests
+{
+    private static Netdocs.Abstractions.Page P(string rel, string url) =>
+        new() { SourcePath = rel, RelativePath = rel, Url = url, Title = rel };
+
+    [Fact]
+    public void SectionIndex_PromotesIndexChildToSectionLanding()
+    {
+        var pages = new List<Netdocs.Abstractions.Page>
+        {
+            P("guide/index.md", "guide/"),
+            P("guide/setup.md", "guide/setup/"),
+        };
+        var config = new Netdocs.Abstractions.SiteConfig
+        {
+            Nav = new List<Netdocs.Abstractions.NavItem>
+            {
+                new()
+                {
+                    Title = "Guide",
+                    Children = new List<Netdocs.Abstractions.NavItem>
+                    {
+                        new() { Path = "guide/index.md" },
+                        new() { Path = "guide/setup.md" },
+                    },
+                },
+            },
+        };
+
+        var nav = Netdocs.Core.Content.NavigationBuilder.Build(config, pages);
+
+        var section = Assert.Single(nav);
+        Assert.True(section.IsSection);
+        Assert.NotNull(section.SectionIndex);
+        Assert.Equal("guide/", section.SectionIndex!.Url);
+        Assert.Single(section.Children); // index child was promoted out of the list
+        Assert.Equal("guide/setup/", section.Children[0].Url);
+    }
+
+    [Fact]
+    public void Flatten_IncludesSectionIndexBeforeChildren()
+    {
+        var pages = new List<Netdocs.Abstractions.Page>
+        {
+            P("guide/index.md", "guide/"),
+            P("guide/setup.md", "guide/setup/"),
+        };
+        var config = new Netdocs.Abstractions.SiteConfig
+        {
+            Nav = new List<Netdocs.Abstractions.NavItem>
+            {
+                new()
+                {
+                    Title = "Guide",
+                    Children = new List<Netdocs.Abstractions.NavItem>
+                    {
+                        new() { Path = "guide/index.md" },
+                        new() { Path = "guide/setup.md" },
+                    },
+                },
+            },
+        };
+
+        var nav = Netdocs.Core.Content.NavigationBuilder.Build(config, pages);
+        var flat = Netdocs.Core.Content.NavigationBuilder.Flatten(nav);
+
+        Assert.Equal(new[] { "guide/", "guide/setup/" }, flat.ConvertAll(p => p.Url));
+    }
+}

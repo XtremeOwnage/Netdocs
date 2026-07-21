@@ -3,6 +3,7 @@
 {{~
 func nav_active(node)
   if node.page && node.page.url == page.url; ret true; end
+  if node.section_index && node.section_index.url == page.url; ret true; end
   for c in node.children
     if nav_active(c); ret true; end
   end
@@ -21,10 +22,21 @@ func render_nav(node, path, level)
   if node.is_section ~}}
     <li class="md-nav__item md-nav__item--nested{{ if active }} md-nav__item--active md-nav__item--section{{ end }}">
       <input class="md-nav__toggle md-toggle" type="checkbox" id="{{ path }}"{{ if active }} checked{{ end }}>
+      {{~ if node.section_index ~}}
+      <div class="md-nav__link md-nav__container">
+        <a href="{{ base_url }}{{ node.section_index.url }}" class="md-nav__link{{ if node.section_index.url == page.url }} md-nav__link--active{{ end }}">
+          <span class="md-ellipsis">{{ node.title }}</span>
+        </a>
+        <label class="md-nav__link " for="{{ path }}" id="{{ path }}_label" tabindex="0">
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      </div>
+      {{~ else ~}}
       <label class="md-nav__link" for="{{ path }}" id="{{ path }}_label" tabindex="0">
         <span class="md-ellipsis">{{ node.title }}</span>
         <span class="md-nav__icon md-icon"></span>
       </label>
+      {{~ end ~}}
       <nav class="md-nav" data-md-level="{{ level }}" aria-labelledby="{{ path }}_label">
         <label class="md-nav__title" for="{{ path }}">
           <span class="md-nav__icon md-icon"></span>
@@ -122,6 +134,18 @@ func render_toc(entry) ~}}
           </div>
           <div class="md-content" data-md-component="content">
             <article class="md-content__inner md-typeset">
+{{~ if (features | array.contains "navigation.path") && breadcrumbs && (array.size breadcrumbs) > 0 ~}}
+<nav class="md-path" aria-label="Breadcrumb">
+  <ul class="md-path__list">
+    {{~ for crumb in breadcrumbs ~}}
+    <li class="md-path__item">
+      {{~ if crumb.url ~}}<a href="{{ base_url }}{{ crumb.url }}" class="md-path__link">{{ crumb.title }}</a>
+      {{~ else ~}}<span class="md-path__link">{{ crumb.title }}</span>{{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ul>
+</nav>
+{{~ end ~}}
 {{~ if page.meta.is_post && page.meta.post_tags && (array.size page.meta.post_tags) > 0 ~}}
 <nav class="md-tags">{{~ for tag in page.meta.post_tags ~}}<a href="{{ base_url }}pages/tags/" class="md-tag">{{ tag }}</a> {{~ end ~}}</nav>
 {{~ end ~}}

@@ -7,8 +7,9 @@ namespace Netdocs.Plugins;
 /// <summary>
 /// Implements mkdocs-table-reader: expands <c>{{ read_csv("file.csv") }}</c> (and
 /// <c>read_table</c>) directives into a Markdown pipe table. Paths are resolved relative
-/// to the docs dir first, then the project root. A CSV uses <c>,</c>; a table file uses
-/// the delimiter given as a second argument (default TAB).
+/// to the page's own directory first (matching mkdocs-table-reader), then the docs dir,
+/// then the project root. A CSV uses <c>,</c>; a table file uses the delimiter given as a
+/// second argument (default TAB).
 /// </summary>
 public sealed partial class TableReaderPlugin : IPlugin, IMarkdownPreprocessor
 {
@@ -38,7 +39,7 @@ public sealed partial class TableReaderPlugin : IPlugin, IMarkdownPreprocessor
                 ? Unescape(match.Groups["delim"].Value)
                 : (fn == "read_csv" ? "," : "\t");
 
-            var resolved = Resolve(path);
+            var resolved = Resolve(path, page);
             if (resolved is null)
                 return $"<!-- table-reader: file not found: {path} -->";
 
@@ -55,11 +56,21 @@ public sealed partial class TableReaderPlugin : IPlugin, IMarkdownPreprocessor
         return Task.FromResult(result);
     }
 
-    private string? Resolve(string path)
+    private string? Resolve(string path, Page page)
     {
         if (Path.IsPathRooted(path) && File.Exists(path)) return path;
-        foreach (var root in new[] { _docsDir, _projectRoot })
+
+        // mkdocs-table-reader resolves relative to the page's own directory first, so a post
+        // can reference a sibling CSV (e.g. "assets/foo.csv") without knowing the docs root.
+        var pageDir = string.IsNullOrEmpty(page.SourcePath) ? null : Path.GetDirectoryName(page.SourcePath);
+
+        var roots = pageDir is null
+            ? new[] { _docsDir, _projectRoot }
+            : new[] { pageDir, _docsDir, _projectRoot };
+
+        foreach (var root in roots)
         {
+            if (string.IsNullOrEmpty(root)) continue;
             var candidate = Path.GetFullPath(Path.Combine(root, path));
             if (File.Exists(candidate)) return candidate;
         }

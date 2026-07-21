@@ -65,6 +65,16 @@ func render_toc(entry) ~}}
     <meta name="description" content="{{ config.site_description }}">
     {{ if config.site_author }}<meta name="author" content="{{ config.site_author }}">{{ end }}
     <title>{{ if !is_homepage && page.title != "" }}{{ page.title }} - {{ end }}{{ config.site_name }}</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ config.site_name }}">
+    <meta property="og:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
+    <meta property="og:description" content="{{ page_description }}">
+    <meta property="og:image" content="{{ og_image }}">
+    <meta property="og:url" content="{{ og_url }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
+    <meta name="twitter:description" content="{{ page_description }}">
+    <meta name="twitter:image" content="{{ og_image }}">
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css">

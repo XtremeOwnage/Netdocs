@@ -33,11 +33,29 @@ jobs:
             echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish self-contained binary
-        run: >-
-          dotnet publish src/Netdocs.Cli -c Release -r linux-x64 --self-contained
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -o dist
+      - name: Publish self-contained binaries (linux, windows, macos)
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          for rid in linux-x64 win-x64 osx-x64 osx-arm64; do
+            echo "::group::publish $rid"
+            dotnet publish src/Netdocs.Cli -c Release -r "$rid" --self-contained \
+              -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+              -p:Version="${VERSION:-0.0.0}" -o "dist/$rid"
+            echo "::endgroup::"
+          done
+
+      - name: Stage standalone executables
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          mkdir -p out
+          v="${VERSION:-0.0.0}"
+          cp "dist/linux-x64/netdocs"      "out/netdocs-${v}-linux-x64"
+          cp "dist/osx-x64/netdocs"        "out/netdocs-${v}-osx-x64"
+          cp "dist/osx-arm64/netdocs"      "out/netdocs-${v}-osx-arm64"
+          cp "dist/win-x64/netdocs.exe"    "out/netdocs-${v}-win-x64.exe"
+          ls -l out
 
       - name: Install nfpm
         run: |

@@ -9,6 +9,5 @@
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 </Project>

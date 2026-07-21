@@ -9,6 +9,7 @@ public sealed class BuildOptions
     public bool IsServe { get; init; }
     public bool Strict { get; init; }
     public bool Clean { get; init; }
+    public bool NoCache { get; init; }
 
     public IReadOnlyDictionary<string, string?> Environment { get; init; }
         = new Dictionary<string, string?>();

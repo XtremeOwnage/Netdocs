@@ -133,7 +133,9 @@ func render_toc(entry) ~}}
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
-                {{~ if page.meta.is_blog_listing || page.meta.is_post ~}}
+                {{~ if page.meta.is_post ~}}
+                {{ include "partials/post-meta.html" }}
+                {{~ else if page.meta.is_blog_listing ~}}
                 {{ include "partials/blog-nav.html" }}
                 {{~ else ~}}
                 {{ include "partials/nav.html" }}
@@ -149,9 +151,6 @@ func render_toc(entry) ~}}
             </div>
           </div>
           <div class="md-content" data-md-component="content">
-            {{~ if page.meta.is_post ~}}
-            {{ include "partials/post-meta.html" }}
-            {{~ end ~}}
             <article class="md-content__inner md-typeset">
 {{~ if (features | array.contains "navigation.path") && breadcrumbs && (array.size breadcrumbs) > 0 ~}}
 <nav class="md-path" aria-label="Breadcrumb">

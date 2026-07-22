@@ -67,19 +67,23 @@ Add `title="…"` to the fence to render a filename/label bar above the block. T
 showing which file a snippet belongs to.
 
 ````markdown
-```yaml title="appsettings.json"
-Netdocs:
-  siteName: "My Site"
-  theme:
-    name: material
+```json title="appsettings.json"
+{
+  "Netdocs": {
+    "siteName": "My Site",
+    "theme": { "name": "material" }
+  }
+}
 ```
 ````
 
-```yaml title="appsettings.json"
-Netdocs:
-  siteName: "My Site"
-  theme:
-    name: material
+```json title="appsettings.json"
+{
+  "Netdocs": {
+    "siteName": "My Site",
+    "theme": { "name": "material" }
+  }
+}
 ```
 
 ## Line numbers

@@ -82,6 +82,7 @@ public static class JsonConfigLoader
         Logo = m.Get("logo").AsString(),
         Favicon = m.Get("favicon").AsString(),
         CustomDir = m.Get("customDir").AsString(),
+        Highlight = m.Get("highlight").AsString() ?? "highlightjs",
         Features = StringList(m.Get("features")),
         Font = m.Get("font").AsMap(),
         Icon = m.Get("icon").AsMap(),

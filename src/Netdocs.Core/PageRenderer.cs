@@ -47,6 +47,7 @@ public static class PageRenderer
             ["base_url"] = BaseUrl(page.Url),
             ["is_homepage"] = string.IsNullOrEmpty(page.Url),
             ["features"] = new HashSet<string>(site.Config.Theme.Features, StringComparer.OrdinalIgnoreCase),
+            ["highlight"] = site.Config.Theme.Highlight,
             ["extra"] = site.Config.Extra,
             ["stylesheets"] = ResolveHrefs(site.Config.ExtraCss, assets.Stylesheets),
             ["scripts"] = assets.Scripts.Select(s => s.Src).Concat(site.Config.ExtraJavaScript).ToList(),

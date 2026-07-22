@@ -67,6 +67,24 @@ public class AbbreviationsPluginTests : IDisposable
     }
 
     [Fact]
+    public void RendersAbbrInProseButNotInsideCode()
+    {
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var pipeline = Netdocs.Core.Markdown.MarkdownPipelineFactory.Build(site, []);
+        var md = "Uses HTML here.\n\nInline `HTML` code.\n\n```\nHTML block\n```\n\n*[HTML]: HyperText Markup Language\n";
+        var page = new Page { SourcePath = "x", RelativePath = "x.md", ProcessedMarkdown = md };
+        new Netdocs.Core.Markdown.DocumentRenderer(pipeline).Render(page);
+
+        // Prose abbreviations become <abbr> tooltips...
+        Assert.Contains("<abbr title=\"HyperText Markup Language\">HTML</abbr>", page.HtmlContent);
+        // ...but abbreviations are never expanded inside inline code or fenced code blocks.
+        Assert.Contains("<code>HTML</code>", page.HtmlContent);
+        Assert.Contains("HTML block", page.HtmlContent);
+        Assert.DoesNotContain("<abbr title=\"HyperText Markup Language\">HTML</abbr> block", page.HtmlContent);
+        Assert.DoesNotContain("<code><abbr", page.HtmlContent);
+    }
+
+    [Fact]
     public async Task HonorsCustomFileList()
     {
         File.WriteAllText(Path.Combine(_docs, "glossary.md"), "*[API]: Application Programming Interface");

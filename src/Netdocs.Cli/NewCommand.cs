@@ -155,7 +155,10 @@ internal static class NewCommand
       "minifyCss": false,
       "minifyJs": false,
       "convertImagesToWebp": false,
-      "webpQuality": 80
+      "webpQuality": 80,
+      // Self-host every CDN asset (highlight.js, Mermaid, fonts, emoji) so the
+      // built site runs from file:// — requires network access at build time.
+      "offline": false
     },
 
     // --- Build-time validation -------------------------------------------------------

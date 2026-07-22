@@ -33,7 +33,11 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family={{ string.replace font_text ' ' '+' }}:300,300i,400,400i,700,700i%7C{{ string.replace font_code ' ' '+' }}:400,400i,700,700i&display=fallback">
     <style>:root{--md-text-font:"{{ font_text }}";--md-code-font:"{{ font_code }}"}</style>
     {{~ for href in stylesheets ~}}
+    {{~ if (string.starts_with href "http") || (string.starts_with href "//") ~}}
+    <link rel="stylesheet" href="{{ href }}">
+    {{~ else ~}}
     <link rel="stylesheet" href="{{ base_url }}{{ asset href }}">
+    {{~ end ~}}
     {{~ end ~}}
     {{~ # Helper functions for inline scripts (palette persistence, search index caching,
        # instant navigation). The vendored Material bundle references these globals during

@@ -30,7 +30,11 @@
     </script>
     <script src="{{ base_url }}assets/vendor/material/javascripts/bundle.d7400e89.min.js"></script>
     {{~ for src in scripts ~}}
+    {{~ if (string.starts_with src "http") || (string.starts_with src "//") ~}}
+    <script src="{{ src }}" defer></script>
+    {{~ else ~}}
     <script src="{{ base_url }}{{ asset src }}" defer></script>
+    {{~ end ~}}
     {{~ end ~}}
     {{~ for js in inline_scripts ~}}
     <script>{{ js }}</script>

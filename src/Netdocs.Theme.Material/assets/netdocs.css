@@ -164,15 +164,26 @@ body {
   --md-code-bg-color: hsla(var(--md-hue), 15%, 22%, 1);
 }
 
-.md-typeset pre > code,
 .md-typeset .highlight,
 .md-typeset .highlighttable {
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
+  overflow: hidden;
 }
 
+/* Bare <pre><code> blocks (not wrapped in a .highlight container) still need a
+   panel border, but a wrapped block must NOT get a second, inset border on the
+   inner <code> — that produced the "double border" seen on the reference page. */
+.md-typeset pre > code {
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .highlight pre > code,
+.md-typeset .highlighttable pre > code,
 .md-typeset .highlighttable .highlight {
   border: none;
+  border-radius: 0;
 }
 
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a

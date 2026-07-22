@@ -66,7 +66,10 @@ Each plugin entry has a `name` and an optional `options` map:
 ]
 ```
 
-Order matters — plugins run in the order listed. See the
+Order matters — plugins run in the order listed. A plugin can also carry an optional
+`order` (integer) to override its Markdown-preprocessor stage order without recompiling;
+see [Preprocessor ordering](../development/lifecycle.md#preprocessor-ordering). Set
+`"enabled": false` on an entry to keep it in config but skip loading it. See the
 [plugin catalogue](../plugins/index.md) for each plugin's options.
 
 ## Markdown extensions

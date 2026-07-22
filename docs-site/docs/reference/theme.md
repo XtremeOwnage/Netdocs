@@ -166,6 +166,9 @@ your `customDir` and it wins over the bundled version.
 | `partials/search.html` | Search box + results overlay markup. |
 | `partials/nav.html` | Sidebar navigation drawer. |
 | `partials/tabs.html` | Header tabs bar (only when `navigation.tabs` is off and you want a second row). |
+| `partials/content-actions.html` | Floating Edit / View-source buttons at the top-right of the article (`content.action.edit` / `content.action.view`). |
+| `partials/breadcrumbs.html` | Breadcrumb trail above the page title (`navigation.path`, driven by `breadcrumbs`). |
+| `partials/source-file.html` | "Last updated / Created" line under the article body (`show_source_meta`, non-post pages). |
 | `partials/toc.html` | Right-hand table of contents. |
 | `partials/footer.html` | Site footer: prev/next nav, copyright, social links. |
 | `partials/post-meta.html` | Blog-post byline: author avatar/name, date, reading time, categories. |

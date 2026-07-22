@@ -92,39 +92,48 @@ variables.
 
 ### Option 2 — A custom plugin (full power)
 
-For macros that need logic — reading files, calling helpers, generating HTML — write a tiny
-`IMarkdownPreprocessor` plugin. This is exactly how the built-in `fileuri`/`button` macros
-are implemented. A macro is just a regex replacement over the Markdown:
+For macros that need logic — reading files, calling helpers, generating HTML — subclass
+`UserDefinedMacro` and register named handlers. No regex or Markdown parsing required:
+function macros are called as `{{ name(...) }}`, variables as `{{ name }}`, and unknown
+tokens are left untouched.
 
 ```csharp
-using System.Text.RegularExpressions;
 using Netdocs.Abstractions;
 
-public sealed partial class YearMacroPlugin : IPlugin, IMarkdownPreprocessor
+public sealed class SiteMacros : UserDefinedMacro
 {
-    public string Name => "year-macro";
-    public int Order => 30; // run after the built-in macros plugin (25)
+    public override string Name => "site-macros";
 
-    public void Configure(IPluginContext ctx) { }
-
-    public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
-    {
-        var result = YearRegex().Replace(markdown, _ => DateTime.UtcNow.Year.ToString());
-        return Task.FromResult(result);
-    }
-
-    [GeneratedRegex(@"\{\{\s*year\s*\(\s*\)\s*\}\}")]
-    private static partial Regex YearRegex();
+    protected override void DefineMacros(IMacroBuilder macros) => macros
+        // {{ year() }} -> current year
+        .Add("year", () => DateTime.UtcNow.Year.ToString())
+        // {{ badge("stable") }} -> receives the quoted args in order
+        .Add("badge", args => $"<span class=\"badge\">{args[0]}</span>")
+        // {{ source() }} -> full access to the page and site
+        .Add("source", inv => $"[Edit]({inv.Site.Config.RepoUrl}/edit/main/docs/{inv.Page.RelativePath})")
+        // {{ product }} -> a bare-token variable
+        .Variable("product", "Netdocs");
 }
 ```
 
 ```markdown
-© {{ year() }} Example Corp.
+© {{ year() }} {{ product }} — {{ badge("stable") }}
 ```
 
-Build it into a DLL and load it with the [external-plugin loader](../development/external-plugins.md).
-See [Events & callbacks](../development/events-and-callbacks.md) for the full plugin
-interface list and where each hook runs in the build.
+A page opts out with front matter `ignore_macros: true` or `render_macros: false`, exactly
+like the built-in macros plugin. Override `Order` (default `30`) to run before/after other
+preprocessors, and override `Configure(ctx)` to read plugin options.
+
+!!! note "Advanced: raw preprocessor"
+    `UserDefinedMacro` is a thin helper over `IMarkdownPreprocessor`. If you need total
+    control over the transform (e.g. a syntax that isn't `{{ … }}`), implement
+    `IPlugin, IMarkdownPreprocessor` directly and run any regex/replacement you like in
+    `ProcessAsync` — this is how the built-in `fileuri`/`button` macros are implemented.
+
+Build your plugin into a DLL and load it with the
+[external-plugin loader](../development/external-plugins.md). See
+[Events & callbacks](../development/events-and-callbacks.md) for the full plugin interface
+list and where each hook runs in the build.
 
 ## Controlling where macros run
 

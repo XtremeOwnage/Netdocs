@@ -66,6 +66,7 @@ body {
   .nd-header-nav__link {
     display: flex;
     align-items: center;
+    position: relative;
     height: 100%;
     padding: 0 .6rem;
     color: var(--md-primary-bg-color);
@@ -85,7 +86,20 @@ body {
 
   .nd-header-nav__link--active {
     opacity: 1;
-    box-shadow: 0 -2px 0 var(--md-primary-bg-color) inset;
+  }
+
+  /* Clean, centred underline bar just beneath the active item's label. The link fills
+     the full header height, so anchor the bar relative to the vertical centre (where the
+     text sits) rather than the link's bottom edge — otherwise it strikes through the text. */
+  .nd-header-nav__link--active::after {
+    content: "";
+    position: absolute;
+    left: .6rem;
+    right: .6rem;
+    top: calc(50% + .55rem);
+    height: .12rem;
+    border-radius: .1rem;
+    background: var(--md-primary-bg-color);
   }
 
   /* Safety net: if a `.md-tabs` bar is ever emitted, keep it hidden — the
@@ -121,6 +135,44 @@ body {
 
 .md-typeset .md-path__item::before {
   content: none;
+}
+
+/* Material indents the breadcrumb trail with a 1.2rem side margin, which pushes the
+   section label to the right of the H1/body copy it sits above. Zero the side margins
+   so the breadcrumb aligns flush with the article's left edge. */
+.md-path {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* The primary (nav) and secondary (TOC) sidebars scroll their own content, but the
+   permanently visible scrollbar track looks broken on short pages. Hide the scrollbar
+   chrome while keeping the wheel/trackpad scroll behaviour intact. */
+.md-sidebar__scrollwrap {
+  scrollbar-width: none;
+}
+
+.md-sidebar__scrollwrap::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Give fenced code blocks a background that reads as a distinct panel against the page
+   (Material's default is only a few percent lighter, so blocks blend into the page on
+   the dark scheme). A hairline border reinforces the separation in both schemes. */
+[data-md-color-scheme="slate"] {
+  --md-code-bg-color: hsla(var(--md-hue), 15%, 22%, 1);
+}
+
+.md-typeset pre > code,
+.md-typeset .highlight,
+.md-typeset .highlighttable {
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+.md-typeset .highlighttable .highlight {
+  border: none;
 }
 
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a

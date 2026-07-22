@@ -5,9 +5,9 @@ title: macros
 # macros
 
 A minimal port of [mkdocs-macros]. The macros plugin lets you inject dynamic content into
-your Markdown *before* it is parsed. It ships two example function macros (`fileuri` and
-`button`), lets you define your own **variables** in config, and — for anything richer —
-documents how to add a macro by writing a small plugin.
+your Markdown *before* it is parsed. It ships three example function macros (`fileuri`,
+`button` and `download`), lets you define your own **variables** in config, and — for
+anything richer — documents how to add a macro by writing a small plugin.
 
 Macros are expanded as a Markdown **preprocessor**, so their output is parsed as normal
 Markdown/HTML afterwards.
@@ -60,6 +60,33 @@ Renders a Material-styled call-to-action button (`.md-button`) linking to the gi
 ```markdown
 {{ button("Get started", "getting-started/") }}
 ```
+
+### `download("file"[, "text"][, "mode"])`
+
+Resolves a doc or shipped asset (same lookup as `fileuri`) and renders a **download link** — a
+Material button with a download icon and the HTML5 `download` attribute, so the browser saves the
+file instead of navigating to it. This pairs naturally with a code block that *shows* a script while
+offering a one-click download of the same file.
+
+```markdown
+````markdown
+```bash title="setup.sh"
+--8<-- "scripts/setup.sh"
+```
+
+{{ download("scripts/setup.sh") }}
+````
+```
+
+- The optional second argument overrides the link text (default: `Download <filename>`).
+- The optional third argument is the URI **mode**, identical to
+  [`fileuri`'s modes](#choosing-the-uri-form): `absolute` (default), `path`, or `relative`.
+
+```markdown
+{{ download("scripts/setup.sh", "Grab the script", "relative") }}
+```
+
+If the file can't be found, an HTML comment is emitted instead of a broken link.
 
 ## Writing your own macros
 

@@ -5,12 +5,14 @@ using Netdocs.Core;
 namespace Netdocs.Plugins;
 
 /// <summary>
-/// Minimal mkdocs-macros port. Ships two example function macros to show the pattern:
+/// Minimal mkdocs-macros port. Ships three example function macros to show the pattern:
 /// <c>{{ fileuri("name") }}</c> resolves a doc or asset to its published URL (prefixed with
-/// <c>site_url</c>), and <c>{{ button("text", "url") }}</c> renders a Material-styled
-/// call-to-action button. Sites can define their own simple text macros without writing C#
-/// via the <c>variables</c> plugin option (each <c>key</c> becomes a <c>{{ key }}</c> token);
-/// richer macros are added by writing a custom <see cref="IMarkdownPreprocessor"/> plugin.
+/// <c>site_url</c>), <c>{{ button("text", "url") }}</c> renders a Material-styled
+/// call-to-action button, and <c>{{ download("file"[, "text"][, "mode"]) }}</c> renders a
+/// download link (HTML5 <c>download</c> attribute) to a doc/asset — handy paired with a code
+/// block that shows the same script. Sites can define their own simple text macros without
+/// writing C# via the <c>variables</c> plugin option (each <c>key</c> becomes a <c>{{ key }}</c>
+/// token); richer macros are added by writing a custom <see cref="IMarkdownPreprocessor"/> plugin.
 /// Honors mkdocs-macros' <c>render_by_default</c> option and the per-page <c>render_macros</c>
 /// / <c>ignore_macros</c> front-matter overrides.
 /// </summary>
@@ -57,6 +59,17 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
         result = ButtonRegex().Replace(result, m =>
             RenderButton(m.Groups["text"].Value, m.Groups["url"].Value));
+
+        result = DownloadRegex().Replace(result, m =>
+        {
+            var file = m.Groups["file"].Value;
+            var url = ResolveFileUri(file, m.Groups["mode"].Value, page, site);
+            if (url is null) return $"<!-- macros: download('{file}') not found -->";
+            var text = m.Groups["text"].Success && m.Groups["text"].Value.Length > 0
+                ? m.Groups["text"].Value
+                : $"Download {BaseName(file)}";
+            return RenderDownload(url, text, BaseName(file));
+        });
 
         // Bare `{{ name }}` tokens expand to a user-defined variable when one exists;
         // unknown tokens are left untouched so they can be handled elsewhere (or shown literally).
@@ -153,6 +166,12 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
     private static string RenderButton(string text, string url) =>
         $"""<a class="md-button" href="{Attr(url)}">{Attr(text)}</a>""";
 
+    /// <summary>Renders a download link for a resolved file URL, using the HTML5 <c>download</c>
+    /// attribute so the browser saves the file (with <paramref name="fileName"/> as the suggested
+    /// name) instead of navigating to it. Styled as a Material button with a download icon.</summary>
+    private static string RenderDownload(string url, string text, string fileName) =>
+        $"""<a class="md-button md-button--download" href="{Attr(url)}" download="{Attr(fileName)}">{Attr(text)}</a>""";
+
     private static string Attr(string text) => text
         .Replace("&", "&amp;")
         .Replace("\"", "&quot;")
@@ -165,6 +184,9 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
     [GeneratedRegex("""\{\{\s*button\s*\(\s*["'](?<text>[^"']*)["']\s*,\s*["'](?<url>[^"']+)["']\s*\)\s*\}\}""")]
     private static partial Regex ButtonRegex();
+
+    [GeneratedRegex("""\{\{\s*download\s*\(\s*["'](?<file>[^"']+)["']\s*(?:,\s*["'](?<text>[^"']*)["']\s*)?(?:,\s*["'](?<mode>[^"']*)["']\s*)?\)\s*\}\}""")]
+    private static partial Regex DownloadRegex();
 
     [GeneratedRegex("""\{\{\s*(?<name>[A-Za-z_][\w.]*)\s*\}\}""")]
     private static partial Regex VariableRegex();

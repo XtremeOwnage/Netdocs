@@ -155,4 +155,40 @@ public class NavigationTests
 
         Assert.Equal(new[] { "guide/", "guide/setup/" }, flat.ConvertAll(p => p.Url));
     }
+
+    [Fact]
+    public void AutoNav_BuildsHierarchyFromDirectories()
+    {
+        // No authored nav -> auto-nav should nest by folder, not dump everything flat.
+        var pages = new List<Netdocs.Abstractions.Page>
+        {
+            P("index.md", ""),
+            P("aws/index.md", "aws/"),
+            P("aws/iam/roles.md", "aws/iam/roles/"),
+            P("aws/iam/index.md", "aws/iam/"),
+            P("account-management/provisioning.md", "account-management/provisioning/"),
+        };
+        var config = new Netdocs.Abstractions.SiteConfig();
+
+        var nav = Netdocs.Core.Content.NavigationBuilder.Build(config, pages);
+
+        // Home (root index) first, then sections ordered alphabetically by folder name.
+        Assert.Equal("index.md", nav[0].Title); // P() uses rel path as title; root index is a link
+        Assert.False(nav[0].IsSection);
+
+        var accountMgmt = Assert.Single(nav, n => n.Title == "Account Management");
+        Assert.True(accountMgmt.IsSection);
+
+        var aws = Assert.Single(nav, n => n.Title == "Aws");
+        Assert.True(aws.IsSection);
+        Assert.NotNull(aws.SectionIndex);
+        Assert.Equal("aws/", aws.SectionIndex!.Url);
+
+        // aws has a nested "Iam" section with its own index promoted to the landing.
+        var iam = Assert.Single(aws.Children, n => n.Title == "Iam");
+        Assert.True(iam.IsSection);
+        Assert.Equal("aws/iam/", iam.SectionIndex!.Url);
+        Assert.Single(iam.Children); // roles.md, index promoted out
+        Assert.Equal("aws/iam/roles/", iam.Children[0].Url);
+    }
 }

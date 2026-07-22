@@ -54,12 +54,92 @@ public static class NavigationBuilder
             || name.Equals("README", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Builds a hierarchical nav from the pages' directory structure when no nav is
+    /// authored — mirroring MkDocs' default behaviour. Each folder becomes a section
+    /// (titleised from its name), an <c>index.md</c>/<c>README.md</c> becomes that
+    /// section's landing page, and entries are ordered alphabetically with index pages
+    /// first. A flat list (the previous behaviour) dumped every page into one level,
+    /// which for large sites overflowed the header nav.
+    /// </summary>
     private static IReadOnlyList<NavNode> AutoNav(IReadOnlyList<Page> pages)
     {
-        return pages
-            .OrderBy(p => p.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .Select(p => new NavNode { Title = p.Title, Page = p })
+        var root = new Dir("");
+        foreach (var page in pages)
+        {
+            var parts = page.RelativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var dir = root;
+            for (var i = 0; i < parts.Length - 1; i++)
+                dir = dir.Sub(parts[i]);
+            dir.Pages.Add(page);
+        }
+
+        var nodes = BuildLevel(root).ToList();
+
+        // A top-level index/README page becomes a plain landing link (e.g. "Home"),
+        // not a section, so it isn't swallowed by BuildLevel's index handling.
+        var home = root.Pages.FirstOrDefault(p => IsIndexPage(p.RelativePath));
+        if (home is not null)
+            nodes.Insert(0, new NavNode { Title = home.Title.Length > 0 ? home.Title : "Home", Page = home, Icon = PageIcon(home) });
+
+        return nodes;
+    }
+
+    /// <summary>Convert a directory's sub-folders and (non-index) pages into nav nodes,
+    /// interleaved and ordered alphabetically by name.</summary>
+    private static List<NavNode> BuildLevel(Dir dir)
+    {
+        var entries = new List<(string Key, NavNode Node)>();
+
+        foreach (var sub in dir.Subs.Values)
+        {
+            var children = BuildLevel(sub);
+            var index = sub.Pages.FirstOrDefault(p => IsIndexPage(p.RelativePath));
+            var section = new NavNode
+            {
+                Title = Titleize(sub.Name),
+                Children = children,
+                SectionIndex = index,
+                Icon = index is not null ? PageIcon(index) : null,
+            };
+            entries.Add((sub.Name, section));
+        }
+
+        foreach (var page in dir.Pages.Where(p => !IsIndexPage(p.RelativePath)))
+        {
+            var key = Path.GetFileNameWithoutExtension(page.RelativePath);
+            entries.Add((key, new NavNode { Title = page.Title, Page = page, Icon = PageIcon(page) }));
+        }
+
+        return entries
+            .OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(e => e.Node)
             .ToList();
+    }
+
+    /// <summary>Turn a folder/file slug into a human-readable section title
+    /// (e.g. "account-management" -> "Account Management").</summary>
+    private static string Titleize(string slug)
+    {
+        var words = slug.Replace('-', ' ').Replace('_', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < words.Length; i++)
+            words[i] = char.ToUpperInvariant(words[i][0]) + words[i][1..];
+        return words.Length > 0 ? string.Join(' ', words) : slug;
+    }
+
+    /// <summary>A node in the directory tree used to build the auto-nav.</summary>
+    private sealed class Dir(string name)
+    {
+        public string Name { get; } = name;
+        public SortedDictionary<string, Dir> Subs { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public List<Page> Pages { get; } = [];
+
+        public Dir Sub(string childName)
+        {
+            if (!Subs.TryGetValue(childName, out var d))
+                Subs[childName] = d = new Dir(childName);
+            return d;
+        }
     }
 
     /// <summary>Depth-first flatten of the nav tree to the linear order of real pages.</summary>

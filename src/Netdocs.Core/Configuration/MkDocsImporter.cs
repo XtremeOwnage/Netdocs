@@ -35,6 +35,7 @@ public static class MkDocsImporter
         AddIfSet(o, "copyright", c.Copyright);
         AddIfSet(o, "repoUrl", c.RepoUrl);
         AddIfSet(o, "repoName", c.RepoName);
+        AddIfSet(o, "editUri", c.EditUri);
         o["docsDir"] = c.DocsDir;
         o["siteDir"] = c.SiteDir;
 

@@ -11,6 +11,11 @@ public sealed class SiteConfig
     public string? RepoUrl { get; set; }
     public string? RepoName { get; set; }
 
+    /// <summary>Path fragment appended to <see cref="RepoUrl"/> to build per-page "edit" links,
+    /// e.g. <c>edit/main/docs/</c>. When null, edit/view action links are not emitted even if
+    /// the <c>content.action.edit</c>/<c>content.action.view</c> theme features are enabled.</summary>
+    public string? EditUri { get; set; }
+
     public string DocsDir { get; set; } = "docs";
     public string SiteDir { get; set; } = "site";
 

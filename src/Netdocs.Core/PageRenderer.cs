@@ -38,6 +38,22 @@ public static class PageRenderer
 
         var breadcrumbs = Breadcrumbs(site.Navigation, page);
 
+        // Per-page "edit"/"view source" links. Only meaningful for real source files
+        // (not generated pages) when the repo URL + edit_uri are configured.
+        string? editUrl = null, viewUrl = null;
+        if (!page.IsGenerated
+            && !string.IsNullOrEmpty(site.Config.RepoUrl)
+            && !string.IsNullOrEmpty(site.Config.EditUri))
+        {
+            var repo = site.Config.RepoUrl!.TrimEnd('/');
+            var editUri = site.Config.EditUri!.Trim('/');
+            var rel = page.RelativePath.Replace('\\', '/').TrimStart('/');
+            editUrl = $"{repo}/{editUri}/{rel}";
+            // Derive a "view" (blob) URL from the edit URL by swapping GitHub's action
+            // segment, so a single edit_uri drives both actions like mkdocs-material.
+            viewUrl = editUrl.Replace("/edit/", "/blob/");
+        }
+
         var model = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["config"] = site.Config,
@@ -66,6 +82,8 @@ public static class PageRenderer
             ["prev_page"] = prev,
             ["next_page"] = next,
             ["breadcrumbs"] = breadcrumbs,
+            ["edit_url"] = editUrl,
+            ["view_url"] = viewUrl,
             ["page_description"] = description,
             ["og_image"] = siteUrl.Length > 0 ? $"{siteUrl}/{socialPath}" : "/" + socialPath,
             ["og_url"] = siteUrl.Length > 0 ? $"{siteUrl}/{page.Url}" : "/" + page.Url,

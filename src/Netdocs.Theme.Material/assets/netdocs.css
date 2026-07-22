@@ -159,9 +159,16 @@ body {
 
 /* Give fenced code blocks a background that reads as a distinct panel against the page
    (Material's default is only a few percent lighter, so blocks blend into the page on
-   the dark scheme). A hairline border reinforces the separation in both schemes. */
+   the dark scheme). A hairline border plus a soft drop shadow lift the block off the
+   page so it "pops" as an elevated panel in both schemes. */
+:root {
+  /* Elevation shadow for code panels — tuned per scheme below. */
+  --nd-code-shadow: 0 0.1rem 0.4rem rgba(0, 0, 0, 0.12), 0 0.05rem 0.1rem rgba(0, 0, 0, 0.08);
+}
 [data-md-color-scheme="slate"] {
   --md-code-bg-color: hsla(var(--md-hue), 15%, 22%, 1);
+  /* Darker, larger shadow so the panel clearly lifts off the dark page. */
+  --nd-code-shadow: 0 0.25rem 0.85rem rgba(0, 0, 0, 0.55), 0 0.1rem 0.25rem rgba(0, 0, 0, 0.4);
 }
 
 .md-typeset .highlight,
@@ -169,6 +176,7 @@ body {
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
   overflow: hidden;
+  box-shadow: var(--nd-code-shadow);
 }
 
 /* Bare <pre><code> blocks (not wrapped in a .highlight container) still need a
@@ -177,13 +185,17 @@ body {
 .md-typeset pre > code {
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
+  box-shadow: var(--nd-code-shadow);
 }
 
+/* Inner children of a wrapped block share the container's border/shadow, so
+   reset theirs to avoid a doubled outline or a shadow bleeding inside the panel. */
 .md-typeset .highlight pre > code,
 .md-typeset .highlighttable pre > code,
 .md-typeset .highlighttable .highlight {
   border: none;
   border-radius: 0;
+  box-shadow: none;
 }
 
 /* Blog post sidebar (`.nd-post-sidebar`) rendered in the left column on post pages: a

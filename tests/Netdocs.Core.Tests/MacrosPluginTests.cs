@@ -94,6 +94,42 @@ public class MacrosPluginTests
         Assert.Contains("{{ unknown }}", result);
     }
 
+    [Fact]
+    public async Task FileUri_ModeVariants_FormatUrl()
+    {
+        var target = new Page { SourcePath = "a", RelativePath = "guides/setup/install.md", Url = "guides/setup/install/" };
+        var page = new Page { SourcePath = "b", RelativePath = "guides/index.md", Url = "guides/" };
+        var site = Site(target, page);
+
+        // Root-absolute path (never includes a host, even if site_url were set).
+        var path = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ fileuri(\"install.md\", \"path\") }}", site, default);
+        Assert.Contains("/guides/setup/install/", path);
+
+        // Page-relative URI: one `../` back out of guides/ to the site root.
+        var rel = await new MacrosPlugin()
+            .ProcessAsync(page, "{{ fileuri(\"install.md\", \"relative\") }}", site, default);
+        Assert.Contains("../guides/setup/install/", rel);
+    }
+
+    [Fact]
+    public async Task FileUri_AbsoluteMode_UsesSiteUrl()
+    {
+        var target = new Page { SourcePath = "a", RelativePath = "feed.md", Url = "feed/" };
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var site = Site(target, page);
+
+        var plugin = new MacrosPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>())
+        {
+            Config = new SiteConfig { SiteUrl = "https://example.com/" },
+        });
+
+        var result = await plugin.ProcessAsync(page, "{{ fileuri(\"feed.md\", \"absolute\") }}", site, default);
+
+        Assert.Contains("https://example.com/feed/", result);
+    }
+
     private sealed class FakeContext(IReadOnlyDictionary<string, object?> options) : IPluginContext
     {
         public SiteConfig Config { get; init; } = new();

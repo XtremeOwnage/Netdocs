@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Netdocs.Abstractions;
 using Netdocs.Plugins;
@@ -70,5 +72,38 @@ public class MacrosPluginTests
         var result = await new MacrosPlugin().ProcessAsync(page, md, Site(page), default);
 
         Assert.Equal(md, result);
+    }
+
+    [Fact]
+    public async Task Variables_ExpandDefinedTokens_AndLeaveUnknownUntouched()
+    {
+        var page = new Page { SourcePath = "b", RelativePath = "index.md", Url = "" };
+        var plugin = new MacrosPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>
+        {
+            ["variables"] = new Dictionary<string, object?>
+            {
+                ["product"] = "Netdocs",
+                ["version"] = "1.2.3",
+            },
+        }));
+
+        var result = await plugin.ProcessAsync(page, "{{ product }} v{{ version }} — {{ unknown }}", Site(page), default);
+
+        Assert.Contains("Netdocs v1.2.3", result);
+        Assert.Contains("{{ unknown }}", result);
+    }
+
+    private sealed class FakeContext(IReadOnlyDictionary<string, object?> options) : IPluginContext
+    {
+        public SiteConfig Config { get; init; } = new();
+        public BuildOptions Options { get; } = new();
+        public ILogger Logger { get; } = NullLogger.Instance;
+        public IServiceCollection Services { get; } = new ServiceCollection();
+        public IReadOnlyDictionary<string, object?> PluginOptions { get; } = options;
+        public void AddStylesheet(string href) { }
+        public void AddScript(string src, bool defer = true) { }
+        public void AddInlineScript(string javascript) { }
+        public void AddAsset(string sourcePath, string destRelative) { }
     }
 }

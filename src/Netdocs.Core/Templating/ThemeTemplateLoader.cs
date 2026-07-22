@@ -44,6 +44,7 @@ public static class TemplateFunctions
 
         var overrides = ExtractIconOverrides(model);
         globals.Import("social_icon", (string? name) => SocialIcon(name ?? "", overrides));
+        globals.Import("nav_icon", (string? name) => NavIcon(name ?? "", overrides));
 
         var versioner = (model is not null && model.TryGetValue("asset_versioner", out var v) ? v as AssetVersioner : null)
             ?? AssetVersioner.NoOp;
@@ -98,4 +99,28 @@ public static class TemplateFunctions
 
     private static string Svg(string path) =>
         $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"{path}\"/></svg>";
+
+    /// <summary>
+    /// Resolves a nav/badge icon to inline markup. Resolution order: custom <c>extra.social_icons</c>
+    /// override → curated Material glyph (<see cref="MaterialIcons"/>) → brand glyph
+    /// (<see cref="SocialIcon"/>) → a short literal string/emoji rendered as text. Returns an empty
+    /// string for a blank name so templates can call it unconditionally.
+    /// </summary>
+    private static string NavIcon(string name, IReadOnlyDictionary<string, string> overrides)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+
+        if (overrides.TryGetValue(name, out var exact))
+            return Svg(exact);
+
+        if (MaterialIcons.Path(name) is { } d)
+            return Svg(d);
+
+        // A short token with no slash is treated as an emoji/text glyph rather than an icon name.
+        if (!name.Contains('/') && name.Length <= 4)
+            return $"<span class=\"nd-emoji\">{System.Net.WebUtility.HtmlEncode(name)}</span>";
+
+        // Fall back to the brand-icon resolver (github, rss, mail, …); it returns a globe otherwise.
+        return SocialIcon(name, overrides);
+    }
 }

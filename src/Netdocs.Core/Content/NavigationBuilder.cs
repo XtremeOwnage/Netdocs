@@ -20,7 +20,7 @@ public static class NavigationBuilder
     private static NavNode? Resolve(NavItem item, IReadOnlyDictionary<string, Page> byRelative)
     {
         if (item.Path is not null && byRelative.TryGetValue(item.Path, out var page))
-            return new NavNode { Title = item.Title ?? page.Title, Page = page };
+            return new NavNode { Title = item.Title ?? page.Title, Page = page, Icon = item.Icon ?? PageIcon(page) };
 
         if (item.Children.Count > 0)
         {
@@ -35,13 +35,17 @@ public static class NavigationBuilder
                 children.RemoveAt(0);
             }
 
-            return new NavNode { Title = item.Title ?? "", Children = children, SectionIndex = sectionIndex };
+            return new NavNode { Title = item.Title ?? "", Children = children, SectionIndex = sectionIndex, Icon = item.Icon ?? (sectionIndex is not null ? PageIcon(sectionIndex) : null) };
         }
 
         return item.Path is null && item.Title is not null
-            ? new NavNode { Title = item.Title }
+            ? new NavNode { Title = item.Title, Icon = item.Icon }
             : null;
     }
+
+    /// <summary>A page can declare a nav icon via <c>icon:</c> front matter (mkdocs-material style).</summary>
+    private static string? PageIcon(Page page) =>
+        page.FrontMatter.TryGetValue("icon", out var v) && v is string s && s.Length > 0 ? s : null;
 
     private static bool IsIndexPage(string relativePath)
     {

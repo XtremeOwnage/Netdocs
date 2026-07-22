@@ -223,6 +223,7 @@ public sealed class NavItem
 {
     public string? Title { get; init; }
     public string? Path { get; init; }
+    public string? Icon { get; init; }
     public IReadOnlyList<NavItem> Children { get; init; } = [];
     public bool IsSection => Children.Count > 0 || Path is null;
 }

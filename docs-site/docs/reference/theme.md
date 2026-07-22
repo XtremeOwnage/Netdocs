@@ -281,3 +281,45 @@ precedence over the built-ins:
 }
 ```
 
+## Icons
+
+Nav items can show a small glyph before their label — the same "reference" look as
+mkdocs-material. Set an icon in **either** place:
+
+- **Front matter** on a page (mkdocs-material compatible):
+
+    ```yaml
+    ---
+    title: Code blocks
+    icon: code-braces
+    ---
+    ```
+
+- **Nav config** (`icon` on any nav entry, including sections):
+
+    ```json
+    "nav": [
+      { "title": "Setup", "icon": "rocket-launch", "children": [ /* … */ ] },
+      { "path": "reference/code-blocks.md", "icon": "code-braces" }
+    ]
+    ```
+
+An icon name is resolved in this order: a custom `extra.social_icons` override → a curated
+Material glyph → a brand glyph (`social_icon`) → a literal emoji/short string rendered as text
+(so `icon: "🚀"` works too). Fully-qualified names like `material/rocket-launch` also match —
+only the last path segment is used.
+
+### Curated icon names
+
+| Category | Names |
+|---|---|
+| Callouts | `alert`, `alert-circle`, `information`, `plus-circle` |
+| Content | `code-braces`, `tab`, `table`, `format-size`, `grid`, `image`, `format-list-bulleted`, `sigma`, `math-integral`, `tooltip-text` |
+| Diagrams | `sitemap`, `graph` |
+| Sections | `book`, `book-open-variant`, `puzzle`, `cog`, `cog-outline`, `rocket`, `rocket-launch`, `home`, `flask`, `heart` |
+| Files & actions | `file-document`, `cloud-upload`, `download`, `content-save`, `magnify`, `tag`, `shield-check` |
+| Fun | `emoticon-happy`, `cursor-default-click` |
+
+Need one that isn't listed? Add it via [`extra.social_icons`](#custom-icons) — the override map
+feeds nav icons and [badges](../plugins/macros.md) too.
+

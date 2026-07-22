@@ -120,10 +120,11 @@ public static class JsonConfigLoader
             var m = entry.AsMap();
             var title = m.Get("title").AsString();
             var path = m.Get("path").AsString();
+            var icon = m.Get("icon").AsString();
             var children = m.Get("children");
             result.Add(children is not null
-                ? new NavItem { Title = title, Children = ParseNav(children) }
-                : new NavItem { Title = title, Path = path });
+                ? new NavItem { Title = title, Icon = icon, Children = ParseNav(children) }
+                : new NavItem { Title = title, Path = path, Icon = icon });
         }
         return result;
     }

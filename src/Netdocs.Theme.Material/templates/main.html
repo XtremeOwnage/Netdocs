@@ -26,6 +26,7 @@ func render_nav(node, path, level)
       {{~ if node.section_index ~}}
       <div class="md-nav__link md-nav__container">
         <a href="{{ base_url }}{{ node.section_index.url }}" class="md-nav__link{{ if node.section_index.url == page.url }} md-nav__link--active{{ end }}">
+          {{~ if node.icon ~}}<span class="nd-nav-icon md-icon">{{ nav_icon node.icon }}</span>{{~ end ~}}
           <span class="md-ellipsis">{{ node.title }}</span>
         </a>
         <label class="md-nav__link " for="{{ path }}" id="{{ path }}_label" tabindex="0">
@@ -34,6 +35,7 @@ func render_nav(node, path, level)
       </div>
       {{~ else ~}}
       <label class="md-nav__link" for="{{ path }}" id="{{ path }}_label" tabindex="0">
+        {{~ if node.icon ~}}<span class="nd-nav-icon md-icon">{{ nav_icon node.icon }}</span>{{~ end ~}}
         <span class="md-ellipsis">{{ node.title }}</span>
         <span class="md-nav__icon md-icon"></span>
       </label>
@@ -54,6 +56,7 @@ func render_nav(node, path, level)
   {{~ else ~}}
     <li class="md-nav__item{{ if active }} md-nav__item--active{{ end }}">
       <a href="{{ base_url }}{{ node.url }}" class="md-nav__link{{ if active }} md-nav__link--active{{ end }}">
+        {{~ if node.icon ~}}<span class="nd-nav-icon md-icon">{{ nav_icon node.icon }}</span>{{~ end ~}}
         <span class="md-ellipsis">{{ node.title }}</span>
       </a>
       {{~ if toc_integrate && node.url == page.url ~}}{{ render_integrated_toc }}{{~ end ~}}

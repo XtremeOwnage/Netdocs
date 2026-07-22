@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Netdocs.Abstractions;
 using Netdocs.Core;
+using Netdocs.Core.Templating;
 
 namespace Netdocs.Plugins;
 
@@ -70,6 +71,27 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
                 : $"Download {BaseName(file)}";
             return RenderDownload(url, text, BaseName(file));
         });
+
+        // Reference badges (mkdocs-material style): `version(...)`, `flag(...)`, `badge(...)`.
+        result = VersionRegex().Replace(result, m =>
+        {
+            var text = Attr(m.Groups["ver"].Value);
+            var body = m.Groups["url"].Success && m.Groups["url"].Value.Length > 0
+                ? $"""<a href="{Attr(m.Groups["url"].Value)}">{text}</a>"""
+                : text;
+            return RenderBadge("tag", body);
+        });
+
+        result = FlagRegex().Replace(result, m =>
+        {
+            var (icon, label) = FlagStyle(m.Groups["name"].Value.Trim().ToLowerInvariant());
+            var text = m.Groups["text"].Success && m.Groups["text"].Value.Length > 0
+                ? m.Groups["text"].Value : label;
+            return RenderBadge(icon, Attr(text));
+        });
+
+        result = BadgeRegex().Replace(result, m =>
+            RenderBadge(m.Groups["icon"].Value, Attr(m.Groups["text"].Value)));
 
         // Bare `{{ name }}` tokens expand to a user-defined variable when one exists;
         // unknown tokens are left untouched so they can be handled elsewhere (or shown literally).
@@ -172,6 +194,28 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
     private static string RenderDownload(string url, string text, string fileName) =>
         $"""<a class="md-button md-button--download" href="{Attr(url)}" download="{Attr(fileName)}">{Attr(text)}</a>""";
 
+    /// <summary>Renders a mkdocs-material style badge: an icon pill followed by a text pill. The
+    /// <paramref name="icon"/> is a curated Material icon name; unknown names fall back to a tag.</summary>
+    private static string RenderBadge(string icon, string textHtml)
+    {
+        var path = MaterialIcons.Path(icon) ?? MaterialIcons.Path("tag")!;
+        var svg = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="{path}"/></svg>""";
+        return $"""<span class="nd-badge"><span class="nd-badge__icon">{svg}</span><span class="nd-badge__text">{textHtml}</span></span>""";
+    }
+
+    /// <summary>Maps a known feature-flag name to an icon + default label (mkdocs-material parity).</summary>
+    private static (string Icon, string Label) FlagStyle(string name) => name switch
+    {
+        "experimental" => ("flask", "Experimental"),
+        "required" => ("alert", "Required"),
+        "default" => ("shield-check", "Default"),
+        "optional" => ("cog-outline", "Optional"),
+        "beta" => ("flask", "Beta"),
+        "new" => ("rocket-launch", "New"),
+        "deprecated" => ("alert-circle", "Deprecated"),
+        _ => ("information", name.Length > 0 ? char.ToUpperInvariant(name[0]) + name[1..] : "Note"),
+    };
+
     private static string Attr(string text) => text
         .Replace("&", "&amp;")
         .Replace("\"", "&quot;")
@@ -187,6 +231,15 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
     [GeneratedRegex("""\{\{\s*download\s*\(\s*["'](?<file>[^"']+)["']\s*(?:,\s*["'](?<text>[^"']*)["']\s*)?(?:,\s*["'](?<mode>[^"']*)["']\s*)?\)\s*\}\}""")]
     private static partial Regex DownloadRegex();
+
+    [GeneratedRegex("""\{\{\s*version\s*\(\s*["'](?<ver>[^"']+)["']\s*(?:,\s*["'](?<url>[^"']*)["']\s*)?\)\s*\}\}""")]
+    private static partial Regex VersionRegex();
+
+    [GeneratedRegex("""\{\{\s*flag\s*\(\s*["'](?<name>[^"']+)["']\s*(?:,\s*["'](?<text>[^"']*)["']\s*)?\)\s*\}\}""")]
+    private static partial Regex FlagRegex();
+
+    [GeneratedRegex("""\{\{\s*badge\s*\(\s*["'](?<icon>[^"']+)["']\s*,\s*["'](?<text>[^"']*)["']\s*\)\s*\}\}""")]
+    private static partial Regex BadgeRegex();
 
     [GeneratedRegex("""\{\{\s*(?<name>[A-Za-z_][\w.]*)\s*\}\}""")]
     private static partial Regex VariableRegex();

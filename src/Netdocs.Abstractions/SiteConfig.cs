@@ -49,6 +49,9 @@ public sealed class SiteConfig
     /// <summary>Output optimization toggles (HTML minification, etc.).</summary>
     public OptimizeConfig Optimize { get; set; } = new();
 
+    /// <summary>Optional build-time validation (internal links, anchors, orphaned files).</summary>
+    public ValidationConfig Validation { get; set; } = new();
+
     /// <summary>Absolute path to the project root (folder containing mkdocs.yml).</summary>
     public string ProjectRoot { get; set; } = "";
 
@@ -180,6 +183,29 @@ public sealed class OptimizeConfig
 
     /// <summary>Quality (1-100) for generated webp images. Default 80.</summary>
     public int WebpQuality { get; set; } = 80;
+}
+
+/// <summary>
+/// Build-time validation. Every enabled check emits a <c>warning</c> per problem; combine with
+/// <c>--strict</c> (or <c>MKDOCS_STRICT=1</c>) to turn those warnings into a non-zero build exit.
+/// All checks are opt-in and default to <c>false</c>.
+/// </summary>
+public sealed class ValidationConfig
+{
+    /// <summary>Verify that internal links and asset references (<c>href</c>/<c>src</c>) in the
+    /// rendered pages resolve to a file that exists in the output. External URLs, anchors, and
+    /// <c>mailto:</c>/<c>tel:</c>/<c>data:</c> links are skipped.</summary>
+    public bool Links { get; set; }
+
+    /// <summary>Verify that <c>#fragment</c> anchors in internal links point at an element that
+    /// actually has that <c>id</c> on the target page. Requires <see cref="Links"/>.</summary>
+    public bool Anchors { get; set; }
+
+    /// <summary>Warn about image assets under the docs directory that no rendered page references.</summary>
+    public bool UnusedImages { get; set; }
+
+    /// <summary>Warn about markdown pages that are not reachable from the navigation tree.</summary>
+    public bool OrphanPages { get; set; }
 }
 
 /// <summary>An authored navigation entry: either a link to a page or a titled section.</summary>

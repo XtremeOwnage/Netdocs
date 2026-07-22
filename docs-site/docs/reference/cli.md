@@ -36,7 +36,7 @@ If no command is given, `build` is assumed.
 | `--port <port>` | `-p` | Dev server port for `serve` (default `8000`). |
 | `--clean` | | Remove existing output before building. |
 | `--no-cache` | | Ignore the incremental render cache and re-render every page. |
-| `--strict` | | Fail on plugin/template errors. |
+| `--strict` | | Treat build warnings (including [validation](validation.md) problems, plugin/template errors) as failures. |
 | `--prod` | `--production` | Production build (enables prod-only plugins such as social cards). |
 | `--verbose` | `-v` | Verbose (Trace) logging. |
 | `--remote <name>` | | `watch`: git remote to poll (default `origin`). |

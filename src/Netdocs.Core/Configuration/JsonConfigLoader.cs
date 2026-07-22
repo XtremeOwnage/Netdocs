@@ -43,8 +43,17 @@ public static class JsonConfigLoader
             Slugify = ParseSlugify(root.Get("slugify").AsMap()),
             Deploy = ParseDeploy(root.Get("deploy").AsMap()),
             Optimize = ParseOptimize(root.Get("optimize").AsMap()),
+            Validation = ParseValidation(root.Get("validation").AsMap()),
         };
     }
+
+    private static ValidationConfig ParseValidation(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Links = m.Get("links").AsBool(false),
+        Anchors = m.Get("anchors").AsBool(false),
+        UnusedImages = m.Get("unusedImages").AsBool(false),
+        OrphanPages = m.Get("orphanPages").AsBool(false),
+    };
 
     private static DeployConfig ParseDeploy(IReadOnlyDictionary<string, object?> m) => new()
     {

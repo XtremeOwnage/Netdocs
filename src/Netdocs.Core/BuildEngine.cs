@@ -125,6 +125,7 @@ public sealed class BuildEngine(
         site.State["asset_versioner"] = new AssetVersioner(ThemePaths.AssetsDir, config.AbsoluteDocsDir);
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
+        var renderedPages = new ConcurrentBag<Validation.RenderedPage>();
         var minify = config.Optimize.MinifyHtml;
         var webpWrap = config.Optimize.ConvertImagesToWebp;
         Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
@@ -133,6 +134,7 @@ public sealed class BuildEngine(
             if (webpWrap) html = Optimization.WebpHtmlRewriter.Rewrite(html);
             if (minify) html = Optimization.HtmlMinifier.Minify(html);
             rendered.Add((page.OutputPath, html));
+            renderedPages.Add(new Validation.RenderedPage(page, html));
         });
         var changed = 0;
         foreach (var (path, html) in rendered)
@@ -183,6 +185,11 @@ public sealed class BuildEngine(
         // which is what makes incremental republishing cheap for the watch daemon.
         var pruned = OutputWriter.PruneStale(site, config.AbsoluteSiteDir);
         if (pruned > 0) _log.LogInformation("Pruned {Count} stale output files", pruned);
+
+        // 14. Optional build-time validation (links, anchors, unused images, orphan pages).
+        // Runs last so every page/asset/plugin output is materialized on disk. Problems are
+        // logged as warnings; `--strict` (or MKDOCS_STRICT) turns them into a failing build.
+        Validation.BuildValidator.Validate(site, renderedPages.ToList(), _log);
 
         sw.Stop();
         _log.LogInformation("Built {Count} pages in {Ms} ms", site.Pages.Count, sw.ElapsedMilliseconds);

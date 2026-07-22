@@ -89,4 +89,4 @@ Choose **Netdocs** if you want a fast, single-binary/container build, typed exte
 built-in deploy/optimization, and your Markdown + plugin needs are covered above. Stay on
 **Material for MkDocs** if you depend on a niche PyMdown extension, the Python plugin ecosystem, or
 mike-based doc versioning that isn't implemented yet — or run both and
-[diff the output](../setup/migrating-from-mkdocs.md#5-verify-parity) before switching.
+[diff the output](../setup/migrating-from-mkdocs.md#verify-parity) before switching.

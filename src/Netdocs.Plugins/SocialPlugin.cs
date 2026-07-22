@@ -59,6 +59,10 @@ public sealed class SocialPlugin : IPlugin, IBuildHook
             site.TrackOutput(dest);
             if (_cache && File.Exists(dest)) return;
 
+            // Defensive: ensure the parent directory exists even if the shared
+            // outDir was pruned or the card path is ever nested. Cheap + idempotent.
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+
             var title = string.IsNullOrWhiteSpace(page.Title) ? site.Config.SiteName : page.Title;
             var description = page.FrontMatter.TryGetValue("description", out var d) && d is string ds && ds.Length > 0
                 ? ds : site.Config.SiteDescription ?? "";

@@ -138,7 +138,8 @@ public static class JsonConfigLoader
             var name = m.Get("name").AsString();
             if (name is null) continue;
             if (m.Get("enabled").AsBool(true) == false) continue;
-            result.Add(new PluginConfig { Name = name, Options = m.Get("options").AsMap() });
+            var order = m.Get("order") is { } orderNode ? orderNode.AsInt() : (int?)null;
+            result.Add(new PluginConfig { Name = name, Options = m.Get("options").AsMap(), Order = order });
         }
         return result;
     }

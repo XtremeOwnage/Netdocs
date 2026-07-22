@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Netdocs.Abstractions;
+using Netdocs.Core;
 
 namespace Netdocs.Plugins;
 
@@ -50,7 +51,7 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
 
         var result = FileUriRegex().Replace(markdown, m =>
         {
-            var url = ResolveFileUri(m.Groups["file"].Value, page, site);
+            var url = ResolveFileUri(m.Groups["file"].Value, m.Groups["mode"].Value, page, site);
             return url ?? $"<!-- macros: fileuri('{m.Groups["file"].Value}') not found -->";
         });
 
@@ -83,7 +84,7 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
     private static bool? TryBool(Page page, string key) =>
         page.FrontMatter.TryGetValue(key, out var v) && v is bool b ? b : null;
 
-    private string? ResolveFileUri(string filename, Page page, SiteContext site)
+    private string? ResolveFileUri(string filename, string mode, Page page, SiteContext site)
     {
         var currentDir = DirName(page.RelativePath);
 
@@ -91,11 +92,32 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
         var match = site.Pages.FirstOrDefault(p =>
                         BaseName(p.RelativePath) == filename && DirName(p.RelativePath) == currentDir)
                     ?? site.Pages.FirstOrDefault(p => BaseName(p.RelativePath) == filename);
-        if (match is not null) return Join(match.Url);
+        if (match is not null) return Format(match.Url, mode, page);
 
         // Fall back to a static asset that ships to the output verbatim.
         var assetRel = ResolveAsset(filename, currentDir);
-        return assetRel is null ? null : Join(assetRel);
+        return assetRel is null ? null : Format(assetRel, mode, page);
+    }
+
+    /// <summary>
+    /// Formats a resolved root-relative target URL according to the optional macro <c>mode</c>:
+    /// <list type="bullet">
+    ///   <item><c>""</c>/<c>absolute</c>/<c>url</c> — full URL prefixed with <c>site_url</c> when
+    ///   configured (falls back to a root-absolute <c>/path</c>). This is the default.</item>
+    ///   <item><c>path</c>/<c>root</c> — a root-absolute <c>/path</c>, never including the host.</item>
+    ///   <item><c>relative</c>/<c>rel</c> — a page-relative URI (<c>../</c> back to the site root),
+    ///   which stays correct when the site is served under a base path.</item>
+    /// </list>
+    /// </summary>
+    private string Format(string url, string mode, Page page)
+    {
+        var raw = url.TrimStart('/');
+        return (mode?.Trim().ToLowerInvariant()) switch
+        {
+            "path" or "root" => "/" + raw,
+            "relative" or "rel" => PageRenderer.BaseUrl(page.Url) + raw,
+            _ => Join(raw),
+        };
     }
 
     private string? ResolveAsset(string filename, string currentDir)
@@ -138,7 +160,7 @@ public sealed partial class MacrosPlugin : IPlugin, IMarkdownPreprocessor
         .Replace(">", "&gt;")
         .Replace("'", "&apos;");
 
-    [GeneratedRegex("""\{\{\s*fileuri\s*\(\s*["'](?<file>[^"']+)["']\s*\)\s*\}\}""")]
+    [GeneratedRegex("""\{\{\s*fileuri\s*\(\s*["'](?<file>[^"']+)["']\s*(?:,\s*["'](?<mode>[^"']*)["']\s*)?\)\s*\}\}""")]
     private static partial Regex FileUriRegex();
 
     [GeneratedRegex("""\{\{\s*button\s*\(\s*["'](?<text>[^"']*)["']\s*,\s*["'](?<url>[^"']+)["']\s*\)\s*\}\}""")]

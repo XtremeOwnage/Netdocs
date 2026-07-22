@@ -41,7 +41,7 @@ engine-owned.
 | # | Stage | Extension point | Notes |
 | --- | --- | --- | --- |
 | 1 | Load configuration | — | `appsettings.json` becomes `SiteConfig`. |
-| 2 | Load external plugins | *(discovery)* | `plugins/*.dll` are registered but not yet enabled. See [External plugins](../reference/external-plugins.md). |
+| 2 | Load external plugins | *(discovery)* | `plugins/*.dll` are registered but not yet enabled. See [External plugins](external-plugins.md). |
 | 3 | Configure plugins | `IPlugin.Configure` | Called **once** per enabled plugin. Register assets/scripts/services here. Runs in `appsettings.json` plugin order. |
 | 4 | Discover content | — | Walks `docs/**`, honoring `.mkdocsignore` / `exclude`. |
 | 5 | Navigation filters | `INavigationFilter.ShouldInclude` | A page is kept only if **all** filters return `true`. |

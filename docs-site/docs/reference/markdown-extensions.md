@@ -75,18 +75,24 @@ Wrap a key combination in `++…++` to render Material keyboard keys:
 Save with ++ctrl+s++ · quit with ++ctrl+alt+del++
 ```
 
+Renders as:
+
+Save with ++ctrl+s++ · quit with ++ctrl+alt+del++
+
 Common key names (`ctrl`, `alt`, `shift`, `cmd`, `tab`, `esc`, `enter`, arrows, `f1`–`f24`,
 …) get their Material glyph and label; anything else renders as a `key-<name>` `<kbd>`.
 
 ### CriticMarkup
 
+CriticMarkup annotations render inline. The **Renders** column below is live output:
+
 | Syntax | Renders |
 | --- | --- |
-| `{++added++}` | inserted text |
-| `{--removed--}` | deleted text |
-| `{==highlight==}` | highlighted text |
-| `{>>comment<<}` | editorial comment |
-| `{~~old~>new~~}` | substitution (delete + insert) |
+| `{++added++}` | {++added++} |
+| `{--removed--}` | {--removed--} |
+| `{==highlight==}` | {==highlight==} |
+| `{>>comment<<}` | {>>comment<<} |
+| `{~~old~>new~~}` | {~~old~>new~~} |
 
 ### Footnotes
 
@@ -98,6 +104,12 @@ Here is a statement that needs a citation.[^src]
 
 [^src]: The supporting detail, rendered at the foot of the page with a back-link.
 ```
+
+Renders as:
+
+Here is a statement that needs a citation.[^src]
+
+[^src]: The supporting detail, rendered at the foot of the page with a back-link.
 
 The reference renders as a superscript link to the definition, and the definition gets a
 return arrow back to the reference.
@@ -111,7 +123,11 @@ Emoji shortcodes render as [Twemoji](https://github.com/jdecked/twemoji) SVG ima
 Ship it :rocket:
 ```
 
-produces `<img class="twemoji" …>` elements served from a pinned jsDelivr CDN. To
+Renders as:
+
+Ship it :rocket: — with love :heart: and a thumbs up :thumbsup:
+
+Emoji produce `<img class="twemoji" …>` elements served from a pinned jsDelivr CDN. To
 self-host the assets (or pin a different set), override the base URL:
 
 ```json

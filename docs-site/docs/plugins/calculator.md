@@ -67,10 +67,11 @@ outputs:
 ## How it works
 
 The plugin runs as a Markdown preprocessor (order `15`) and replaces each `calc` fence with
-a raw-HTML `<form class="nd-calc">`. A single evaluator script is injected **once per page**;
-it collects each form's inputs into named variables, evaluates every output expression, and
-updates the results on every `input`/`change`. It also re-binds on Material's `document$`
-observable, so calculators keep working with instant navigation.
+a raw-HTML `<form class="nd-calc">`. The evaluator itself is registered **once for the whole
+site** (not injected into page content), so it never clutters your Markdown. It collects each
+form's inputs into named variables, evaluates every output expression, and updates the results
+on every `input`/`change`. It also binds on Material's `document$` observable, so calculators
+keep working with instant navigation.
 
 ## Inputs
 

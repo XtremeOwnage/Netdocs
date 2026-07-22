@@ -44,6 +44,7 @@ public static class ConfigLoader
             Logo = m.Get("logo").AsString(),
             Favicon = m.Get("favicon").AsString(),
             CustomDir = m.Get("custom_dir").AsString(),
+            Highlight = m.Get("highlight").AsString() ?? "highlightjs",
             Features = m.Get("features").AsList().Select(x => x.AsString() ?? "").Where(s => s.Length > 0).ToList(),
             Font = m.Get("font").AsMap(),
             Icon = m.Get("icon").AsMap(),

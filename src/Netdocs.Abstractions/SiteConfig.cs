@@ -60,6 +60,14 @@ public sealed class ThemeConfig
     public string? CustomDir { get; set; }
     public IReadOnlyList<PaletteConfig> Palette { get; set; } = [];
     public IReadOnlyList<string> Features { get; set; } = [];
+    /// <summary>Selects the client-side syntax-highlighting renderer for fenced code blocks.
+    /// The Markdig fence parser (titles, line numbers, hl_lines, mermaid) always runs in core
+    /// and emits neutral <c>&lt;pre&gt;&lt;code class="language-x"&gt;</c> HTML; this only chooses
+    /// how that HTML is colourised in the browser. Built-in values: <c>highlightjs</c> (default,
+    /// highlight.js via CDN with line numbers) and <c>none</c> (plain, un-highlighted blocks).
+    /// Any other value is treated as <c>custom</c>: the theme injects no highlighter and you supply
+    /// your own via <c>extra_javascript</c>/<c>extra_css</c> (e.g. Prism, Shiki).</summary>
+    public string Highlight { get; set; } = "highlightjs";
     public IReadOnlyDictionary<string, object?> Font { get; set; } = new Dictionary<string, object?>();
     public IReadOnlyDictionary<string, object?> Icon { get; set; } = new Dictionary<string, object?>();
 }

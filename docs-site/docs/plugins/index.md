@@ -45,8 +45,8 @@ content that uses them (for example [table-reader](table-reader.md) is a no-op o
 ```
 
 Add [`blog`](blog.md) if you publish posts, [`file-filter`](file-filter.md) for
-environment-driven content gating, and [`affiliate-links`](affiliate-links.md) if you use
-affiliate links. A few plugins are intentionally left out of the "enable everything" default:
+environment-driven content gating, and [`link-notes`](link-notes.md) if you want to
+annotate outbound links (e.g. affiliate disclosures). A few plugins are intentionally left out of the "enable everything" default:
 
 | Plugin | Why it's opt-in |
 |---|---|

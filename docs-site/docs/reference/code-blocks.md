@@ -38,6 +38,19 @@ $ netdocs build
 ```
 ````
 
+### Supported languages
+
+Highlighting is powered by [highlight.js](https://highlightjs.org/) and covers all of its
+["common" languages](https://github.com/highlightjs/highlight.js/blob/main/SUPPORTED_LANGUAGES.md)
+(Python, JavaScript/TypeScript, C#, Go, Rust, Java, Ruby, PHP, C/C++, JSON, YAML, XML/HTML, CSS,
+SQL, Bash/shell, Markdown, and more). Netdocs additionally registers several infrastructure
+languages that are not in that common set:
+
+`powershell`, `dockerfile`, `nginx`, `apache`, `http`, `dns` (zone files), `properties` (`.env` /
+`.properties`), `dart`, `scala`, and `x86asm`.
+
+Any language highlight.js does not recognise falls back to a plain block rather than erroring.
+
 ```
 $ netdocs build
 ```

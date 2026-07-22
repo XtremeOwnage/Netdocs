@@ -60,6 +60,8 @@ If you're migrating, read this alongside the [migration guide](../setup/migratin
 - **Output optimization.** Optional HTML/CSS/JS minification and WebP image conversion are
   first-class build toggles.
 - **A calculator plugin.** Interactive `calc` fences render as live forms — no MkDocs equivalent.
+- **Live-reload dev server.** `netdocs serve` runs a Kestrel dev server that watches your files,
+  rebuilds incrementally, and pushes changes to the browser over a WebSocket.
 - **Config importer.** `netdocs import` gets you from `mkdocs.yml` to `appsettings.json` in one step.
 
 ## Known gaps / not implemented yet
@@ -71,7 +73,6 @@ Notable things that are **not** implemented (or only partially) today:
 |---|---|---|
 | Arbitrary PyMdown extensions | Partial | The commonly-used set is built in; niche PyMdown extensions have no equivalent. |
 | Python `hooks:` / plugin ecosystem | Not applicable | Netdocs plugins are C#. Port logic to a C# plugin or an [external DLL](../development/external-plugins.md). |
-| `mkdocs serve` live-reload dev server | Not yet | Use `netdocs build` (fast, cached); a watch mode is on the roadmap. |
 | Versioned docs (mike) | Not yet | No built-in multi-version switcher. |
 | Instant prefetch / progressive rendering knobs | Partial | Instant navigation works; not every Material `navigation.*` toggle is wired. |
 | i18n / static site search in non-Latin languages | Partial | Search supports configured `lang`; full CJK tokenization is limited. |
@@ -87,5 +88,5 @@ contributions are welcome.
 Choose **Netdocs** if you want a fast, single-binary/container build, typed extensibility, and
 built-in deploy/optimization, and your Markdown + plugin needs are covered above. Stay on
 **Material for MkDocs** if you depend on a niche PyMdown extension, the Python plugin ecosystem, or
-`mkdocs serve`/mike features that aren't implemented yet — or run both and
+mike-based doc versioning that isn't implemented yet — or run both and
 [diff the output](../setup/migrating-from-mkdocs.md#5-verify-parity) before switching.

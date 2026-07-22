@@ -1,0 +1,17 @@
+{{~ # ---------------------------------------------------------------------------
+   # partials/social.html — Social links shown at the right of the header.
+   #
+   # Data:  `extra.social` in your config — a list of { icon, link } entries.
+   #        `social_icon <name>` resolves an icon name (e.g. "fontawesome/brands/github")
+   #        to an inline SVG.
+   #
+   # Override: drop a file at `<custom_dir>/partials/social.html` to change how the
+   #        social links render, without touching the header. Return nothing to hide them.
+   # --------------------------------------------------------------------------- ~}}
+{{~ if extra.social ~}}
+<nav class="md-header__social" aria-label="Social">
+  {{~ for link in extra.social ~}}
+  <a href="{{ link.link }}" class="md-header__button md-icon" title="{{ link.icon }}" target="_blank" rel="noopener">{{ social_icon link.icon }}</a>
+  {{~ end ~}}
+</nav>
+{{~ end ~}}

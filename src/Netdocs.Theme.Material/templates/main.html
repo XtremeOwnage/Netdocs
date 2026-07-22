@@ -89,48 +89,7 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
 <!doctype html>
 <html lang="{{ config.theme.language }}" class="no-js">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="description" content="{{ config.site_description }}">
-    {{ if config.site_author }}<meta name="author" content="{{ config.site_author }}">{{ end }}
-    <title>{{ if !is_homepage && page.title != "" }}{{ page.title }} - {{ end }}{{ config.site_name }}</title>
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="{{ config.site_name }}">
-    <meta property="og:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
-    <meta property="og:description" content="{{ page_description }}">
-    <meta property="og:image" content="{{ og_image }}">
-    <meta property="og:url" content="{{ og_url }}">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{ if page.title != '' }}{{ page.title }}{{ else }}{{ config.site_name }}{{ end }}">
-    <meta name="twitter:description" content="{{ page_description }}">
-    <meta name="twitter:image" content="{{ og_image }}">
-    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
-    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
-    <link rel="stylesheet" href="{{ base_url }}{{ asset "assets/netdocs.css" }}">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family={{ string.replace font_text ' ' '+' }}:300,300i,400,400i,700,700i%7C{{ string.replace font_code ' ' '+' }}:400,400i,700,700i&display=fallback">
-    <style>:root{--md-text-font:"{{ font_text }}";--md-code-font:"{{ font_code }}"}</style>
-    {{~ for href in stylesheets ~}}
-    <link rel="stylesheet" href="{{ base_url }}{{ asset href }}">
-    {{~ end ~}}
-    {{~ # Helper functions for inline scripts (palette persistence, search index caching,
-       # instant navigation). The vendored Material bundle references these globals during
-       # init; without them it throws `__md_get is not defined`, which aborts the whole
-       # observable chain (breaking search, the palette toggle, and instant loading). ~}}
-    <script>
-      __md_scope = new URL("{{ base_url }}", location)
-      __md_hash = v => [...v].reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0)
-      __md_get = (key, storage = localStorage, scope = __md_scope) => (
-        JSON.parse(storage.getItem(scope.pathname + "." + key))
-      )
-      __md_set = (key, value, storage = localStorage, scope = __md_scope) => {
-        try {
-          storage.setItem(scope.pathname + "." + key, JSON.stringify(value))
-        } catch (err) {
-          /* Uncritical, just swallow */
-        }
-      }
-    </script>
+    {{ include "partials/head.html" }}
   </head>
   <body dir="ltr" data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}" data-base="{{ base_url }}">
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -211,32 +170,6 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
 
     <div class="md-dialog" data-md-component="dialog"><div class="md-dialog__inner md-typeset"></div></div>
 
-    <script id="__config" type="application/json">
-      {
-        "base": "{{ base_url }}",
-        "features": [{{~ for f in features ~}}"{{ f }}"{{~ if !for.last ~}}, {{~ end ~}}{{~ end ~}}],
-        "translations": {
-          "clipboard.copy": "Copy to clipboard",
-          "clipboard.copied": "Copied to clipboard",
-          "search.result.placeholder": "Type to start searching",
-          "search.result.none": "No matching documents",
-          "search.result.one": "1 matching document",
-          "search.result.other": "# matching documents",
-          "search.result.more.one": "1 more on this page",
-          "search.result.more.other": "# more on this page",
-          "search.result.term.missing": "Missing"
-        },
-        "search": "{{ base_url }}assets/vendor/material/javascripts/workers/search.2c215733.min.js"
-      }
-    </script>
-    <script src="{{ base_url }}assets/vendor/material/javascripts/bundle.d7400e89.min.js"></script>
-    {{~ for src in scripts ~}}
-    <script src="{{ base_url }}{{ asset src }}" defer></script>
-    {{~ end ~}}
-    {{~ for js in inline_scripts ~}}
-    <script>{{ js }}</script>
-    {{~ end ~}}
-    {{~ if (highlight | string.downcase) == "highlightjs" ~}}{{ include "partials/highlight.html" }}{{~ end ~}}
-    {{ include "partials/mermaid.html" }}
+    {{ include "partials/scripts.html" }}
   </body>
 </html>

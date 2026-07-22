@@ -31,14 +31,8 @@
       {{~ end ~}}
     </nav>
     {{~ end ~}}
-    {{~ # Social links (right). ~}}
-    {{~ if extra.social ~}}
-    <nav class="md-header__social" aria-label="Social">
-      {{~ for link in extra.social ~}}
-      <a href="{{ link.link }}" class="md-header__button md-icon" title="{{ link.icon }}" target="_blank" rel="noopener">{{ social_icon link.icon }}</a>
-      {{~ end ~}}
-    </nav>
-    {{~ end ~}}
+    {{~ # Social links (right) — see partials/social.html. ~}}
+    {{ include "partials/social.html" }}
     {{~ # Palette (light/dark) toggle (right). ~}}
     {{~ if palettes && (palettes | array.size) > 0 ~}}
     <form class="md-header__option" data-md-component="palette">

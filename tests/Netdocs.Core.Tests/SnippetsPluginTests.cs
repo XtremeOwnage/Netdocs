@@ -53,6 +53,21 @@ public class SnippetsPluginTests : IDisposable
     }
 
     [Fact]
+    public async Task IncludesWholeFile_WithCrlfSourceLine()
+    {
+        // Windows-authored markdown uses CRLF line endings; the block-include directive must
+        // still resolve when the line ends with \r\n rather than \n.
+        Write("notice.md", "Shared notice text.");
+        var plugin = PluginWith(("base_path", new object?[] { _dir }));
+
+        var markdown = "Intro\r\n--8<-- \"notice.md\"\r\nOutro\r\n";
+        var result = await plugin.ProcessAsync(Page, markdown, Site(), default);
+
+        Assert.Contains("Shared notice text.", result);
+        Assert.DoesNotContain("--8<--", result);
+    }
+
+    [Fact]
     public async Task ExtractsNamedSectionOnly()
     {
         Write("sample.py", "before\n# --8<-- [start:setup]\nimport os\n# --8<-- [end:setup]\nafter\n");

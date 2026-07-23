@@ -156,7 +156,7 @@ public sealed partial class SnippetsPlugin : IPlugin, IMarkdownPreprocessor
         _ => []
     };
 
-    [GeneratedRegex(@"^[ \t]*(?:;\s*)?--8<--(?:-)?[ \t]+""(?<spec>[^""]+)""[ \t]*$", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^[ \t]*(?:;\s*)?--8<--(?:-)?[ \t]+""(?<spec>[^""]+)""[ \t]*\r?$", RegexOptions.Multiline)]
     private static partial Regex IncludeRegex();
 
     // Inline parameterized include: `--8<-- "file" key="value" ...` (at least one argument).

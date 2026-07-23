@@ -36,12 +36,31 @@ Grab the build for your platform from the
 
 === "Windows"
 
-    Download `netdocs.exe` from the releases page and run it directly (optionally add its
-    folder to your `PATH`):
+    Install with the one-line PowerShell installer — it downloads the latest `netdocs.exe`
+    to `%LOCALAPPDATA%\Programs\Netdocs` and adds it to your user `PATH`:
+
+    ```powershell
+    irm https://raw.githubusercontent.com/XtremeOwnage/Netdocs/main/install/install.ps1 | iex
+    ```
+
+    Install a specific version, or a local build, by downloading the script and passing options:
+
+    ```powershell
+    # a pinned release
+    .\install.ps1 -Version 1.2.3
+
+    # a binary you built yourself
+    .\install.ps1 -FromFile .\artifacts\bin\Netdocs.Cli\release\netdocs.exe
+    ```
+
+    Prefer to manage it manually? Download `netdocs.exe` from the releases page and run it
+    directly:
 
     ```powershell
     .\netdocs.exe --help
     ```
+
+    To remove it later, run `uninstall.ps1` (also on the releases page).
 
 === "Linux (portable)"
 

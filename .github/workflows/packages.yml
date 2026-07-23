@@ -58,6 +58,8 @@ jobs:
           cp "dist/osx-x64/netdocs"        "out/netdocs-${v}-osx-x64"
           cp "dist/osx-arm64/netdocs"      "out/netdocs-${v}-osx-arm64"
           cp "dist/win-x64/netdocs.exe"    "out/netdocs-${v}-win-x64.exe"
+          cp install/install.ps1           "out/install.ps1"
+          cp install/uninstall.ps1         "out/uninstall.ps1"
           ls -l out
 
       - name: Install nfpm

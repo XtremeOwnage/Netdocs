@@ -4,6 +4,7 @@
   "private": true,
   "description": "Version-tracking manifest for the front-end libraries Netdocs loads from a CDN (they are not installed via npm). Dependabot watches this file; when it opens an update PR here, bump the matching CDN URL in the theme templates / plugins to the same version, then merge. See docs-site/docs/development/frontend-dependencies.md.",
   "dependencies": {
+    "@twemoji/api": "17.0.3",
     "highlight.js": "11.11.1",
     "highlightjs-line-numbers.js": "2.9.1",
     "mermaid": "^11.0.0",

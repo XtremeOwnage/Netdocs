@@ -205,8 +205,13 @@ public sealed class OptimizeConfig
     /// <c>assets/external/</c>, and rewrites the pages to reference the local copies so the site
     /// works without internet (including from <c>file://</c>). Requires network access at build
     /// time; assets that fail to download keep their CDN URL and log a warning.
+    /// <para>
+    /// Tri-state: <c>null</c> (default) self-hosts on production builds but not during
+    /// <c>serve</c>/dev, so published sites are resilient while local iteration stays fast and
+    /// offline. Set <c>true</c> to always self-host, or <c>false</c> to never self-host.
+    /// </para>
     /// </summary>
-    public bool Offline { get; set; }
+    public bool? Offline { get; set; }
 }
 
 /// <summary>

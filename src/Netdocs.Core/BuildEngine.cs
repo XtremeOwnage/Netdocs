@@ -224,7 +224,9 @@ public sealed class BuildEngine(
         }
 
         // 13b. Offline self-hosting: download external CDN assets and rewrite pages to local copies.
-        if (config.Optimize.Offline)
+        // Tri-state: null => self-host on production builds only (not serve/dev); true/false forces it.
+        var offline = config.Optimize.Offline ?? (options.IsProduction && !options.IsServe);
+        if (offline)
             using (Measure("13b. self-host assets"))
                 await Optimization.SelfHostAssets.RunAsync(site, _log, ct);
 

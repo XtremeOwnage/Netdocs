@@ -104,7 +104,7 @@ public sealed class BuildEngine(
             var key = cache is null ? "" : RenderCache.ComputeKey(page, pipelineSalt, linkMapHash);
             if (cache is not null && cache.TryRestore(page, key)) return;
 
-            var renderer = new DocumentRenderer(pipelines.Value!, linkMap);
+            var renderer = new DocumentRenderer(pipelines.Value!, linkMap, config.Abbreviations.FirstInstanceOnly);
             renderer.Render(page);
             cache?.Store(page, key);
         });
@@ -227,7 +227,7 @@ public sealed class BuildEngine(
         var version = typeof(BuildEngine).Assembly.GetName().Version?.ToString() ?? "0";
         var extensions = string.Join(",", config.MarkdownExtensions.Keys.OrderBy(k => k, StringComparer.Ordinal));
         var contributors = string.Join(",", host.MarkdigContributors.Select(c => c.GetType().FullName).OrderBy(n => n, StringComparer.Ordinal));
-        return $"{version}|{extensions}|{contributors}";
+        return $"{version}|{extensions}|{contributors}|abbr1st={config.Abbreviations.FirstInstanceOnly}";
     }
 
     private static string ComputeLinkMapHash(IReadOnlyDictionary<string, string> linkMap)

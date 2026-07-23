@@ -10,7 +10,10 @@ using Netdocs.Abstractions;
 namespace Netdocs.Core.Markdown;
 
 /// <summary>Renders processed markdown to HTML and extracts TOC, title, and plain text.</summary>
-public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDictionary<string, string>? linkMap = null)
+public sealed class DocumentRenderer(
+    MarkdownPipeline pipeline,
+    IReadOnlyDictionary<string, string>? linkMap = null,
+    bool abbreviationsFirstInstanceOnly = false)
 {
     private readonly HtmlParser _htmlParser = new();
 
@@ -29,7 +32,9 @@ public sealed class DocumentRenderer(MarkdownPipeline pipeline, IReadOnlyDiction
             renderer.Render(document);
             writer.Flush();
         }
-        page.HtmlContent = sb.ToString();
+        page.HtmlContent = abbreviationsFirstInstanceOnly
+            ? AbbreviationReducer.KeepFirstInstances(sb.ToString())
+            : sb.ToString();
 
         page.Toc = BuildToc(document);
 

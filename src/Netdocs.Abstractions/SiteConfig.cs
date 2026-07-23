@@ -43,6 +43,9 @@ public sealed class SiteConfig
     /// <summary>Controls how titles/ids are turned into URL slugs (blog, categories, authors, tags).</summary>
     public SlugifyConfig Slugify { get; set; } = new();
 
+    /// <summary>Behaviour of the abbreviations feature (<c>&lt;abbr&gt;</c> tooltips).</summary>
+    public AbbreviationsConfig Abbreviations { get; set; } = new();
+
     /// <summary>Optional post-build deployment target (filesystem copy or git branch publish).</summary>
     public DeployConfig Deploy { get; set; } = new();
 
@@ -121,6 +124,17 @@ public sealed class SlugifyConfig
 
     /// <summary>When true, drop non-ASCII letters/digits entirely instead of keeping them.</summary>
     public bool Ascii { get; set; }
+}
+
+/// <summary>Behaviour of the abbreviations feature that renders <c>*[TERM]: definition</c>
+/// entries as <c>&lt;abbr&gt;</c> tooltips.</summary>
+public sealed class AbbreviationsConfig
+{
+    /// <summary>When true (default), only the first occurrence of each abbreviation term on a page
+    /// is wrapped in an <c>&lt;abbr&gt;</c> tooltip; later occurrences render as plain text. This
+    /// avoids blanketing a page in dotted-underline placeholders when a term repeats many times.
+    /// Set to false to restore the classic behaviour of marking every occurrence.</summary>
+    public bool FirstInstanceOnly { get; set; } = true;
 }
 
 /// <summary>

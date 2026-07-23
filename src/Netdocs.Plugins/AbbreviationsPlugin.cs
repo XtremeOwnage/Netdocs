@@ -25,6 +25,11 @@ public sealed class AbbreviationsPlugin : IPlugin, IMarkdownPreprocessor
         if (files.Count == 0)
             files.Add("_include/abbv.md"); // sensible default
 
+        // Default-on: only the first occurrence of each term per page gets a tooltip. Opt out with
+        // `first_instance_only: false` to mark every occurrence (the classic behaviour).
+        if (ctx.PluginOptions.TryGetValue("first_instance_only", out var fio) && fio is not null)
+            ctx.Config.Abbreviations.FirstInstanceOnly = ToBool(fio, true);
+
         var builder = new System.Text.StringBuilder();
         foreach (var rel in files)
         {
@@ -47,4 +52,13 @@ public sealed class AbbreviationsPlugin : IPlugin, IMarkdownPreprocessor
         if (_combined.Length == 0) return Task.FromResult(markdown);
         return Task.FromResult(markdown + "\n" + _combined);
     }
+
+    private static bool ToBool(object value, bool fallback) => value switch
+    {
+        bool b => b,
+        string s when bool.TryParse(s, out var r) => r,
+        string s => !(s.Equals("no", StringComparison.OrdinalIgnoreCase)
+            || s.Equals("off", StringComparison.OrdinalIgnoreCase) || s == "0"),
+        _ => fallback,
+    };
 }

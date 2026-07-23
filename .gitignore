@@ -11,3 +11,6 @@ obj/
 plan/
 # Ad-hoc screenshots / scratch images used during verification.
 _*.png
+
+# Local publish output (self-contained binaries).
+dist/

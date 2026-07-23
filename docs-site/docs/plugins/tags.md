@@ -30,6 +30,24 @@ Then place the marker on your tags page (e.g. `docs/tags.md`):
 
 Nested tags separated by `/` nest under their parent, producing a hierarchical index.
 
+### Scoped listings
+
+A marker can carry an optional scope object to list only some tags. This is handy when you want
+a dedicated page per top-level category:
+
+```markdown
+<!-- material/tags { include: [Application] } -->
+<!-- material/tags { exclude: [Draft, Internal] } -->
+```
+
+- **`include`** — list only tags matching one of these entries. When omitted, every tag is listed.
+- **`exclude`** — drop tags matching one of these entries.
+
+Matching is **prefix-aware**: an entry like `Application` selects the `Application` tag *and* every
+nested child (`Application/AWS`, `Application/ActiveDirectory`, …). Each marker is rendered
+independently, so several scoped listings can coexist across pages. If a scope matches no tags the
+section renders empty and the build logs a warning naming how many markers came up blank.
+
 ### Custom display name
 
 Use the front-matter **`tags_title`** override to control how a page appears in the tag

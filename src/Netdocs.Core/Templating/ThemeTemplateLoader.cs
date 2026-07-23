@@ -1,3 +1,4 @@
+using Netdocs.Core.Markdown.Emoji;
 using Scriban;
 using Scriban.Parsing;
 using Scriban.Runtime;
@@ -115,6 +116,13 @@ public static class TemplateFunctions
 
         if (MaterialIcons.Path(name) is { } d)
             return Svg(d);
+
+        // Fall back to the full bundled icon set (material-*, octicons-*, fontawesome-*,
+        // simple-*). mkdocs-style names use slashes (e.g. `simple/splunk`); the registry
+        // keys use dashes (`simple-splunk`), so normalise before lookup.
+        var registryKey = name.Trim().Trim(':').Replace('/', '-');
+        if (IconRegistry.RenderSvg(registryKey) is { } svg)
+            return svg;
 
         // A short token with no slash is treated as an emoji/text glyph rather than an icon name.
         if (!name.Contains('/') && name.Length <= 4)

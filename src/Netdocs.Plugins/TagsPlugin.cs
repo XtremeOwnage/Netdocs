@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
 using Netdocs.Core.Content;
 
@@ -79,10 +80,25 @@ public sealed class TagsPlugin : IPlugin, IBuildHook
         var markdown = new System.Text.StringBuilder();
         RenderNode(root, 0, markdown);
 
+        var replaced = 0;
         foreach (var page in site.Pages)
         {
             if (page.RawMarkdown.Contains(marker, StringComparison.Ordinal))
+            {
                 page.RawMarkdown = page.RawMarkdown.Replace(marker, markdown.ToString());
+                replaced++;
+            }
+        }
+
+        // A tags page with an empty index renders as a blank body, which looks like a bug. Surface
+        // why: either no page declared front-matter tags, or they were all hidden as shadow tags.
+        if (replaced > 0 && index.Count == 0)
+        {
+            var log = site.LoggerFactory.CreateLogger("tags");
+            log.LogWarning(
+                "Tags marker '<!-- material/tags -->' found on {Pages} page(s) but the tag index is empty; " +
+                "the tags page will be blank. Add 'tags:' front matter to pages, or check shadow-tag settings.",
+                replaced);
         }
     }
 

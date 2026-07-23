@@ -134,9 +134,9 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
           </div>
           {{~ end ~}}
           <div class="md-content" data-md-component="content">
+{{ include "partials/breadcrumbs.html" }}
             <article class="md-content__inner md-typeset">
 {{ include "partials/content-actions.html" }}
-{{ include "partials/breadcrumbs.html" }}
 {{~ if page.meta.is_post && page.meta.post_tags && (array.size page.meta.post_tags) > 0 ~}}
 <nav class="md-tags">{{~ for tag in page.meta.post_tags ~}}<a href="{{ base_url }}pages/tags/" class="md-tag">{{ tag }}</a> {{~ end ~}}</nav>
 {{~ end ~}}

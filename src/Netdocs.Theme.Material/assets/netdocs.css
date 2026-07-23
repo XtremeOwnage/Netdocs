@@ -54,30 +54,15 @@ body {
   }
 }
 
-/* Breadcrumbs (`.md-path`) are emitted inside the `.md-typeset` article, where the
-   generic `.md-typeset ul { list-style: disc }` rule would otherwise paint a bullet
-   in front of the first crumb. Reassert the breadcrumb's own list reset with higher
-   specificity so it always renders as a clean inline trail (no stray bullet). */
-.md-typeset .md-path__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.md-typeset .md-path__item {
-  display: inline-flex;
-}
-
-.md-typeset .md-path__item::before {
-  content: none;
-}
-
-/* Material indents the breadcrumb trail with a 1.2rem side margin, which pushes the
-   section label to the right of the H1/body copy it sits above. Zero the side margins
-   so the breadcrumb aligns flush with the article's left edge. */
+/* Breadcrumbs (`.md-path`) render as a horizontal trail above the article title. They are
+   emitted just outside the `.md-typeset` article so the article's `ul`/`li` styling can't
+   turn the crumb list into a vertical bulleted list. The vendor `.md-path` rules then lay
+   the trail out as a flex row with a chevron between crumbs (none before the first). Only
+   the side margin is adjusted so the trail lines up flush with the article body / H1. */
 .md-path {
-  margin-left: 0;
-  margin-right: 0;
+  margin-left: 1.2rem;
+  margin-right: 1.2rem;
+  padding-top: 0.8rem;
 }
 
 /* The primary (nav) and secondary (TOC) sidebars scroll their own content, but the

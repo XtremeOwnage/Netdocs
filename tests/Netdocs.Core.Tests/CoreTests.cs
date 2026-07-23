@@ -23,6 +23,9 @@ public class UrlTests
     [InlineData("about/", "../")]
     [InlineData("blog/posts/hello/", "../../../")]
     [InlineData("404.html", "")]
+    [InlineData("changelogs/2025/Q2/2025.05.05/", "../../../../")]
+    [InlineData("releases/v1.2.3/", "../../")]
+    [InlineData("a/b/c/d/e/2025.05.05/", "../../../../../../")]
     public void BaseUrl_ComputesRelativePrefix(string url, string expected)
         => Assert.Equal(expected, PageRenderer.BaseUrl(url));
 }

@@ -1,0 +1,62 @@
+{{~ # ---------------------------------------------------------------------------
+   # partials/code-collapse.html — Collapses long code blocks marked with the fence
+   # `collapse` flag or `max-lines="N"`. The core renderer emits such blocks as
+   # <div class="highlight nd-collapsible" data-max-lines="N">; this clips them to
+   # N lines with a fade and a "Show more/less" toggle so long listings don't take
+   # over the page. Runs after highlight.js (and on every instant-nav page swap).
+   # --------------------------------------------------------------------------- ~}}
+<script>
+(function () {
+  function initOne(wrapper) {
+    if (wrapper.dataset.ndCollapseReady === "1") return;
+    var pre = wrapper.querySelector("pre");
+    var code = wrapper.querySelector("code");
+    if (!pre || !code) return;
+
+    var n = parseInt(wrapper.getAttribute("data-max-lines"), 10);
+    if (!n || n < 1) return;
+
+    var lh = parseFloat(getComputedStyle(code).lineHeight);
+    if (!lh || isNaN(lh)) lh = 20;
+    var maxPx = Math.round(n * lh);
+
+    // Only collapse when the block is meaningfully taller than the cap.
+    if (code.scrollHeight <= maxPx + lh) { wrapper.dataset.ndCollapseReady = "1"; return; }
+
+    wrapper.style.setProperty("--nd-max", maxPx + "px");
+    wrapper.classList.add("nd-collapsed");
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "nd-code-toggle";
+    var expandLabel = "Show more";
+    var collapseLabel = "Show less";
+    btn.textContent = expandLabel;
+    btn.setAttribute("aria-expanded", "false");
+    btn.addEventListener("click", function () {
+      var collapsed = wrapper.classList.toggle("nd-collapsed");
+      btn.textContent = collapsed ? expandLabel : collapseLabel;
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    });
+    wrapper.appendChild(btn);
+    wrapper.dataset.ndCollapseReady = "1";
+  }
+
+  function initAll() {
+    document.querySelectorAll(".nd-collapsible[data-max-lines]").forEach(initOne);
+  }
+
+  function schedule() {
+    // Defer so highlight.js / line-number injection has settled before measuring.
+    setTimeout(initAll, 60);
+  }
+
+  if (window.document$ && typeof window.document$.subscribe === "function") {
+    window.document$.subscribe(schedule);
+  } else if (document.readyState !== "loading") {
+    schedule();
+  } else {
+    document.addEventListener("DOMContentLoaded", schedule);
+  }
+})();
+</script>

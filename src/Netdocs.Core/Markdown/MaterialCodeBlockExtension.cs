@@ -48,7 +48,13 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         }
 
         renderer.EnsureLine();
-        renderer.Write("<div class=\"highlight\">");
+        renderer.Write("<div class=\"highlight");
+        if (opts.MaxLines is not null)
+            renderer.Write(" nd-collapsible");
+        renderer.Write('"');
+        if (opts.MaxLines is { } maxLines)
+            renderer.Write(" data-max-lines=\"").Write(maxLines.ToString()).Write('"');
+        renderer.Write('>');
         if (!string.IsNullOrEmpty(opts.Title))
             renderer.Write("<span class=\"filename\">").WriteEscape(opts.Title).Write("</span>");
 
@@ -85,10 +91,18 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 /// <summary>Parsed subset of pymdownx.highlight fence attributes.</summary>
 internal readonly struct FenceOptions
 {
+    /// <summary>Default number of visible lines when a block is marked with a bare <c>collapse</c>
+    /// flag rather than an explicit <c>max-lines="N"</c>.</summary>
+    public const int DefaultCollapseLines = 10;
+
     public string? Language { get; init; }
     public int? LineNumbersStart { get; init; }
     public string? HlLines { get; init; }
     public string? Title { get; init; }
+
+    /// <summary>When set, the block is clipped to this many visible lines with a "show more"
+    /// toggle (fence flag <c>collapse</c> or <c>max-lines="N"</c>).</summary>
+    public int? MaxLines { get; init; }
 
     /// <summary>
     /// Handles both the bare form (<c>py linenums="1"</c>) and the attr-list brace form
@@ -110,6 +124,7 @@ internal readonly struct FenceOptions
         int? linenumsStart = null;
         string? hlLines = null;
         string? title = null;
+        int? maxLines = null;
 
         foreach (var token in Tokenize(body))
         {
@@ -120,6 +135,7 @@ internal readonly struct FenceOptions
                 var name = token.TrimStart('.');
                 if (name.Length == 0) continue;
                 if (name.Equals("linenums", StringComparison.OrdinalIgnoreCase)) { linenumsStart ??= 1; continue; }
+                if (name.Equals("collapse", StringComparison.OrdinalIgnoreCase)) { maxLines ??= DefaultCollapseLines; continue; }
                 language ??= name;
                 continue;
             }
@@ -137,6 +153,10 @@ internal readonly struct FenceOptions
                 case "title":
                     title = value;
                     break;
+                case "max-lines":
+                case "max_lines":
+                    if (int.TryParse(value, out var ml) && ml > 0) maxLines = ml;
+                    break;
             }
         }
 
@@ -146,6 +166,7 @@ internal readonly struct FenceOptions
             LineNumbersStart = linenumsStart,
             HlLines = hlLines,
             Title = title,
+            MaxLines = maxLines,
         };
     }
 
@@ -162,6 +183,10 @@ internal readonly struct FenceOptions
         var linenumsStart = LineNumbersStart;
         var hlLines = HlLines;
         var title = Title;
+        var maxLines = MaxLines;
+        if (attr.Classes is { Count: > 0 } cls && maxLines is null
+            && cls.Any(c => c.Equals("collapse", StringComparison.OrdinalIgnoreCase)))
+            maxLines = DefaultCollapseLines;
         if (attr.Properties is { } props)
         {
             foreach (var (key, value) in props)
@@ -178,6 +203,10 @@ internal readonly struct FenceOptions
                     case "title":
                         title ??= v;
                         break;
+                    case "max-lines":
+                    case "max_lines":
+                        if (maxLines is null && int.TryParse(v, out var ml) && ml > 0) maxLines = ml;
+                        break;
                 }
             }
         }
@@ -188,6 +217,7 @@ internal readonly struct FenceOptions
             LineNumbersStart = linenumsStart,
             HlLines = hlLines,
             Title = title,
+            MaxLines = maxLines,
         };
     }
 

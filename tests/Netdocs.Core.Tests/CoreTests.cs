@@ -229,6 +229,30 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void CodeFence_MaxLines_EmitsCollapsibleWrapper()
+    {
+        var html = Render("```python max-lines=\"3\"\nprint(1)\n```\n");
+        Assert.Contains("class=\"highlight nd-collapsible\"", html);
+        Assert.Contains("data-max-lines=\"3\"", html);
+    }
+
+    [Fact]
+    public void CodeFence_CollapseFlag_UsesDefaultMaxLines()
+    {
+        var html = Render("```python collapse\nprint(1)\n```\n");
+        Assert.Contains("nd-collapsible", html);
+        Assert.Contains("data-max-lines=\"10\"", html);
+    }
+
+    [Fact]
+    public void CodeFence_NoCollapse_HasPlainHighlightWrapper()
+    {
+        var html = Render("```python\nprint(1)\n```\n");
+        Assert.Contains("class=\"highlight\"", html);
+        Assert.DoesNotContain("nd-collapsible", html);
+    }
+
+    [Fact]
     public void InlineHilite_ShebangProducesLanguageClass()
     {
         var html = Render("Use `#!python range(10)` here.\n");

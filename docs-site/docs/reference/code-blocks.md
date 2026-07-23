@@ -202,6 +202,44 @@ the language (the `pymdownx.inlinehilite` shebang syntax). For example,
 `` `#!python range(10)` `` renders as #!python range(10), while a plain `` `range(10)` ``
 stays un-highlighted.
 
+## Collapsing long blocks
+
+Very long listings can dominate a page. Add the `collapse` flag to clip a block to the first
+**10** lines with a **Show more / Show less** toggle, or `max-lines="N"` to choose the height.
+The block only collapses when it is actually taller than the cap, so short snippets are unaffected.
+
+````markdown
+```python collapse
+# ... a long script ...
+```
+````
+
+````markdown
+```python max-lines="6"
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+print(factorial(5))
+print(factorial(6))
+print(factorial(7))
+```
+````
+
+```python max-lines="6"
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+print(factorial(5))
+print(factorial(6))
+print(factorial(7))
+```
+
+Both forms also work in the brace syntax — `{ .python max-lines="6" }` or `{ .python collapse }`.
+
 ## Mermaid diagrams
 
 A fence tagged `mermaid` is emitted as a diagram container and rendered in the browser by
@@ -228,6 +266,8 @@ graph LR
 | `title="…"`         | `title="app.py"`        | Renders a filename/label bar above the block.                 |
 | `linenums="N"`      | `linenums="1"`          | Numbers lines starting from `N`.                              |
 | `hl_lines="…"`      | `hl_lines="2 4-6"`      | Highlights lines (block-relative), single lines and ranges.   |
+| `collapse`          | ` ```python collapse `  | Clips the block to 10 lines with a Show more/less toggle.     |
+| `max-lines="N"`     | `max-lines="6"`         | Clips the block to `N` lines with a Show more/less toggle.    |
 | brace form          | ` ```{.python …} `      | `pymdownx.highlight` attr-list syntax for the same options.   |
 | `#!lang` (inline)   | `` `#!python range()` `` | Highlights an inline code span (`pymdownx.inlinehilite`).     |
 | `mermaid`           | ` ```mermaid `          | Renders the fence as a Mermaid diagram.                       |

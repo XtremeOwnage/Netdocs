@@ -336,6 +336,56 @@ body {
 
 
 /* ---------------------------------------------------------------------------
+   Collapsible code blocks (fence `collapse` / `max-lines="N"`). The block is
+   emitted as `.highlight.nd-collapsible[data-max-lines]`; a small script clips
+   it to N lines (via the --nd-max custom property) and appends a toggle button.
+   --------------------------------------------------------------------------- */
+.md-typeset .highlight.nd-collapsible {
+  position: relative;
+}
+
+.md-typeset .highlight.nd-collapsible.nd-collapsed > pre {
+  max-height: var(--nd-max, 16rem);
+  overflow-y: hidden;
+  overflow-x: auto;
+}
+
+/* Fade the last visible lines while collapsed to signal there's more below. */
+.md-typeset .highlight.nd-collapsible.nd-collapsed::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2.2rem;
+  height: 2.4rem;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--md-code-bg-color));
+}
+
+.md-typeset .highlight.nd-collapsible .nd-code-toggle {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.8rem;
+  border: none;
+  border-top: 0.05rem solid var(--md-default-fg-color--lightest);
+  background: var(--md-code-bg-color);
+  color: var(--md-accent-fg-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.md-typeset .highlight.nd-collapsible .nd-code-toggle:hover {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-accent-fg-color);
+}
+
+
+/* ---------------------------------------------------------------------------
    Calculator plugin (```calc fences -> interactive forms). Styles the input
    grid and the computed-output cards. Uses Material CSS custom properties so
    it follows the active palette (light/dark) automatically.

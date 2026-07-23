@@ -25,6 +25,7 @@ docs/
 ```yaml
 ---
 date: 2025-05-01
+slug: my-custom-slug        # optional — overrides the title-derived slug
 categories: [Technology]
 tags: [dotnet, ssg]
 authors: [jane]
@@ -39,9 +40,15 @@ Full body…
 ```
 
 - `date` — used for the post URL and ordering (falls back to file mtime).
+- `slug` — optional explicit URL slug. When omitted, the slug is derived from the post
+  **title** (front-matter `title:` or the first `H1`), *not* the file name — matching
+  MkDocs/Material. So a post titled "Hacking KVM with IP Control" stored as
+  `2025-02-24-KVM-Esphome.md` publishes at `blog/2025/hacking-kvm-with-ip-control/`.
 - `categories` — explicit categories; otherwise derived from the post's folder.
 - The excerpt is the content up to `<!-- more -->` (or the first paragraph), with any
   leading `H1` stripped and length capped so it stays a concise teaser.
+
+The post URL is `{blog_dir}{date:post_url_date_format}/{slug}/`.
 
 ## Options
 

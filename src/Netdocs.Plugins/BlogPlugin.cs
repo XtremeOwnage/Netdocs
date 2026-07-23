@@ -69,7 +69,7 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
             if (!page.RelativePath.StartsWith(postsPrefix, StringComparison.OrdinalIgnoreCase)) continue;
 
             var date = ReadDate(page);
-            var slug = Slug.Make(Path.GetFileNameWithoutExtension(page.RelativePath), _config.Slugify);
+            var slug = ResolvePostSlug(page);
             var url = $"{_blogDir}{date.ToString(_urlDateFormat, CultureInfo.InvariantCulture)}/{slug}/";
             page.Url = url;
             page.OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url));
@@ -338,6 +338,52 @@ public sealed class BlogPlugin : IPlugin, IBuildHook, IContentGenerator
                 return parsed;
         }
         return File.Exists(page.SourcePath) ? File.GetLastWriteTimeUtc(page.SourcePath) : DateTimeOffset.UtcNow;
+    }
+
+    // Matches an ATX level-1 heading line (optional trailing closing hashes).
+    private static readonly System.Text.RegularExpressions.Regex H1Regex = new(
+        @"^\s{0,3}#\s+(?<title>.+?)\s*#*\s*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline |
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Collapses inline markdown links `[text](url)` / `![alt](src)` down to their visible text
+    // so URLs don't leak words into the slug.
+    private static readonly System.Text.RegularExpressions.Regex InlineLinkRegex = new(
+        @"!?\[(?<text>[^\]]*)\]\([^)]*\)",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Resolves a blog post's URL slug the way mkdocs-material does: an explicit front-matter
+    /// <c>slug</c> wins, otherwise the post <em>title</em> (front-matter title or first H1) is
+    /// slugified. The file name is only a last-resort fallback. This keeps Netdocs URLs identical
+    /// to the ones MkDocs produced (e.g. a post titled "Hacking KVM with IP Control" published as
+    /// <c>2025-02-24-KVM-Esphome.md</c> lives at <c>/blog/2025/hacking-kvm-with-ip-control/</c>).
+    /// </summary>
+    private string ResolvePostSlug(Page page)
+    {
+        if (page.FrontMatter.TryGetValue("slug", out var s) && s is string slug && slug.Trim().Length > 0)
+            return slug.Trim().Trim('/');
+
+        var title = PostTitle(page);
+        return !string.IsNullOrWhiteSpace(title)
+            ? Slug.Make(title, _config.Slugify)
+            : Slug.Make(Path.GetFileNameWithoutExtension(page.RelativePath), _config.Slugify);
+    }
+
+    /// <summary>
+    /// The post title as mkdocs-material sees it: the front-matter <c>title</c>, else the first
+    /// level-1 heading in the source. H1 extraction runs here because page titles derived from
+    /// headings are not populated until the later render step.
+    /// </summary>
+    private static string? PostTitle(Page page)
+    {
+        if (!string.IsNullOrWhiteSpace(page.Title)) return page.Title;
+
+        var match = H1Regex.Match(page.RawMarkdown ?? "");
+        if (!match.Success) return null;
+
+        var text = InlineLinkRegex.Replace(match.Groups["title"].Value, "${text}");
+        return text.Trim();
     }
 
     private static List<string> ReadList(Page page, string key)

@@ -127,4 +127,86 @@ public class BlogPluginTests
             Assert.NotEmpty(categories.Cast<object?>());
         }
     }
+
+    private static SiteContext NewSite() => new()
+    {
+        Config = new SiteConfig { ProjectRoot = Path.GetTempPath() },
+        Options = new BuildOptions(),
+        LoggerFactory = NullLoggerFactory.Instance,
+    };
+
+    [Fact]
+    public async Task PostUrl_UsesSlugifiedTitle_NotFileName()
+    {
+        // mkdocs-material derives the post URL from the title, so a post titled
+        // "Hacking KVM with IP Control" stored as 2025-02-24-KVM-Esphome.md must publish at
+        // /blog/2025/hacking-kvm-with-ip-control/ — matching the old MkDocs URLs.
+        var plugin = new BlogPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>()));
+
+        var post = new Page
+        {
+            SourcePath = "blog/posts/2025/2025-02-24-KVM-Esphome.md",
+            RelativePath = "blog/posts/2025/2025-02-24-KVM-Esphome.md",
+            RawMarkdown = "# Hacking a cheap KVM with IP Control\n\nBody.",
+            Title = "Hacking KVM with IP Control",
+            FrontMatter = new Dictionary<string, object?> { ["date"] = "2025-02-24" },
+        };
+
+        var site = NewSite();
+        site.Pages.Add(post);
+
+        await plugin.OnBuildStartAsync(site, CancellationToken.None);
+
+        Assert.Equal("blog/2025/hacking-kvm-with-ip-control/", post.Url);
+    }
+
+    [Fact]
+    public async Task PostUrl_ExplicitFrontMatterSlug_Wins()
+    {
+        var plugin = new BlogPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>()));
+
+        var post = new Page
+        {
+            SourcePath = "blog/posts/2025/whatever.md",
+            RelativePath = "blog/posts/2025/whatever.md",
+            RawMarkdown = "# A Totally Different Title\n\nBody.",
+            Title = "A Totally Different Title",
+            FrontMatter = new Dictionary<string, object?> { ["date"] = "2025-02-24", ["slug"] = "custom-slug" },
+        };
+
+        var site = NewSite();
+        site.Pages.Add(post);
+
+        await plugin.OnBuildStartAsync(site, CancellationToken.None);
+
+        Assert.Equal("blog/2025/custom-slug/", post.Url);
+    }
+
+    [Fact]
+    public async Task PostUrl_FallsBackToFirstH1_WhenNoFrontMatterTitle()
+    {
+        // With no front-matter title, the title (and therefore the slug) comes from the first H1,
+        // mirroring how mkdocs-material resolves the page title before rendering.
+        var plugin = new BlogPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>()));
+
+        var post = new Page
+        {
+            SourcePath = "blog/posts/2025/2025-05-08-KVM-Assistant-V2.md",
+            RelativePath = "blog/posts/2025/2025-05-08-KVM-Assistant-V2.md",
+            RawMarkdown = "# Introducing [KVM](https://example.com) Assistant\n\nBody.",
+            // Title deliberately left null: only the H1 is available at slug-assignment time.
+            FrontMatter = new Dictionary<string, object?> { ["date"] = "2025-05-08" },
+        };
+
+        var site = NewSite();
+        site.Pages.Add(post);
+
+        await plugin.OnBuildStartAsync(site, CancellationToken.None);
+
+        // Link syntax collapses to its text, so the URL word set is "introducing kvm assistant".
+        Assert.Equal("blog/2025/introducing-kvm-assistant/", post.Url);
+    }
 }

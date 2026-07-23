@@ -8,7 +8,7 @@ namespace Netdocs.Plugins;
 /// extension parses <c>$...$</c> / <c>$$...$$</c> (and <c>\(...\)</c> / <c>\[...\]</c>)
 /// into <c>&lt;span class="math"&gt;\(...\)&lt;/span&gt;</c> and
 /// <c>&lt;div class="math"&gt;\[...\]&lt;/div&gt;</c> elements — code spans and fenced
-/// blocks are left untouched — and MathJax v3 typesets those delimiters client-side.
+/// blocks are left untouched — and MathJax v4 typesets those delimiters client-side.
 /// </summary>
 /// <remarks>
 /// MathJax is loaded from a CDN by default; point <c>mathjax_url</c> at a vendored copy
@@ -18,7 +18,7 @@ namespace Netdocs.Plugins;
 public sealed class ArithmatexPlugin : IPlugin, IMarkdigContributor
 {
     private const string DefaultMathJaxUrl =
-        "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+        "https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js";
 
     public string Name => "arithmatex";
 

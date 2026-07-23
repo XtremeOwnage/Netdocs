@@ -92,6 +92,11 @@ public static class PageRenderer
         var versioner = site.State.GetValueOrDefault("asset_versioner") as AssetVersioner ?? AssetVersioner.NoOp;
         model["asset_versioner"] = versioner;
 
+        // Optional version selector (versioning plugin). Absent unless the plugin ran.
+        model["versions"] = site.State.GetValueOrDefault("versions");
+        model["current_version"] = site.State.GetValueOrDefault("current_version");
+        model["version_label"] = site.State.GetValueOrDefault("version_label") as string ?? "Version";
+
         return engine.Render(template, model);
     }
 

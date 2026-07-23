@@ -588,3 +588,69 @@ mark.critic {
   text-decoration: none;
 }
 .nd-badge__text a:hover { text-decoration: underline; }
+
+/* Version selector (versioning plugin) — hover/focus dropdown in the header. */
+.md-version {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: .4rem;
+  font-size: .7rem;
+}
+.md-version__current {
+  appearance: none;
+  cursor: pointer;
+  color: inherit;
+  background: rgba(0, 0, 0, .18);
+  border: none;
+  border-radius: .1rem;
+  padding: .1rem .5rem;
+  font-size: inherit;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.md-version__current::after {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: .35em;
+  vertical-align: middle;
+  border-left: .3em solid transparent;
+  border-right: .3em solid transparent;
+  border-top: .3em solid currentColor;
+}
+.md-version__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  min-width: 100%;
+  margin: .2rem 0 0;
+  padding: .2rem 0;
+  list-style: none;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  border-radius: .1rem;
+  box-shadow: 0 .2rem .5rem rgba(0, 0, 0, .25);
+  opacity: 0;
+  transform: translateY(-.2rem);
+  pointer-events: none;
+  transition: opacity .2s, transform .2s;
+}
+.md-version:hover .md-version__list,
+.md-version:focus-within .md-version__list {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.md-version__item { margin: 0; }
+.md-version__link {
+  display: block;
+  padding: .3rem .8rem;
+  color: inherit;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.md-version__link:hover { background: var(--md-default-fg-color--lightest); }
+.md-version__link--active { font-weight: 700; color: var(--md-primary-fg-color); }

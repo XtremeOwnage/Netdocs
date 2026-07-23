@@ -20,7 +20,7 @@ public static class NavigationBuilder
     private static NavNode? Resolve(NavItem item, IReadOnlyDictionary<string, Page> byRelative)
     {
         if (item.Path is not null && byRelative.TryGetValue(item.Path, out var page))
-            return new NavNode { Title = item.Title ?? page.Title, Page = page, Icon = item.Icon ?? PageIcon(page) };
+            return new NavNode { Title = item.Title ?? page.NavigationTitle, Page = page, Icon = item.Icon ?? PageIcon(page) };
 
         if (item.Children.Count > 0)
         {
@@ -87,7 +87,7 @@ public static class NavigationBuilder
         // not a section, so it isn't swallowed by BuildLevel's index handling.
         var home = root.Pages.FirstOrDefault(p => IsIndexPage(p.RelativePath));
         if (home is not null)
-            nodes.Insert(0, new NavNode { Title = home.Title.Length > 0 ? home.Title : "Home", Page = home, Icon = PageIcon(home) });
+            nodes.Insert(0, new NavNode { Title = home.NavigationTitle.Length > 0 ? home.NavigationTitle : "Home", Page = home, Icon = PageIcon(home) });
 
         return nodes;
     }
@@ -133,7 +133,7 @@ public static class NavigationBuilder
         foreach (var page in dir.Pages.Where(p => !IsIndexPage(p.RelativePath)))
         {
             var key = Path.GetFileNameWithoutExtension(page.RelativePath);
-            entries.Add((key, new NavNode { Title = page.Title, Page = page, Icon = PageIcon(page) }));
+            entries.Add((key, new NavNode { Title = page.NavigationTitle, Page = page, Icon = PageIcon(page) }));
         }
 
         var dirMeta = PagesMeta.Load(docsRoot, dir.RelPath);

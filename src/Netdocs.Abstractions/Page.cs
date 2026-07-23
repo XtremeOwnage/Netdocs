@@ -17,6 +17,28 @@ public sealed class Page
 
     public string Title { get; set; } = "";
 
+    /// <summary>Optional <c>page_title</c> front-matter override for the page's own title
+    /// (the <c>&lt;title&gt;</c> element, social meta, and prev/next labels). Falls back to
+    /// <see cref="Title"/> via <see cref="DisplayTitle"/> when unset.</summary>
+    public string? PageTitle { get; set; }
+
+    /// <summary>Optional <c>nav_title</c> front-matter override for how the page is labelled in
+    /// the navigation. Falls back to <see cref="Title"/> via <see cref="NavigationTitle"/>.</summary>
+    public string? NavTitle { get; set; }
+
+    /// <summary>Optional <c>tag_title</c> front-matter override for how the page is labelled on
+    /// the tags listing. Falls back to <see cref="Title"/> via <see cref="TagListingTitle"/>.</summary>
+    public string? TagTitle { get; set; }
+
+    /// <summary>The title shown for the page itself: <c>page_title</c> override → standard title.</summary>
+    public string DisplayTitle => !string.IsNullOrWhiteSpace(PageTitle) ? PageTitle! : Title;
+
+    /// <summary>The label used in navigation: <c>nav_title</c> override → standard title.</summary>
+    public string NavigationTitle => !string.IsNullOrWhiteSpace(NavTitle) ? NavTitle! : Title;
+
+    /// <summary>The label used on the tags listing: <c>tag_title</c> override → standard title.</summary>
+    public string TagListingTitle => !string.IsNullOrWhiteSpace(TagTitle) ? TagTitle! : Title;
+
     /// <summary>Raw markdown as read from disk.</summary>
     public string RawMarkdown { get; set; } = "";
 

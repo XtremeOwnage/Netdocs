@@ -55,7 +55,7 @@ public class ArithmatexPluginTests
 
         var script = Assert.Single(assets.InlineScripts);
         Assert.Contains("window.MathJax", script);
-        Assert.Contains("mathjax@3", script);
+        Assert.Contains("mathjax@4", script);
         Assert.Contains("document$", script);
     }
 

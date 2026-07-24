@@ -18,6 +18,9 @@
     <PackageVersion Include="Microsoft.AspNetCore.WebSockets" Version="2.3.0" />
     <PackageVersion Include="AngleSharp" Version="1.5.2" />
     <PackageVersion Include="LibGit2Sharp" Version="0.31.0" />
+    <!-- Pinned to the 3.x line on purpose: ImageSharp 4.0 switched to the Six Labors Split
+         License and fails the build without a registered license key (sixlabors.lic). Netdocs is
+         a zero-config OSS tool distributed to users, so we stay on the Apache-2.0 3.1.x releases. -->
     <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageVersion Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
     <PackageVersion Include="xunit" Version="2.9.3" />

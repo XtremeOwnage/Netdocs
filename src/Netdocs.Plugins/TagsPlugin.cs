@@ -86,7 +86,7 @@ public sealed partial class TagsPlugin : IPlugin, IBuildHook
 
                 var root = BuildTree(scoped);
                 var markdown = new System.Text.StringBuilder();
-                RenderNode(root, 0, markdown);
+                RenderNode(root, 0, markdown, site.Config.Slugify);
                 return markdown.ToString();
             });
         }
@@ -183,21 +183,36 @@ public sealed partial class TagsPlugin : IPlugin, IBuildHook
         System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex TagMarkerRegex();
 
-    private static void RenderNode(TagNode node, int depth, System.Text.StringBuilder markdown)
+    private static void RenderNode(TagNode node, int depth, System.Text.StringBuilder markdown, SlugifyConfig slugify)
     {
         foreach (var child in node.Children.Values)
         {
             var level = Math.Min(2 + depth, 6);
-            markdown.Append('\n').Append(new string('#', level)).Append(' ').AppendLine(child.FullPath).AppendLine();
+            // Emit an explicit heading id matching MkDocs Material's tags plugin: "tag:" followed by
+            // each hierarchy segment slugified individually and rejoined with '/'. This keeps anchor
+            // links (e.g. #tag:development/c) identical between Netdocs and Material instead of the
+            // auto-identifier's collapsed form (e.g. #developmentc).
+            var anchor = TagAnchor(child.FullPath, slugify);
+            markdown.Append('\n').Append(new string('#', level)).Append(' ')
+                    .Append(child.FullPath).Append(" { #").Append(anchor).Append(" }")
+                    .AppendLine().AppendLine();
             if (child.Pages is { Count: > 0 })
             {
                 foreach (var page in child.Pages.DistinctBy(p => p.Url).OrderBy(GetDisplayTitle, StringComparer.OrdinalIgnoreCase))
                     markdown.Append("- [").Append(GetDisplayTitle(page)).Append("](/").Append(page.Url).AppendLine(")");
                 markdown.AppendLine();
             }
-            RenderNode(child, depth + 1, markdown);
+            RenderNode(child, depth + 1, markdown, slugify);
         }
     }
+
+    /// <summary>Builds the anchor id for a tag heading to match MkDocs Material: the literal prefix
+    /// <c>tag:</c> followed by each '/'-separated hierarchy segment slugified on its own and rejoined
+    /// with '/' (e.g. <c>Development/C#</c> -> <c>tag:development/c</c>).</summary>
+    internal static string TagAnchor(string fullPath, SlugifyConfig slugify) =>
+        "tag:" + string.Join('/', fullPath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(segment => Slug.Make(segment, slugify)));
 
     private sealed class TagNode
     {

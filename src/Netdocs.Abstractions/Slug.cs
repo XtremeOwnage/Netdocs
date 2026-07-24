@@ -1,8 +1,7 @@
 using System.Globalization;
 using System.Text;
-using Netdocs.Abstractions;
 
-namespace Netdocs.Plugins;
+namespace Netdocs.Abstractions;
 
 /// <summary>Slugifies text for URLs. Default: lowercase, hyphen-separated, accents folded.</summary>
 public static class Slug

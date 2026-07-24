@@ -54,6 +54,15 @@ body {
   }
 }
 
+/* Active top-level tab indicator. Material's default already lifts the active
+   tab to full opacity; add a slightly bolder label so the current section reads
+   as a subtle "highlight" (matching Material for MkDocs) instead of a heavy
+   underline bar. Loaded after the vendored CSS, so this wins at equal
+   specificity. */
+.md-tabs__item--active .md-tabs__link {
+  font-weight: 700;
+}
+
 /* Breadcrumbs (`.md-path`) render as a horizontal trail above the article title. They are
    emitted just outside the `.md-typeset` article so the article's `ul`/`li` styling can't
    turn the crumb list into a vertical bulleted list. The vendor `.md-path` rules then lay

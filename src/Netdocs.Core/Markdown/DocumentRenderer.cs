@@ -111,6 +111,10 @@ public sealed class DocumentRenderer(
             !path.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
             return null;
 
+        // Decode percent-encoding (e.g. hand-written `%20` for spaces) so the link path
+        // matches the raw relative paths used as map keys.
+        path = Uri.UnescapeDataString(path);
+
         var currentDir = Path.GetDirectoryName(currentRelativePath.Replace('\\', '/'))?.Replace('\\', '/') ?? "";
         var combined = currentDir.Length == 0 ? path : currentDir + "/" + path;
         var normalized = NormalizeRelative(combined);

@@ -24,6 +24,8 @@ public class UrlTests
     [InlineData("cluster-setup/Deploying MetalLB.md", "cluster-setup/deploying-metallb/")]
     [InlineData("Applications/Kubernetes/index.md", "applications/kubernetes/")]
     [InlineData("Guide_One/Step Two.md", "guide-one/step-two/")]
+    [InlineData("changelogs/2025/Q2/2025.05.05.md", "changelogs/2025/q2/2025.05.05/")]
+    [InlineData("releases/v1.2.3 Notes.md", "releases/v1.2.3-notes/")]
     public void UrlFor_WithSlugify_SlugifiesSegments(string relative, string expected)
         => Assert.Equal(expected, ContentDiscovery.UrlFor(relative, new SlugifyConfig()));
 
@@ -393,5 +395,28 @@ public class MarkdownTests
 
         Assert.Contains("href=\"../../cluster/openshift-registry-setup/\"", page.HtmlContent);
         Assert.DoesNotContain("%20", page.HtmlContent);
+    }
+
+    [Theory]
+    [InlineData("vscode:extension/ms-python.python")]
+    [InlineData("mailto:team@example.com")]
+    [InlineData("tel:+15551234567")]
+    [InlineData("https://example.com/docs.md")]
+    public void CustomSchemeLinks_AreLeftUntouched(string url)
+    {
+        // Links carrying any URI scheme (not just `://` ones) must not be rewritten as
+        // relative page/resource links. Regression guard for `vscode:extension/...` deep links.
+        var site = new SiteContext { Config = new SiteConfig(), Options = new BuildOptions(), LoggerFactory = NullLoggerFactory.Instance };
+        var pipeline = MarkdownPipelineFactory.Build(site, []);
+        var page = new Page
+        {
+            SourcePath = "tools/guide.md",
+            RelativePath = "tools/guide.md",
+            Url = "tools/guide/",
+            ProcessedMarkdown = $"Install [it]({url}).",
+        };
+        new DocumentRenderer(pipeline, new Dictionary<string, string>()).Render(page);
+
+        Assert.Contains($"href=\"{url}\"", page.HtmlContent);
     }
 }

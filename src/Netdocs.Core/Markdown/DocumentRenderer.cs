@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using AngleSharp.Html.Parser;
 using Markdig;
 using Markdig.Renderers;
@@ -10,12 +11,23 @@ using Netdocs.Abstractions;
 namespace Netdocs.Core.Markdown;
 
 /// <summary>Renders processed markdown to HTML and extracts TOC, title, and plain text.</summary>
-public sealed class DocumentRenderer(
+public sealed partial class DocumentRenderer(
     MarkdownPipeline pipeline,
     IReadOnlyDictionary<string, string>? linkMap = null,
     bool abbreviationsFirstInstanceOnly = false)
 {
     private readonly HtmlParser _htmlParser = new();
+
+    // Matches a URI scheme prefix (e.g. `http:`, `mailto:`, `data:`, `vscode:`, `tel:`).
+    // Custom schemes like `vscode:extension/...` have no `//`, so a bare `://` check misses
+    // them; anything with a scheme must be left untouched, not treated as a relative path.
+    [GeneratedRegex(@"^[a-zA-Z][a-zA-Z0-9+.\-]*:", RegexOptions.CultureInvariant)]
+    private static partial Regex UriSchemeRegex();
+
+    /// <summary>True when a link is absolute (root-relative), an in-page anchor, or carries a
+    /// URI scheme — i.e. it must not be rewritten as a page/resource-relative link.</summary>
+    internal static bool IsAbsoluteOrExternal(string url) =>
+        url.StartsWith('/') || url.StartsWith('#') || UriSchemeRegex().IsMatch(url);
 
     public void Render(Page page)
     {
@@ -73,9 +85,7 @@ public sealed class DocumentRenderer(
     /// (no leading slash; callers prepend a base-relative prefix).</summary>
     internal static string? ResolveResourceLink(string currentRelativePath, string url, bool isImage)
     {
-        if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
-            url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
-            url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        if (IsAbsoluteOrExternal(url))
             return null;
 
         var cut = url.IndexOfAny(['#', '?']);
@@ -99,8 +109,7 @@ public sealed class DocumentRenderer(
 
     internal static string? ResolveMarkdownLink(string currentRelativePath, string url, IReadOnlyDictionary<string, string> map)
     {
-        if (url.Contains("://") || url.StartsWith('/') || url.StartsWith('#') ||
-            url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        if (IsAbsoluteOrExternal(url))
             return null;
 
         var hash = url.IndexOf('#');

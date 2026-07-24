@@ -71,40 +71,40 @@ public sealed class BuildEngine(
         // 3. OnBuildStart hooks.
         _log.LogDebug("Running OnBuildStart hooks ({Count})", host.BuildHooks.Count);
         using (Measure("3. OnBuildStart hooks"))
-        foreach (var hook in host.BuildHooks)
-        {
-            _log.LogTrace("OnBuildStart: {Hook}", hook.GetType().Name);
-            using (Measure(PluginLabel(hook)))
-                await hook.OnBuildStartAsync(site, ct);
-        }
+            foreach (var hook in host.BuildHooks)
+            {
+                _log.LogTrace("OnBuildStart: {Hook}", hook.GetType().Name);
+                using (Measure(PluginLabel(hook)))
+                    await hook.OnBuildStartAsync(site, ct);
+            }
 
         // 4. Content generators (blog lists, tags, archives).
         var generatedCount = 0;
         using (Measure("4. content generators"))
-        foreach (var generator in host.ContentGenerators)
-            using (Measure(PluginLabel(generator)))
-            await foreach (var generated in generator.GenerateAsync(site, ct))
-            {
-                site.Pages.Add(generated);
-                generatedCount++;
-                _log.LogTrace("Generated page {Url} by {Generator}", generated.Url, generator.GetType().Name);
-            }
+            foreach (var generator in host.ContentGenerators)
+                using (Measure(PluginLabel(generator)))
+                    await foreach (var generated in generator.GenerateAsync(site, ct))
+                    {
+                        site.Pages.Add(generated);
+                        generatedCount++;
+                        _log.LogTrace("Generated page {Url} by {Generator}", generated.Url, generator.GetType().Name);
+                    }
         _log.LogDebug("Content generators produced {Count} pages", generatedCount);
 
         // 5. Preprocess markdown (snippets, abbreviations, macros).
         _log.LogDebug("Preprocessing {Count} pages with {Preprocessors} preprocessor(s)", site.Pages.Count, host.Preprocessors.Count);
         using (Measure("5. preprocess markdown"))
-        foreach (var page in site.Pages)
-        {
-            var md = page.RawMarkdown;
-            foreach (var pre in host.Preprocessors)
+            foreach (var page in site.Pages)
             {
-                if (pre is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
-                using (Measure(PluginLabel(pre)))
-                    md = await pre.ProcessAsync(page, md, site, ct);
+                var md = page.RawMarkdown;
+                foreach (var pre in host.Preprocessors)
+                {
+                    if (pre is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
+                    using (Measure(PluginLabel(pre)))
+                        md = await pre.ProcessAsync(page, md, site, ct);
+                }
+                page.ProcessedMarkdown = md;
             }
-            page.ProcessedMarkdown = md;
-        }
 
         // 6. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
         //    A content-hash cache reuses the (pure) render artifacts for pages whose markdown,
@@ -155,24 +155,24 @@ public sealed class BuildEngine(
         var minify = config.Optimize.MinifyHtml;
         var webpWrap = config.Optimize.ConvertImagesToWebp;
         using (Measure("8. template render"))
-        Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
-        {
-            var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
-            if (webpWrap) html = Optimization.WebpHtmlRewriter.Rewrite(html);
-            if (minify) html = Optimization.HtmlMinifier.Minify(html);
-            rendered.Add((page.OutputPath, html));
-            renderedPages.Add(new Validation.RenderedPage(page, html));
-        });
+            Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
+            {
+                var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
+                if (webpWrap) html = Optimization.WebpHtmlRewriter.Rewrite(html);
+                if (minify) html = Optimization.HtmlMinifier.Minify(html);
+                rendered.Add((page.OutputPath, html));
+                renderedPages.Add(new Validation.RenderedPage(page, html));
+            });
         var changed = 0;
         using (Measure("8. write output"))
-        foreach (var (path, html) in rendered)
-        {
-            if (await OutputWriter.WriteTextIfChangedAsync(site, path, html, ct))
+            foreach (var (path, html) in rendered)
             {
-                changed++;
-                _log.LogTrace("Wrote {Path}", path);
+                if (await OutputWriter.WriteTextIfChangedAsync(site, path, html, ct))
+                {
+                    changed++;
+                    _log.LogTrace("Wrote {Path}", path);
+                }
             }
-        }
         _log.LogInformation("Emitted {Count} HTML pages ({Changed} changed)", rendered.Count, changed);
 
         // 8b. 404 page.
@@ -188,13 +188,13 @@ public sealed class BuildEngine(
 
         // 9. OnPageRendered hooks (search docs, etc.).
         using (Measure("9. OnPageRendered hooks"))
-        foreach (var hook in host.BuildHooks)
-            using (Measure(PluginLabel(hook)))
-            foreach (var page in site.Pages)
-            {
-                if (hook is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
-                await hook.OnPageRenderedAsync(page, site, ct);
-            }
+            foreach (var hook in host.BuildHooks)
+                using (Measure(PluginLabel(hook)))
+                    foreach (var page in site.Pages)
+                    {
+                        if (hook is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
+                        await hook.OnPageRenderedAsync(page, site, ct);
+                    }
 
         // 10. Copy assets (theme + docs static + plugin-registered).
         using (Measure("10. copy assets"))
@@ -203,12 +203,12 @@ public sealed class BuildEngine(
 
         // 11. OnBuildComplete hooks (search index, rss, sitemap).
         using (Measure("11. OnBuildComplete hooks"))
-        foreach (var hook in host.BuildHooks)
-        {
-            _log.LogTrace("OnBuildComplete: {Hook}", hook.GetType().Name);
-            using (Measure(PluginLabel(hook)))
-                await hook.OnBuildCompleteAsync(site, ct);
-        }
+            foreach (var hook in host.BuildHooks)
+            {
+                _log.LogTrace("OnBuildComplete: {Hook}", hook.GetType().Name);
+                using (Measure(PluginLabel(hook)))
+                    await hook.OnBuildCompleteAsync(site, ct);
+            }
 
         // 12. Built-in sitemap.xml.
         using (Measure("12. sitemap"))

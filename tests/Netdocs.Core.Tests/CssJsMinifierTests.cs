@@ -32,6 +32,31 @@ public class CssJsMinifierTests
     }
 
     [Fact]
+    public void MinifyCss_CommentWithApostropheAndQuotes_DoesNotDropFollowingRule()
+    {
+        // Regression: a comment containing an apostrophe or quoted word used to make the
+        // string-protection pass swallow the rule that followed it, dropping it from the output.
+        var css = """
+            /* It's a subtle "highlight" instead of an underline. */
+            .md-tabs__item--active .md-tabs__link {
+                font-weight: 700;
+            }
+            """;
+        var min = CssJsMinifier.MinifyCss(css);
+
+        Assert.DoesNotContain("/*", min);
+        Assert.Contains(".md-tabs__item--active .md-tabs__link{font-weight:700}", min);
+    }
+
+    [Fact]
+    public void MinifyCss_DoesNotTreatCommentTokenInsideString_AsComment()
+    {
+        var css = "a::before { content: \"/* not a comment */\"; }";
+        var min = CssJsMinifier.MinifyCss(css);
+        Assert.Contains("\"/* not a comment */\"", min);
+    }
+
+    [Fact]
     public void MinifyJs_StripsCommentsAndCollapsesWhitespace()
     {
         var js = """

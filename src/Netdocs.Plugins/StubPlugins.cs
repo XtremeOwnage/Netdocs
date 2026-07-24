@@ -1,6 +1,7 @@
 using Markdig;
 using Netdocs.Abstractions;
 using Netdocs.Core.Configuration;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -21,22 +22,15 @@ public sealed class FileFilterPlugin : IPlugin, INavigationFilter
 
     public void Configure(IPluginContext ctx)
     {
-        var path = Path.Combine(ctx.Config.ProjectRoot, ".file-filter.yml");
-        if (!File.Exists(path)) { _active = false; return; }
+        // Path-based `.mkdocsignore` pruning is handled during content discovery; this plugin owns
+        // the front-matter label filter. Both share the same enabled gate via FileFilterSettings.
+        var settings = FileFilterSettings.Load(ctx.Config.ProjectRoot);
+        _active = settings.AppliesLabelFilter(ctx.Options.IsServe);
+        if (!_active) return;
 
-        var root = YamlTree.Parse(File.ReadAllText(path)).AsMap();
-
-        var enabled = root.Get("enabled").AsBool(true);
-        var enabledOnServe = root.TryGetValue("enabled_on_serve", out var eos) ? eos.AsBool(true) : true;
-        _active = ctx.Options.IsServe ? enabled && enabledOnServe : enabled;
-
-        if (root.Get("metadata_property").AsString() is { Length: > 0 } prop) _metadataProperty = prop;
-        foreach (var t in root.Get("exclude_tag").AsList())
-            if (t.AsString() is { Length: > 0 } s) _excludeTags.Add(s);
-        foreach (var t in root.Get("include_tag").AsList())
-            if (t.AsString() is { Length: > 0 } s) _includeTags.Add(s);
-
-        if (_excludeTags.Count == 0) _active = false;
+        _metadataProperty = settings.MetadataProperty;
+        foreach (var t in settings.ExcludeTags) _excludeTags.Add(t);
+        foreach (var t in settings.IncludeTags) _includeTags.Add(t);
     }
 
     public bool ShouldInclude(Page page, SiteContext site)

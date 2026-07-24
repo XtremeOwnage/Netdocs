@@ -4,7 +4,7 @@ using Netdocs.Abstractions;
 namespace Netdocs.Core.Content;
 
 /// <summary>Walks the docs directory and produces <see cref="Page"/> instances.</summary>
-public sealed class ContentDiscovery(SiteConfig config, ILogger<ContentDiscovery> logger)
+public sealed class ContentDiscovery(SiteConfig config, BuildOptions options, ILogger<ContentDiscovery> logger)
 {
     private static readonly string[] MarkdownExtensions = [".md", ".markdown"];
 
@@ -14,7 +14,11 @@ public sealed class ContentDiscovery(SiteConfig config, ILogger<ContentDiscovery
         if (!Directory.Exists(docsDir))
             throw new DirectoryNotFoundException($"docs_dir not found: {docsDir}");
 
-        var ignore = IgnoreRules.Load(config.ProjectRoot, docsDir, config.Exclude);
+        // `.mkdocsignore` only prunes content when the file-filter is active for this build mode
+        // (production, by default). On dev / serve builds the listed dev-only sections stay in.
+        var filter = FileFilterSettings.Load(config.ProjectRoot);
+        var applyIgnoreFile = filter.AppliesMkdocsIgnore(options.IsServe);
+        var ignore = IgnoreRules.Load(config.ProjectRoot, docsDir, config.Exclude, applyIgnoreFile, filter.MkdocsignoreFile);
         var pages = new List<Page>();
 
         foreach (var file in Directory.EnumerateFiles(docsDir, "*", SearchOption.AllDirectories))

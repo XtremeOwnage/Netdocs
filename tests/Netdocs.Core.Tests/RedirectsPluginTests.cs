@@ -30,6 +30,14 @@ public class RedirectsPluginTests : IDisposable
         return site;
     }
 
+    private static Page PageWith(string url, string frontMatterKey, object? value) => new()
+    {
+        SourcePath = "x",
+        RelativePath = url + ".md",
+        Url = url + "/",
+        FrontMatter = new Dictionary<string, object?> { [frontMatterKey] = value },
+    };
+
     private async Task<SiteContext> Run(IReadOnlyDictionary<string, object?> options)
     {
         var site = Site();
@@ -135,6 +143,63 @@ public class RedirectsPluginTests : IDisposable
         var site = await Run(new Dictionary<string, object?> { ["redirect_files"] = "does-not-exist.json" });
         Assert.False(Directory.Exists(site.Config.AbsoluteSiteDir) &&
             Directory.EnumerateFiles(site.Config.AbsoluteSiteDir).Any());
+    }
+
+    [Fact]
+    public async Task FrontMatter_RedirectFromString_EmitsStubToPageUrl()
+    {
+        var site = Site();
+        site.Pages.Add(PageWith("blog/2018/ls-how-to-turn-on-the-alternator",
+            "redirect_from", "blog/2018/ls--how-to-turn-on-the-alternator/"));
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>(), site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        var html = ReadStub(site, "blog/2018/ls--how-to-turn-on-the-alternator/index.html");
+        Assert.Contains("url=/blog/2018/ls-how-to-turn-on-the-alternator/", html);
+    }
+
+    [Fact]
+    public async Task FrontMatter_RedirectFromList_EmitsStubPerEntry()
+    {
+        var site = Site();
+        site.Pages.Add(PageWith("new/page", "redirect_from",
+            new List<object?> { "old/a/", "old/b/" }));
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>(), site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.Contains("url=/new/page/", ReadStub(site, "old/a/index.html"));
+        Assert.Contains("url=/new/page/", ReadStub(site, "old/b/index.html"));
+    }
+
+    [Fact]
+    public async Task FrontMatter_AliasesKey_AlsoSupported()
+    {
+        var site = Site();
+        site.Pages.Add(PageWith("new/page", "aliases", "legacy/x/"));
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>(), site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.Contains("url=/new/page/", ReadStub(site, "legacy/x/index.html"));
+    }
+
+    [Fact]
+    public async Task ConfiguredMap_OverridesFrontMatterForSameSource()
+    {
+        var site = Site();
+        site.Pages.Add(PageWith("from-frontmatter", "redirect_from", "dup/"));
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                ["redirect_maps"] = new Dictionary<string, object?> { ["dup/"] = "/from-config/" },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.Contains("url=/from-config/", ReadStub(site, "dup/index.html"));
     }
 
     private sealed class FakeContext(IReadOnlyDictionary<string, object?> options, SiteConfig config) : IPluginContext

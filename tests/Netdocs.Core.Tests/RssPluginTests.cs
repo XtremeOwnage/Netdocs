@@ -104,6 +104,69 @@ public class RssPluginTests : IDisposable
     }
 
     [Fact]
+    public async Task Guid_DefaultsToPermalinkUrl()
+    {
+        var site = Site(Post("Hello", "blog/hello", DateTimeOffset.UtcNow));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        Assert.Contains("<guid isPermaLink=\"true\">https://example.com/blog/hello/</guid>", xml);
+    }
+
+    [Fact]
+    public async Task RssGuidFrontMatter_OverridesPermalinkGuid()
+    {
+        var fm = new Dictionary<string, object?> { ["rss_guid"] = "urn:uuid:stable-123" };
+        var site = Site(Post("Renamed", "blog/new-slug", DateTimeOffset.UtcNow, frontMatter: fm));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        Assert.Contains("<guid isPermaLink=\"false\">urn:uuid:stable-123</guid>", xml);
+        // The stable id also anchors the Atom entry.
+        await Run(new Dictionary<string, object?> { ["atom"] = true }, site);
+        var atom = File.ReadAllText(Path.Combine(_root, "feed_atom_created.xml"));
+        Assert.Contains("<id>urn:uuid:stable-123</id>", atom);
+    }
+
+    [Fact]
+    public async Task Description_UsesRenderedHtmlBeforeMoreMarker()
+    {
+        var html = "<h1 id=\"t\">Title</h1>\n<p>Intro <strong>bold</strong>.</p>\n<!-- more -->\n<p>Rest</p>";
+        var site = Site(Post("Post", "blog/p", DateTimeOffset.UtcNow, html: html));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        // HTML is escaped inside <description>; the intro paragraph (with formatting) is present,
+        // the leading H1 is stripped, and content after <!-- more --> is excluded.
+        Assert.Contains("&lt;p&gt;Intro &lt;strong&gt;bold&lt;/strong&gt;.&lt;/p&gt;", xml);
+        Assert.DoesNotContain("Title", xml.Split("<description>")[1].Split("</description>")[0]);
+        Assert.DoesNotContain("Rest", xml);
+    }
+
+    [Fact]
+    public async Task Description_AbsolutizesRelativeLinks()
+    {
+        var html = "<p>See <a href=\"../other/\">this</a>.</p>\n<!-- more -->\n<p>x</p>";
+        var site = Site(Post("Post", "blog/2024/p", DateTimeOffset.UtcNow, html: html));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        Assert.Contains("https://example.com/blog/2024/other/", xml);
+    }
+
+    [Fact]
+    public async Task RssDescriptionFrontMatter_WinsOverRenderedHtml()
+    {
+        var fm = new Dictionary<string, object?> { ["rss_description"] = "Custom summary" };
+        var html = "<p>Intro</p>\n<!-- more -->\n<p>Rest</p>";
+        var site = Site(Post("Post", "blog/p", DateTimeOffset.UtcNow, html: html, frontMatter: fm));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        Assert.Contains("<description>Custom summary</description>", xml);
+    }
+
+    [Fact]
     public async Task PerPostTitleOverride_WinsOverPageTitle()
     {
         var fm = new Dictionary<string, object?> { ["rss_title"] = "Feed Title" };

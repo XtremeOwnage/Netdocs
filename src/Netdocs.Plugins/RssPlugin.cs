@@ -98,10 +98,15 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
         var page = post.Page;
         var url = $"{siteUrl}/{page.Url}";
         var title = FrontMatterString(page, "rss_title") ?? page.Title;
-        var description = FrontMatterString(page, "rss_description") ?? post.Excerpt;
+        var description = FrontMatterString(page, "rss_description")
+            ?? BuildDescriptionHtml(page, url)
+            ?? post.Excerpt;
+        // A stable guid overrides the (URL-derived) permalink guid so a later slug/URL change
+        // doesn't make readers re-surface every post as new. Backfill `rss_guid` in front matter.
+        var guid = FrontMatterString(page, "rss_guid");
         var image = ResolveImage(page, url, siteUrl);
         var content = _fullContent && page.HtmlContent.Length > 0 ? page.HtmlContent : null;
-        return new FeedItem(title, url, post.Date, post.Categories, description, image, content);
+        return new FeedItem(title, url, guid, post.Date, post.Categories, description, image, content);
     }
 
     private string BuildRss(SiteContext site, string siteUrl, List<FeedItem> items)
@@ -152,8 +157,16 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
             writer.WriteElementString("title", item.Title);
             writer.WriteElementString("link", item.Url);
             writer.WriteStartElement("guid");
-            writer.WriteAttributeString("isPermaLink", "true");
-            writer.WriteString(item.Url);
+            if (item.Guid is { Length: > 0 } guid)
+            {
+                writer.WriteAttributeString("isPermaLink", "false");
+                writer.WriteString(guid);
+            }
+            else
+            {
+                writer.WriteAttributeString("isPermaLink", "true");
+                writer.WriteString(item.Url);
+            }
             writer.WriteEndElement();
             writer.WriteElementString("pubDate", item.Date.ToString("r"));
             foreach (var category in item.Categories)
@@ -204,7 +217,7 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
         {
             writer.WriteStartElement("entry");
             writer.WriteElementString("title", item.Title);
-            writer.WriteElementString("id", item.Url);
+            writer.WriteElementString("id", item.Guid is { Length: > 0 } aid ? aid : item.Url);
             writer.WriteElementString("updated", item.Date.ToString("yyyy-MM-ddTHH:mm:sszzz"));
             writer.WriteElementString("published", item.Date.ToString("yyyy-MM-ddTHH:mm:sszzz"));
             writer.WriteStartElement("link");
@@ -292,9 +305,76 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
     [GeneratedRegex("""<img[^>]+src=["']([^"']+)["']""", RegexOptions.IgnoreCase)]
     private static partial Regex FirstImage();
 
+    /// <summary>
+    /// Builds a rendered-HTML description from the post's content so feed readers show formatted
+    /// text instead of raw markdown. Uses the intro region — everything before the
+    /// <c>&lt;!-- more --&gt;</c> marker, mirroring the on-site excerpt — or the first paragraph
+    /// when the post has no marker. Leading tag navigation and the H1 (the item already carries a
+    /// title) are stripped, and relative links/images are absolutized so they resolve in a reader.
+    /// </summary>
+    private static string? BuildDescriptionHtml(Page page, string postUrl)
+    {
+        var html = page.HtmlContent;
+        if (string.IsNullOrWhiteSpace(html)) return null;
+
+        var moreIdx = html.IndexOf("<!-- more -->", StringComparison.OrdinalIgnoreCase);
+        string region;
+        if (moreIdx >= 0)
+        {
+            region = html[..moreIdx];
+        }
+        else
+        {
+            var first = FirstParagraph().Match(html);
+            if (!first.Success) return null;
+            region = first.Value;
+        }
+
+        region = LeadingTagsNav().Replace(region, "");
+        region = LeadingHeading().Replace(region, "");
+        region = AbsolutizeUrls(region.Trim(), postUrl);
+        return region.Length > 0 ? region : null;
+    }
+
+    /// <summary>Rewrites relative <c>href</c>/<c>src</c> values to absolute URLs, resolved against
+    /// the post's canonical URL, so links and images in a feed description work in any reader.</summary>
+    private static string AbsolutizeUrls(string html, string postUrl)
+    {
+        if (!Uri.TryCreate(postUrl.EndsWith('/') ? postUrl : postUrl + "/", UriKind.Absolute, out var baseUri))
+            return html;
+
+        return HrefOrSrc().Replace(html, match =>
+        {
+            var attr = match.Groups[1].Value;
+            var value = match.Groups[2].Value;
+            if (value.Length == 0 || value.StartsWith('#') || value.Contains("://") ||
+                value.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("tel:", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                return match.Value;
+
+            return Uri.TryCreate(baseUri, value, out var abs)
+                ? $"{attr}=\"{abs}\""
+                : match.Value;
+        });
+    }
+
+    [GeneratedRegex("""<p\b[^>]*>.*?</p>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex FirstParagraph();
+
+    [GeneratedRegex("""^\s*<nav\b[^>]*class="[^"]*md-tags[^"]*"[^>]*>.*?</nav>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex LeadingTagsNav();
+
+    [GeneratedRegex("""^\s*<h1\b[^>]*>.*?</h1>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex LeadingHeading();
+
+    [GeneratedRegex("\\b(href|src)\\s*=\\s*\"([^\"]*)\"", RegexOptions.IgnoreCase)]
+    private static partial Regex HrefOrSrc();
+
     private sealed record FeedItem(
         string Title,
         string Url,
+        string? Guid,
         DateTimeOffset Date,
         IReadOnlyList<string> Categories,
         string Description,

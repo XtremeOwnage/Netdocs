@@ -74,6 +74,36 @@ public class RssPluginTests : IDisposable
     }
 
     [Fact]
+    public async Task DeclaresUtf8AndParsesStrictly()
+    {
+        var site = Site(Post("Hello", "blog/hello", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero),
+            categories: new[] { "News" }));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var path = Path.Combine(_root, "feed_rss_created.xml");
+        var declaration = File.ReadLines(path).First();
+        Assert.Contains("encoding=\"utf-8\"", declaration, StringComparison.OrdinalIgnoreCase);
+
+        // Parse from the raw bytes so the declared encoding is honored — this throws if the
+        // declaration disagrees with the on-disk bytes.
+        var doc = new System.Xml.XmlDocument();
+        doc.Load(path);
+        Assert.Equal("rss", doc.DocumentElement!.Name);
+    }
+
+    [Fact]
+    public async Task RssChannel_IncludesStandardMetadata()
+    {
+        var site = Site(Post("Hello", "blog/hello", new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero)));
+        await Run(new Dictionary<string, object?>(), site);
+
+        var xml = File.ReadAllText(Path.Combine(_root, "feed_rss_created.xml"));
+        Assert.Contains("<generator>Netdocs</generator>", xml);
+        Assert.Contains("<language>en</language>", xml);
+        Assert.Contains("<pubDate>", xml);
+    }
+
+    [Fact]
     public async Task PerPostTitleOverride_WinsOverPageTitle()
     {
         var fm = new Dictionary<string, object?> { ["rss_title"] = "Feed Title" };

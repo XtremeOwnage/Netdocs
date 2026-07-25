@@ -51,6 +51,44 @@ page's footnote list.
     posts readable and avoids per-link markup such as
     `--8<-- "ebay.html" text="..." url="..."`, which is noisier and easy to get wrong.
 
+## Reusing a snippet for the note
+
+Instead of typing the note text inline in your config, a rule can point at a Markdown
+**snippet file** with `note_snippet`. This keeps a single source of truth for a disclosure
+that you may also include manually elsewhere (via [snippets](snippets.md)), so the wording
+stays consistent everywhere:
+
+```json
+{
+  "name": "ebay",
+  "domains": [ "ebay.us" ],
+  "note_snippet": "snippets/ebay-affiliate.md"
+}
+```
+
+The path is resolved against the project root and the `docs/` directory, each with a
+conventional `snippets` subdirectory — so `snippets/ebay-affiliate.md`,
+`docs/snippets/ebay-affiliate.md`, or a bare `ebay-affiliate.md` (found in `docs/snippets`)
+all work. If the snippet can't be found, the plugin logs a warning and falls back to the
+inline `note` (when one is set).
+
+When the snippet is a single **admonition** — the usual pretty affiliate box:
+
+```markdown
+!!! info "E-Bay Affiliate Links Used"
+    This post **DOES** include eBay affiliate links. ...
+
+    You will pay the same amount as normal ...
+```
+
+…the plugin is admonition-aware:
+
+- its **title** (`E-Bay Affiliate Links Used`) becomes the standalone fallback box's header
+  (unless the rule sets an explicit `label`), and its admonition **kind** (`info`) is reused;
+- its **body** becomes the tooltip / footer-note text. (An admonition can't render *inside*
+  a footnote, so the body is used directly there; the pretty box is reproduced for
+  table-only links via the standalone admonition.)
+
 ## How it works
 
 The plugin runs as a Markdown preprocessor (order `30`, after
@@ -133,13 +171,17 @@ Each **rule** object:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Rule id; used to build the footnote label (`linknote-<name>`). |
-| `note` | string | yes | Markdown shown as the tooltip and footer note. Legacy alias: `disclosure`. |
-| `domains` | array | no* | Hosts that identify the link. Each entry is a domain string or `{ "domain": "...", "query_contains": "..." }`. Subdomains match automatically. |
-| `patterns` | array | no* | Regular expressions matched (case-insensitively) against the full URL. |
+| `note` | string | yes* | Markdown shown as the tooltip and footer note. Legacy alias: `disclosure`. |
+| `note_snippet` | string | yes* | Path to a Markdown snippet whose content is used as the note (resolved against the project root / `docs` dir and their `snippets` subdirs). A single-admonition snippet contributes its title (→ `label`) and kind, and its body becomes the note. Legacy alias: `disclosure_snippet`. |
+| `domains` | array | no† | Hosts that identify the link. Each entry is a domain string or `{ "domain": "...", "query_contains": "..." }`. Subdomains match automatically. |
+| `patterns` | array | no† | Regular expressions matched (case-insensitively) against the full URL. |
 | `query_contains` | string | no | Default substring a matching URL must contain (per-domain values override this). |
-| `label` | string | no | Title for the standalone fallback admonition (table-only links). Default `Links`. |
+| `label` | string | no | Title for the standalone fallback admonition (table-only links). Defaults to the snippet's admonition title, else `Links`. |
 
-\* A rule must provide at least one of `domains` or `patterns`.
+\* A rule must provide the note text via either `note` or `note_snippet` (if both are set and
+the snippet resolves, the snippet wins; otherwise `note` is the fallback).
+
+† A rule must provide at least one of `domains` or `patterns`.
 
 !!! tip
     Enable [`content.footnote.tooltips`](../reference/theme.md) in your theme `features`

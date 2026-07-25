@@ -30,6 +30,14 @@ public class LinkNotesPluginTests
         return plugin;
     }
 
+    private static LinkNotesPlugin ConfiguredWithRoot(string projectRoot, params Dictionary<string, object?>[] rules)
+    {
+        var opts = new Dictionary<string, object?> { ["rules"] = rules.Cast<object?>().ToList() };
+        var plugin = new LinkNotesPlugin();
+        plugin.Configure(new FakeContext(opts) { Config = new SiteConfig { ProjectRoot = projectRoot } });
+        return plugin;
+    }
+
     private static Dictionary<string, object?> Rule(string name, string[] domains, string note, string? query = null)
     {
         var d = new Dictionary<string, object?>
@@ -259,5 +267,98 @@ public class LinkNotesPluginTests
         // Should not throw; the rule simply has no usable pattern (and no domains), so it's dropped.
         var plugin = Configured(d);
         Assert.DoesNotContain("linknote", Run(plugin, "[a](https://ebay.us/x)"));
+    }
+
+    [Fact]
+    public void NoteSnippet_Admonition_UsesBodyForFootnoteAndTitleForFallback()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var snippet =
+                "!!! info \"E-Bay Affiliate Links Used\"\n" +
+                "    This post **DOES** include eBay affiliate links.\n\n" +
+                "    You pay the same price.\n";
+            File.WriteAllText(Path.Combine(dir, "ebay-affiliate.md"), snippet);
+
+            var rule = new Dictionary<string, object?>
+            {
+                ["name"] = "ebay",
+                ["domains"] = new List<object?> { "ebay.us" },
+                ["note_snippet"] = "ebay-affiliate.md",
+            };
+            var plugin = ConfiguredWithRoot(dir, rule);
+
+            // Inline link: footnote definition carries the de-indented body (NOT a nested admonition,
+            // which can't render inside a footnote) so the tooltip shows the text.
+            var inline = Run(plugin, "Buy on [eBay](https://ebay.us/abc).");
+            Assert.Contains("[^linknote-ebay]", inline);
+            Assert.Contains("This post **DOES** include eBay affiliate links.", inline);
+            Assert.DoesNotContain("!!! info", inline);
+            // Continuation lines are indented so the second paragraph stays in the footnote.
+            Assert.Contains("\n    You pay the same price.", inline);
+
+            // Table-only link: standalone admonition reuses the snippet's title as the box header.
+            var table = Run(plugin, "| Item | Buy |\n| --- | --- |\n| Widget | [eBay](https://ebay.us/xyz) |");
+            Assert.Contains("!!! info \"E-Bay Affiliate Links Used\"", table);
+            Assert.Contains("This post **DOES** include eBay affiliate links.", table);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void NoteSnippet_MissingFile_FallsBackToInlineNote()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var rule = new Dictionary<string, object?>
+            {
+                ["name"] = "ebay",
+                ["domains"] = new List<object?> { "ebay.us" },
+                ["note"] = "Inline fallback note.",
+                ["note_snippet"] = "does-not-exist.md",
+            };
+            var plugin = ConfiguredWithRoot(dir, rule);
+            var result = Run(plugin, "Buy on [eBay](https://ebay.us/abc).");
+            Assert.Contains("[^linknote-ebay]: Inline fallback note.", result);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void NoteSnippet_ResolvesFromDocsSnippetsDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        var snippetsDir = Path.Combine(dir, "docs", "snippets");
+        Directory.CreateDirectory(snippetsDir);
+        try
+        {
+            File.WriteAllText(Path.Combine(snippetsDir, "amazon-affiliate.md"),
+                "!!! info \"Amazon Affiliate Links Used\"\n    Amazon disclosure body.\n");
+
+            var rule = new Dictionary<string, object?>
+            {
+                ["name"] = "amazon",
+                ["domains"] = new List<object?> { "amzn.to" },
+                // Bare filename resolves via the conventional <docs>/snippets directory.
+                ["note_snippet"] = "amazon-affiliate.md",
+            };
+            var plugin = ConfiguredWithRoot(dir, rule);
+            var result = Run(plugin, "Buy on [Amazon](https://amzn.to/abc).");
+            Assert.Contains("[^linknote-amazon]: Amazon disclosure body.", result);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 }

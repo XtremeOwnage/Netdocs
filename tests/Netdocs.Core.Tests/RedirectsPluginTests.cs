@@ -202,6 +202,105 @@ public class RedirectsPluginTests : IDisposable
         Assert.Contains("url=/from-config/", ReadStub(site, "dup/index.html"));
     }
 
+    [Fact]
+    public async Task SlugifyRedirect_SeparatorChange_EmitsRedirectToCurrentUrl()
+    {
+        var site = Site();
+        site.Pages.Add(new Page { SourcePath = "x", RelativePath = "x.md", Url = "blog/2018/ls-how-to-turn-on/" });
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                ["slugify_redirects"] = new Dictionary<string, object?> { ["separator"] = "_" },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        var html = ReadStub(site, "blog/2018/ls_how_to_turn_on/index.html");
+        Assert.Contains("url=/blog/2018/ls-how-to-turn-on/", html);
+    }
+
+    [Fact]
+    public async Task SlugifyRedirect_NoConfigChange_EmitsNothing()
+    {
+        var site = Site();
+        site.Pages.Add(new Page { SourcePath = "x", RelativePath = "x.md", Url = "blog/ls-how-to/" });
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                // Same as the current default slugify (lower / "-"), so no URL changes.
+                ["slugify_redirects"] = new Dictionary<string, object?> { ["separator"] = "-", ["case"] = "lower" },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.False(Directory.Exists(site.Config.AbsoluteSiteDir) &&
+            Directory.EnumerateFiles(site.Config.AbsoluteSiteDir, "*", SearchOption.AllDirectories).Any());
+    }
+
+    [Fact]
+    public async Task SlugifyRedirect_ArrayOfConfigs_AllApplied()
+    {
+        var site = Site();
+        site.Pages.Add(new Page { SourcePath = "x", RelativePath = "x.md", Url = "posts/my-post/" });
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                ["slugify_redirects"] = new List<object?>
+                {
+                    new Dictionary<string, object?> { ["separator"] = "_" },
+                    new Dictionary<string, object?> { ["separator"] = "+" },
+                },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.Contains("url=/posts/my-post/", ReadStub(site, "posts/my_post/index.html"));
+        Assert.Contains("url=/posts/my-post/", ReadStub(site, "posts/my+post/index.html"));
+    }
+
+    [Fact]
+    public async Task SlugifyRedirect_DoesNotClobberExistingPage()
+    {
+        var site = Site();
+        // Current page whose old-separator slug would collide with a real page below.
+        site.Pages.Add(new Page { SourcePath = "a", RelativePath = "a.md", Url = "a-b/" });
+        // A real page already living at the would-be old URL.
+        site.Pages.Add(new Page { SourcePath = "b", RelativePath = "b.md", Url = "a_b/" });
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                ["slugify_redirects"] = new Dictionary<string, object?> { ["separator"] = "_" },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        // No stub should be written over the real /a_b/ page.
+        Assert.False(File.Exists(Path.Combine(site.Config.AbsoluteSiteDir, "a_b", "index.html")));
+    }
+
+    [Fact]
+    public async Task SlugifyRedirect_ConfiguredMapOverridesGeneratedSource()
+    {
+        var site = Site();
+        site.Pages.Add(new Page { SourcePath = "x", RelativePath = "x.md", Url = "blog/ls-how-to/" });
+        var plugin = new RedirectsPlugin();
+        plugin.Configure(new FakeContext(
+            new Dictionary<string, object?>
+            {
+                ["slugify_redirects"] = new Dictionary<string, object?> { ["separator"] = "_" },
+                // An explicit map for the same generated source must win.
+                ["redirect_maps"] = new Dictionary<string, object?> { ["blog/ls_how_to/"] = "/somewhere-else/" },
+            },
+            site.Config));
+        await plugin.OnBuildCompleteAsync(site, default);
+
+        Assert.Contains("url=/somewhere-else/", ReadStub(site, "blog/ls_how_to/index.html"));
+    }
+
     private sealed class FakeContext(IReadOnlyDictionary<string, object?> options, SiteConfig config) : IPluginContext
     {
         public SiteConfig Config { get; } = config;

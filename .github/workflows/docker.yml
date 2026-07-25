@@ -32,11 +32,14 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          # `latest` follows the newest stable release (metadata-action's default
+          # latest=auto), NOT main. A push to main only produces `:main` + `:sha-*`.
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v7

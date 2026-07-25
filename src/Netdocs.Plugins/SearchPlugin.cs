@@ -18,6 +18,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
     private string _separator = DefaultSeparator;
     private IReadOnlyList<string> _pipeline = DefaultPipeline;
     private bool _stripBloatElements = true;
+    private bool _includeTags = true;
 
     public string Name => "search";
 
@@ -40,6 +41,11 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         // that inflate the index without adding search value. Defaults to true.
         if (opts.TryGetValue("strip_bloat_elements", out var strip) && strip is bool b)
             _stripBloatElements = b;
+
+        // `include_tags` controls whether tags are included in the search index. Tags are metadata
+        // (not content) and can inflate the index. Defaults to true for backward compatibility.
+        if (opts.TryGetValue("include_tags", out var incTags) && incTags is bool t)
+            _includeTags = t;
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
@@ -49,7 +55,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
 
         foreach (var page in site.Pages)
         {
-            var tags = ExtractTags(page);
+            var tags = _includeTags ? ExtractTags(page) : [];
             var (intro, sections) = SplitPage(parser, page, _stripBloatElements);
             docs.Add(new SearchDoc(page.Url, page.Title, intro, tags));
 

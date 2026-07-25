@@ -28,6 +28,20 @@ body {
   fill: currentColor;
 }
 
+/* Footer meta links (e.g. Disclaimers) rendered from `extra.footer_links`.
+   Sit on their own line under the copyright/attribution text. */
+.md-footer-links {
+  margin-top: 0.3rem;
+}
+
+.md-footer-links__link {
+  color: inherit;
+}
+
+.md-footer-links__sep {
+  opacity: 0.5;
+}
+
 /* ----------------------------------------------------------------------------
    Header: logo + site title on the left; social links, palette toggle and
    search on the right. Top-level navigation lives in the separate `.md-tabs`

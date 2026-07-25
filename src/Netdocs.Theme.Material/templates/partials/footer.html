@@ -30,6 +30,17 @@
       <div class="md-copyright">
         {{~ if config.copyright ~}}<div class="md-copyright__highlight">{{ config.copyright }}</div>{{~ end ~}}
         Built with Netdocs, a derivative of <a href="https://github.com/squidfunk/mkdocs-material" target="_blank" rel="noopener">MkDocs-Material</a>
+        {{~ if extra.footer_links ~}}
+        <nav class="md-footer-links" aria-label="Footer links">
+          {{~ for l in extra.footer_links ~}}
+          {{~ href = l.link ~}}
+          {{~ external = (href | string.starts_with "http") || (href | string.starts_with "//") ~}}
+          {{~ if !external ~}}{{~ href = base_url + (strip_slash href) ~}}{{~ end ~}}
+          {{~ if !for.first ~}}<span class="md-footer-links__sep"> &middot; </span>{{~ end ~}}
+          <a href="{{ href }}" class="md-footer-links__link"{{ if external }} target="_blank" rel="noopener"{{ end }}>{{ l.name }}</a>
+          {{~ end ~}}
+        </nav>
+        {{~ end ~}}
       </div>
       {{~ if extra.social ~}}
       <div class="md-social">

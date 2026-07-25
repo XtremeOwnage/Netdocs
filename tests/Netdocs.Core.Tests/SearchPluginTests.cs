@@ -177,4 +177,68 @@ public class SearchPluginTests
         Assert.Equal("[\\s]+", cfg.GetProperty("separator").GetString());
         Assert.Equal(new[] { "trimmer" }, cfg.GetProperty("pipeline").EnumerateArray().Select(e => e.GetString()).ToArray());
     }
+
+    [Fact]
+    public void IncludeTags_DefaultsToTrue()
+    {
+        var page = new Page
+        {
+            SourcePath = "",
+            RelativePath = "index.md",
+            Url = "test/",
+            Title = "Test",
+            HtmlContent = "<h1>Test</h1><p>Content</p>",
+            PlainText = "Test Content",
+            FrontMatter = new Dictionary<string, object?> { ["tags"] = new[] { "tag1", "tag2" } },
+        };
+
+        var index = EmitIndex(page);
+        var doc = index.GetProperty("docs").EnumerateArray().First(d => d.GetProperty("location").GetString() == "test/");
+        var tags = doc.GetProperty("tags").EnumerateArray().Select(t => t.GetString()).ToList();
+
+        Assert.Equal(new[] { "tag1", "tag2" }, tags);
+    }
+
+    [Fact]
+    public void IncludeTags_CanBeDisabled()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-search-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var plugin = new SearchPlugin();
+            plugin.Configure(new FakeContext(new Dictionary<string, object?> { ["include_tags"] = false }));
+
+            var config = new SiteConfig { ProjectRoot = dir };
+            var site = new SiteContext
+            {
+                Config = config,
+                Options = new BuildOptions(),
+                LoggerFactory = NullLoggerFactory.Instance,
+            };
+            var page = new Page
+            {
+                SourcePath = "",
+                RelativePath = "index.md",
+                Url = "test/",
+                Title = "Test",
+                HtmlContent = "<h1>Test</h1><p>Content</p>",
+                PlainText = "Test Content",
+                FrontMatter = new Dictionary<string, object?> { ["tags"] = new[] { "tag1", "tag2" } },
+            };
+            site.Pages.Add(page);
+
+            plugin.OnBuildCompleteAsync(site, CancellationToken.None).GetAwaiter().GetResult();
+            var json = File.ReadAllText(Path.Combine(config.AbsoluteSiteDir, "search", "search_index.json"));
+            var index = JsonDocument.Parse(json).RootElement;
+            var doc = index.GetProperty("docs").EnumerateArray().First(d => d.GetProperty("location").GetString() == "test/");
+            var tags = doc.GetProperty("tags").EnumerateArray().ToList();
+
+            // Tags should be empty when include_tags is false
+            Assert.Empty(tags);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
 }

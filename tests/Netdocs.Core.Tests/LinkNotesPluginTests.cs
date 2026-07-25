@@ -311,7 +311,7 @@ public class LinkNotesPluginTests
     }
 
     [Fact]
-    public void NoteSnippet_MissingFile_FallsBackToInlineNote()
+    public void NoteSnippet_MissingFile_FailsBuild()
     {
         var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -321,12 +321,15 @@ public class LinkNotesPluginTests
             {
                 ["name"] = "ebay",
                 ["domains"] = new List<object?> { "ebay.us" },
+                // Even with an inline note present, a referenced-but-missing snippet is a fatal
+                // configuration error rather than a silent fallback.
                 ["note"] = "Inline fallback note.",
                 ["note_snippet"] = "does-not-exist.md",
             };
             var plugin = ConfiguredWithRoot(dir, rule);
-            var result = Run(plugin, "Buy on [eBay](https://ebay.us/abc).");
-            Assert.Contains("[^linknote-ebay]: Inline fallback note.", result);
+            var ex = Assert.Throws<FileNotFoundException>(
+                () => Run(plugin, "Buy on [eBay](https://ebay.us/abc)."));
+            Assert.Contains("does-not-exist.md", ex.Message);
         }
         finally
         {

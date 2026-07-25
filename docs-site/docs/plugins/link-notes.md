@@ -69,8 +69,8 @@ stays consistent everywhere:
 The path is resolved against the project root and the `docs/` directory, each with a
 conventional `snippets` subdirectory — so `snippets/ebay-affiliate.md`,
 `docs/snippets/ebay-affiliate.md`, or a bare `ebay-affiliate.md` (found in `docs/snippets`)
-all work. If the snippet can't be found, the plugin logs a warning and falls back to the
-inline `note` (when one is set).
+all work. If a referenced snippet **cannot be found, the build fails** with a clear error
+(even without `--strict`) — a mistyped path can never silently drop an affiliate disclosure.
 
 When the snippet is a single **admonition** — the usual pretty affiliate box:
 
@@ -172,14 +172,15 @@ Each **rule** object:
 |---|---|---|---|
 | `name` | string | yes | Rule id; used to build the footnote label (`linknote-<name>`). |
 | `note` | string | yes* | Markdown shown as the tooltip and footer note. Legacy alias: `disclosure`. |
-| `note_snippet` | string | yes* | Path to a Markdown snippet whose content is used as the note (resolved against the project root / `docs` dir and their `snippets` subdirs). A single-admonition snippet contributes its title (→ `label`) and kind, and its body becomes the note. Legacy alias: `disclosure_snippet`. |
+| `note_snippet` | string | yes* | Path to a Markdown snippet whose content is used as the note (resolved against the project root / `docs` dir and their `snippets` subdirs). A single-admonition snippet contributes its title (→ `label`) and kind, and its body becomes the note. A referenced-but-missing snippet **fails the build**. Legacy alias: `disclosure_snippet`. |
 | `domains` | array | no† | Hosts that identify the link. Each entry is a domain string or `{ "domain": "...", "query_contains": "..." }`. Subdomains match automatically. |
 | `patterns` | array | no† | Regular expressions matched (case-insensitively) against the full URL. |
 | `query_contains` | string | no | Default substring a matching URL must contain (per-domain values override this). |
 | `label` | string | no | Title for the standalone fallback admonition (table-only links). Defaults to the snippet's admonition title, else `Links`. |
 
-\* A rule must provide the note text via either `note` or `note_snippet` (if both are set and
-the snippet resolves, the snippet wins; otherwise `note` is the fallback).
+\* A rule must provide the note text via either `note` or `note_snippet`. If `note_snippet`
+is set it takes precedence; a referenced snippet that cannot be found fails the build rather
+than falling back, so a mistyped path is caught instead of silently dropping the note.
 
 † A rule must provide at least one of `domains` or `patterns`.
 

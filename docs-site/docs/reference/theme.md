@@ -210,15 +210,17 @@ Material's Jinja partials map fairly directly onto Scriban. The common substitut
 | `{{ config.site_name }}` | `{{ config.site_name }}` (unchanged) |
 
 Use the trim markers `{{~` / `~}}` to strip surrounding whitespace, and the theme helpers
-(`social_icon`, `strip_slash`, `base_url`) instead of Material's Jinja filters. For example,
-an override that renders the configured social links in the header:
+(`social_icon`, `social_label`, `strip_slash`, `base_url`) instead of Material's Jinja filters.
+For example, an override that renders the configured social links in the header:
 
 ```html
 {{~ if extra.social ~}}
 <div class="header-social">
   {{~ for link in extra.social ~}}
+  {{~ label = link.name ~}}
+  {{~ if !label || (label | string.strip) == "" ~}}{{~ label = social_label link.icon ~}}{{~ end ~}}
   <a href="{{ link.link }}" class="md-social__link md-header__button md-icon"
-     title="{{ link.icon }}" target="_blank" rel="noopener">{{ social_icon link.icon }}</a>
+     title="{{ label }}" aria-label="{{ label }}" target="_blank" rel="noopener">{{ social_icon link.icon }}</a>
   {{~ end ~}}
 </div>
 {{~ end ~}}
@@ -227,7 +229,9 @@ an override that renders the configured social links in the header:
 ## Social links & icons
 
 Configure the links shown in the header and footer under `extra.social`. Each entry has an
-`icon` name (Material/FontAwesome-style, e.g. `fontawesome/brands/github`) and a `link`:
+`icon` name (Material/FontAwesome-style, e.g. `fontawesome/brands/github`) and a `link`. You
+can optionally add a `name` to control the hover tooltip / `aria-label`; when omitted, a
+friendly label is derived automatically from the icon (see [Tooltips & labels](#tooltips--labels)):
 
 ```json
 {
@@ -236,7 +240,7 @@ Configure the links shown in the header and footer under `extra.social`. Each en
       "social": [
         { "icon": "fontawesome/brands/github", "link": "https://github.com/you/repo" },
         { "icon": "fontawesome/brands/mastodon", "link": "https://fosstodon.org/@you" },
-        { "icon": "material/rss", "link": "feed_rss_created.xml" }
+        { "icon": "material/rss", "link": "feed_rss_created.xml", "name": "Subscribe via RSS" }
       ]
     }
   }
@@ -259,6 +263,23 @@ substring, so both the Material (`material/github`) and FontAwesome
 | `youtube` | YouTube |
 | `mail` / `email` / `envelope` | Email |
 | *(anything else)* | Globe (generic link) |
+
+### Tooltips & labels
+
+Each social link needs readable hover text for usability and accessibility. The theme resolves
+the label in this order:
+
+1. An explicit `name` on the entry (e.g. `"name": "Subscribe via RSS"`) — always wins.
+2. Otherwise the `social_label` helper derives a friendly name from the icon: it takes the last
+   path segment and maps well-known ones to proper casing — `fontawesome/solid/rss` → **RSS
+   Feed**, `fontawesome/brands/x-twitter` → **X (Twitter)**, `fontawesome/brands/linkedin` →
+   **LinkedIn**, `fontawesome/solid/globe` → **Website**, and so on.
+3. Anything unrecognised is title-cased from its last segment, so `simple/my-service` still
+   reads as **My Service** rather than the raw icon path.
+
+The resolved label is used for both the `title` (tooltip) and `aria-label`. Set an explicit
+`name` whenever the icon alone is ambiguous — for example a generic globe that actually points
+to your main website.
 
 ### Custom icons
 

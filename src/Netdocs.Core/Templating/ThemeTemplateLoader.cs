@@ -45,6 +45,7 @@ public static class TemplateFunctions
 
         var overrides = ExtractIconOverrides(model);
         globals.Import("social_icon", (string? name) => SocialIcon(name ?? "", overrides));
+        globals.Import("social_label", static (string? name) => SocialLabel(name ?? ""));
         globals.Import("nav_icon", (string? name) => NavIcon(name ?? "", overrides));
 
         var versioner = (model is not null && model.TryGetValue("asset_versioner", out var v) ? v as AssetVersioner : null)
@@ -100,6 +101,82 @@ public static class TemplateFunctions
 
     private static string Svg(string path) =>
         $"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"{path}\"/></svg>";
+
+    /// <summary>
+    /// Turns an icon name into a human-friendly label for tooltips / <c>aria-label</c>s
+    /// (e.g. <c>fontawesome/solid/rss</c> → "RSS Feed", <c>fontawesome/brands/x-twitter</c> →
+    /// "X (Twitter)"). Falls back to a title-cased version of the last path segment for anything
+    /// not in the curated map, so unknown icons still read nicely (e.g. <c>some/cool-thing</c> →
+    /// "Cool Thing"). Sites can always override this per-link via a <c>name</c> field in config.
+    /// </summary>
+    public static string SocialLabel(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+
+        // Use the last path segment (mkdocs-style names look like "fontawesome/brands/github").
+        var seg = name.Trim().Trim('/');
+        var slash = seg.LastIndexOf('/');
+        if (slash >= 0) seg = seg[(slash + 1)..];
+        var key = seg.ToLowerInvariant();
+
+        return key switch
+        {
+            "github" => "GitHub",
+            "gitlab" => "GitLab",
+            "bitbucket" => "Bitbucket",
+            "discord" => "Discord",
+            "slack" => "Slack",
+            "reddit" => "Reddit",
+            "rss" or "feed" or "square-rss" => "RSS Feed",
+            "globe" or "link" or "house" or "home" or "web" or "earth" or "language" => "Website",
+            "x-twitter" or "twitter" or "x" => "X (Twitter)",
+            "mastodon" => "Mastodon",
+            "bluesky" or "butterfly" => "Bluesky",
+            "linkedin" or "linkedin-in" => "LinkedIn",
+            "youtube" or "youtube-play" => "YouTube",
+            "facebook" or "facebook-f" => "Facebook",
+            "instagram" => "Instagram",
+            "threads" => "Threads",
+            "tiktok" => "TikTok",
+            "twitch" => "Twitch",
+            "telegram" => "Telegram",
+            "whatsapp" => "WhatsApp",
+            "signal" => "Signal",
+            "matrix" or "matrix-org" => "Matrix",
+            "envelope" or "email" or "mail" or "at" => "Email",
+            "phone" => "Phone",
+            "stack-overflow" or "stackoverflow" => "Stack Overflow",
+            "hacker-news" or "hackernews" or "y-combinator" => "Hacker News",
+            "docker" => "Docker",
+            "kubernetes" => "Kubernetes",
+            "npm" => "npm",
+            "nuget" => "NuGet",
+            "steam" => "Steam",
+            "patreon" => "Patreon",
+            "ko-fi" => "Ko-fi",
+            "paypal" => "PayPal",
+            "medium" => "Medium",
+            "dev" or "dev-to" => "DEV Community",
+            "keybase" => "Keybase",
+            "spotify" => "Spotify",
+            "soundcloud" => "SoundCloud",
+            _ => TitleCase(key),
+        };
+    }
+
+    /// <summary>Title-cases a dash/underscore/space separated token: "cool-thing" → "Cool Thing".</summary>
+    private static string TitleCase(string value)
+    {
+        var words = value.Split(['-', '_', ' '], StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < words.Length; i++)
+        {
+            var w = words[i];
+            words[i] = w.Length == 1 ? char.ToUpperInvariant(w[0]).ToString()
+                                     : char.ToUpperInvariant(w[0]) + w[1..];
+        }
+        return words.Length == 0 ? value : string.Join(' ', words);
+    }
+
 
     /// <summary>
     /// Resolves a nav/badge icon to inline markup. Resolution order: custom <c>extra.social_icons</c>

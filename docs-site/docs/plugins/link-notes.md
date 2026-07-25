@@ -128,9 +128,9 @@ footnotes at all). The snippet receives the matched link as template parameters,
 A `link_snippet` is typically a small HTML fragment that wraps the link with a CSS-styled tooltip:
 
 ```html
-<span class="affiliate-wrapper"><a href="${url}" target="_blank" rel="nofollow sponsored noopener"
-class="affiliate-link">${text}</a><span class="affiliate-tooltip"><span class="tooltip-title">eBay
-Affiliate Link</span><span class="tooltip-content">This is an eBay affiliate link…</span></span></span>
+<span class="buylink-wrap"><a href="${url}" target="_blank" rel="nofollow sponsored noopener"
+class="buylink-a">${text}</a><span class="buylink-pop"><span class="buylink-pop-h">eBay
+Affiliate Link</span><span class="buylink-pop-b">This is an eBay affiliate link…</span></span></span>
 ```
 
 Because the replacement is inline HTML (not a footnote), tooltip mode also works **inside pipe-table
@@ -138,9 +138,15 @@ cells** — where footnote references can't go — so links generated from CSVs 
 [table-reader](table-reader.md) get the same pretty popup. A referenced-but-missing `link_snippet`
 **fails the build**, exactly like `note_snippet`.
 
+!!! warning "Avoid ad-blocker-triggering class names"
+    Don't put the word `affiliate` (or `sponsor`/`ad`/`promo`) in the class names. Ad-blockers ship
+    cosmetic filters such as `[class*="affiliate"] { display: none }`, which will **hide the whole
+    link** for a large share of readers while it still renders fine in a clean browser. Use a neutral
+    prefix (the example above uses `buylink-*`).
+
 !!! tip "Style it once"
-    Put the tooltip CSS (`.affiliate-wrapper` / `.affiliate-tooltip` etc.) in your `extra_css` and
-    reuse the same classes across every affiliate snippet so all popups look consistent.
+    Put the tooltip CSS (`.buylink-wrap` / `.buylink-pop` etc.) in your `extra_css` and
+    reuse the same classes across every snippet so all popups look consistent.
 
 ## How it works
 

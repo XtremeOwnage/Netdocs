@@ -118,7 +118,7 @@ public class SearchPluginTests
     }
 
     [Fact]
-    public void SearchText_PreservesBlockHtml()
+    public void SearchText_StripsOnlyBloatElements()
     {
         var page = new Page
         {
@@ -126,7 +126,7 @@ public class SearchPluginTests
             RelativePath = "index.md",
             Url = "",
             Title = "Home",
-            HtmlContent = "<h1 id=\"home\">Home</h1><p>Hello <strong>world</strong>.</p>",
+            HtmlContent = "<h1 id=\"home\">Home</h1><p>Hello <strong>world</strong>.</p><svg>diagram</svg><img src=\"photo.jpg\" /><figure>caption</figure>",
             PlainText = "Home Hello world.",
         };
 
@@ -134,7 +134,15 @@ public class SearchPluginTests
         var pageDoc = index.GetProperty("docs").EnumerateArray()
             .First(d => d.GetProperty("location").GetString() == "");
 
-        Assert.Contains("<p>Hello <strong>world</strong>.</p>", pageDoc.GetProperty("text").GetString());
+        var text = pageDoc.GetProperty("text").GetString();
+        // Semantic HTML is preserved for rich teaser rendering
+        Assert.Contains("<p>Hello <strong>world</strong>.</p>", text);
+        // Bloat elements (SVG, img, figure) are removed
+        Assert.DoesNotContain("<svg>", text);
+        Assert.DoesNotContain("<img", text);
+        Assert.DoesNotContain("<figure>", text);
+        Assert.DoesNotContain("diagram", text); // SVG content stripped too
+        Assert.DoesNotContain("caption", text); // figure content stripped too
     }
 
     [Fact]

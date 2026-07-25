@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Netdocs.Abstractions;
@@ -16,6 +17,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
     private IReadOnlyList<string> _languages = ["en"];
     private string _separator = DefaultSeparator;
     private IReadOnlyList<string> _pipeline = DefaultPipeline;
+    private bool _stripBloatElements = true;
 
     public string Name => "search";
 
@@ -33,6 +35,11 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         // `pipeline` overrides the lunr token pipeline; an empty list disables stemming/stopwords.
         if (opts.TryGetValue("pipeline", out var pipe) && AsStringList(pipe) is { } p)
             _pipeline = p;
+
+        // `strip_bloat_elements` removes SVG, img, canvas, figure, picture, and other non-semantic elements
+        // that inflate the index without adding search value. Defaults to true.
+        if (opts.TryGetValue("strip_bloat_elements", out var strip) && strip is bool b)
+            _stripBloatElements = b;
     }
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
@@ -43,7 +50,7 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
         foreach (var page in site.Pages)
         {
             var tags = ExtractTags(page);
-            var (intro, sections) = SplitPage(parser, page);
+            var (intro, sections) = SplitPage(parser, page, _stripBloatElements);
             docs.Add(new SearchDoc(page.Url, page.Title, intro, tags));
 
             foreach (var section in sections)
@@ -69,8 +76,9 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
     /// The H1 is the page title (not a section), so the content beneath it — up to the first H2/H3 —
     /// becomes the page-level doc's text. That text is the teaser Material shows on the main result
     /// line for each page, so leaving it empty (as an H1-as-section split does) drops all excerpts.
-    /// Block-level HTML is preserved in the text so teasers render like the upstream index.</summary>
-    private static (string Intro, IReadOnlyList<SearchDoc> Sections) SplitPage(HtmlParser parser, Page page)
+    /// Block-level HTML is preserved to render rich teasers; bloat-inducing elements (SVG, img, canvas)
+    /// are optionally stripped (enabled by default) to reduce index size without sacrificing presentation.</summary>
+    private static (string Intro, IReadOnlyList<SearchDoc> Sections) SplitPage(HtmlParser parser, Page page, bool stripBloat)
     {
         if (string.IsNullOrEmpty(page.HtmlContent))
             return (Collapse(page.PlainText), []);
@@ -103,11 +111,11 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
             }
             else if (seenSection)
             {
-                buffer.Append(NodeText(node)).Append(' ');
+                buffer.Append(NodeText(node, stripBloat)).Append(' ');
             }
             else
             {
-                intro.Append(NodeText(node)).Append(' ');
+                intro.Append(NodeText(node, stripBloat)).Append(' ');
             }
         }
         if (currentId is not null)
@@ -119,10 +127,24 @@ public sealed class SearchPlugin : IPlugin, IBuildHook
     }
 
     /// <summary>Serializes a node for the search index: block-level HTML is kept (matching the
-    /// upstream mkdocs-material index, whose text field carries markup so teasers render richly),
-    /// while bare text nodes contribute their text content.</summary>
-    private static string NodeText(INode node) =>
-        node is IElement el ? el.OuterHtml : node.TextContent;
+    /// upstream mkdocs-material index, whose text field carries markup so teasers render richly).
+    /// Bloat-inducing elements (SVG, img, canvas, etc.) are optionally stripped to keep the index lean.</summary>
+    private static string NodeText(INode node, bool stripBloat) =>
+        node is IElement el ? StripBloatElements(el.OuterHtml, stripBloat) : node.TextContent;
+
+    /// <summary>Strips bloat-inducing elements (svg, img, canvas, picture, figure) from HTML.
+    /// Semantic elements (p, strong, em, code, etc.) are preserved for rich teaser rendering.</summary>
+    private static string StripBloatElements(string html, bool stripBloat)
+    {
+        if (!stripBloat) return html;
+
+        // Remove entire SVG, img, canvas, picture, figure elements (including content)
+        var stripped = Regex.Replace(html, @"<(?:svg|img|canvas|picture|figure)[^>]*>.*?</(?:svg|img|canvas|picture|figure)>", " ", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        // Also remove self-closing variants (e.g., <img ... />)
+        stripped = Regex.Replace(stripped, @"<(?:svg|img|canvas|picture|figure)[^>]*/?>", " ", RegexOptions.IgnoreCase);
+        // Collapse whitespace
+        return Regex.Replace(stripped, @"\s+", " ").Trim();
+    }
 
     private static string[] ExtractTags(Page page)
     {

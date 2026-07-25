@@ -16,14 +16,29 @@ updates:
         patterns:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
+      # Catch-all: bundle every remaining minor/patch bump into a single PR to
+      # cut down on review noise. Major bumps are intentionally left out so they
+      # still open as individual PRs and get reviewed on their own.
+      nuget-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
-  # GitHub Actions workflow dependencies
+  # GitHub Actions workflow dependencies. Actions are bumped as one group across
+  # all update types (including major) because action major bumps are frequent,
+  # low-risk, and were previously opening a separate PR per action.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
 
   # Front-end JS/CSS libraries loaded from a CDN, tracked via /package.json.
   # Dependabot flags new releases here; a maintainer then bumps the matching CDN
@@ -36,4 +51,7 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps(frontend)"
-
+    groups:
+      frontend:
+        patterns:
+          - "*"

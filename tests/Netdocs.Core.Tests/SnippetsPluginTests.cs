@@ -146,6 +146,55 @@ public class SnippetsPluginTests : IDisposable
         Assert.Contains("Default snippets dir works.", result);
     }
 
+    [Fact]
+    public async Task PreservesIndentation_ForIndentedInclude()
+    {
+        // A `--8<--` indented inside a code fence within an admonition must keep that
+        // indentation on every included line. Otherwise the fence closes empty and the
+        // file spills out as top-level markdown (script comments become <h1> headers).
+        Write("script.sh", "#!/usr/bin/env bash\n# a comment\nset -euo pipefail\necho hi");
+        var plugin = PluginWith(("base_path", new object?[] { _dir }));
+
+        var markdown = "    --8<-- \"script.sh\"";
+        var result = await plugin.ProcessAsync(Page, markdown, Site(), default);
+
+        // Every non-blank included line is prefixed with the marker's 4-space indent.
+        Assert.Contains("    #!/usr/bin/env bash", result);
+        Assert.Contains("    # a comment", result);
+        Assert.Contains("    set -euo pipefail", result);
+        Assert.Contains("    echo hi", result);
+        Assert.DoesNotContain("--8<--", result);
+    }
+
+    [Fact]
+    public async Task PreservesIndentation_BlankLinesNotIndented()
+    {
+        // Blank lines in the included file must not gain trailing whitespace.
+        Write("script.sh", "line one\n\nline two");
+        var plugin = PluginWith(("base_path", new object?[] { _dir }));
+
+        var result = await plugin.ProcessAsync(Page, "    --8<-- \"script.sh\"", Site(), default);
+
+        Assert.Contains("    line one", result);
+        Assert.Contains("    line two", result);
+        // The blank line stays blank (no "    \n" with trailing spaces).
+        Assert.DoesNotContain("    \n", result.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public async Task NoIndentation_UnindentedIncludeUnchanged()
+    {
+        // An include at column 0 must not gain any indentation (regression guard so the
+        // reindent logic is a no-op for the common case).
+        Write("notice.md", "line a\nline b");
+        var plugin = PluginWith(("base_path", new object?[] { _dir }));
+
+        var result = await plugin.ProcessAsync(Page, "--8<-- \"notice.md\"", Site(), default);
+
+        Assert.Contains("line a\nline b", result.Replace("\r\n", "\n"));
+        Assert.DoesNotContain("  line a", result);
+    }
+
     private sealed class FakeContext(IReadOnlyDictionary<string, object?> options) : IPluginContext
     {
         public SiteConfig Config { get; init; } = new();

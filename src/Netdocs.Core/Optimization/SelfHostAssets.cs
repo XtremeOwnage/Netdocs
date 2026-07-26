@@ -8,10 +8,16 @@ namespace Netdocs.Core.Optimization;
 
 /// <summary>
 /// Self-hosts external CDN assets for offline usage. Scans emitted HTML for external
-/// <c>&lt;script src&gt;</c>, <c>&lt;link href&gt;</c>, <c>&lt;img src&gt;</c>, and the Mermaid
-/// dynamic <c>import()</c>, downloads each once into <c>assets/external/</c> (recursively fetching
-/// <c>url(...)</c> references inside downloaded CSS, e.g. web-font files), and rewrites every page
-/// to point at the local copies with page-relative paths so the site works from <c>file://</c>.
+/// <c>&lt;script src&gt;</c>, <c>&lt;img src&gt;</c>, subresource-fetching <c>&lt;link&gt;</c> tags
+/// (see <see cref="SelfHostableLinkRels"/>), and the Mermaid dynamic <c>import()</c>, downloads each
+/// once into <c>assets/external/</c> (recursively fetching <c>url(...)</c> references inside
+/// downloaded CSS, e.g. web-font files), and rewrites every page to point at the local copies with
+/// page-relative paths so the site works from <c>file://</c>.
+/// <para>
+/// Only the attribute spans that matched are rewritten. Outbound links to the same URL — an
+/// <c>&lt;a href&gt;</c>, a <c>&lt;link rel=canonical&gt;</c>, a redirect's meta refresh — are left
+/// exactly as authored.
+/// </para>
 /// </summary>
 public static partial class SelfHostAssets
 {
@@ -38,14 +44,19 @@ public static partial class SelfHostAssets
         var htmlFiles = Directory.EnumerateFiles(siteDir, "*.html", SearchOption.AllDirectories).ToList();
         if (htmlFiles.Count == 0) return;
 
-        // 1. Collect every external URL referenced by an asset tag across all pages.
+        // 1. Collect every external URL referenced by an asset tag across all pages, together with
+        //    the exact span each URL occupies so the rewrite in step 3 can be surgical.
         var urls = new HashSet<string>(StringComparer.Ordinal);
         var fileText = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fileRefs = new Dictionary<string, List<AssetRef>>(StringComparer.OrdinalIgnoreCase);
         foreach (var f in htmlFiles)
         {
             var text = await File.ReadAllTextAsync(f, ct);
+            var refs = ExtractAssetRefs(text).ToList();
+            if (refs.Count == 0) continue;
             fileText[f] = text;
-            foreach (var u in ExtractAssetUrls(text)) urls.Add(u);
+            fileRefs[f] = refs;
+            foreach (var r in refs) urls.Add(r.Url);
         }
         if (urls.Count == 0) return;
 
@@ -62,16 +73,27 @@ public static partial class SelfHostAssets
         }
 
         // 3. Rewrite each HTML file, replacing external URLs with page-relative local paths.
+        //    Only the spans found in step 1 are touched — a plain string replace would also clobber
+        //    the same URL where it legitimately appears as navigable content (an <a href>, a meta
+        //    refresh, JSON-LD), turning outbound links into downloads of a self-hosted copy.
         var rewritten = 0;
         foreach (var (path, original) in fileText)
         {
             var pageDir = Path.GetDirectoryName(path)!;
-            var updated = original;
-            foreach (var (url, local) in map)
+            var sb = new StringBuilder(original.Length);
+            var cursor = 0;
+            foreach (var r in fileRefs[path].OrderBy(r => r.Start))
             {
-                var rel = RelativePath(pageDir, Path.Combine(absExternalDir, local));
-                updated = updated.Replace(url, rel, StringComparison.Ordinal);
+                if (r.Start < cursor) continue; // overlapping match — first one wins
+                if (!map.TryGetValue(r.Url, out var local)) continue; // download failed; keep the CDN URL
+                sb.Append(original, cursor, r.Start - cursor);
+                sb.Append(RelativePath(pageDir, Path.Combine(absExternalDir, local)));
+                cursor = r.Start + r.Length;
             }
+            if (cursor == 0) continue; // nothing replaced
+            sb.Append(original, cursor, original.Length - cursor);
+
+            var updated = sb.ToString();
             if (updated != original)
             {
                 await File.WriteAllTextAsync(path, updated, ct);
@@ -132,18 +154,48 @@ public static partial class SelfHostAssets
         return css;
     }
 
-    private static IEnumerable<string> ExtractAssetUrls(string html)
+    /// <summary>An external URL to self-host, and where it sits in the page it was found on.</summary>
+    private readonly record struct AssetRef(int Start, int Length, string Url);
+
+    /// <summary>
+    /// <c>rel</c> values that actually fetch a subresource, and so are safe to self-host. Everything
+    /// else a <c>&lt;link&gt;</c> can express is navigational metadata pointing at a document —
+    /// <c>canonical</c>, <c>alternate</c>, <c>prev</c>/<c>next</c>, <c>author</c> — or a hint that
+    /// fetches a whole page rather than an asset (<c>prefetch</c>, <c>prerender</c>, used by instant
+    /// navigation). Downloading those and repointing the page at a local copy is always wrong.
+    /// </summary>
+    private static readonly HashSet<string> SelfHostableLinkRels = new(StringComparer.OrdinalIgnoreCase)
     {
-        foreach (Match m in ScriptImgRegex().Matches(html)) yield return m.Groups[1].Value;
+        "stylesheet", "icon", "apple-touch-icon", "apple-touch-icon-precomposed", "mask-icon",
+        "manifest", "preload", "modulepreload",
+    };
+
+    private static IEnumerable<AssetRef> ExtractAssetRefs(string html)
+    {
+        foreach (Match m in ScriptImgRegex().Matches(html)) yield return RefFor(m);
         foreach (Match m in LinkRegex().Matches(html))
         {
-            var tag = m.Value;
-            // Preconnect / dns-prefetch hints don't fetch an asset — skip them.
-            if (tag.Contains("preconnect", StringComparison.OrdinalIgnoreCase)
-                || tag.Contains("dns-prefetch", StringComparison.OrdinalIgnoreCase)) continue;
-            yield return m.Groups[1].Value;
+            if (!IsSelfHostableLink(m.Value)) continue;
+            yield return RefFor(m);
         }
-        foreach (Match m in ImportRegex().Matches(html)) yield return m.Groups[1].Value;
+        foreach (Match m in ImportRegex().Matches(html)) yield return RefFor(m);
+
+        static AssetRef RefFor(Match m)
+        {
+            var g = m.Groups[1];
+            return new AssetRef(g.Index, g.Length, g.Value);
+        }
+    }
+
+    /// <summary>True when a <c>&lt;link&gt;</c> tag references a subresource worth self-hosting.</summary>
+    private static bool IsSelfHostableLink(string tag)
+    {
+        var rel = RelAttrRegex().Match(tag);
+        // A <link> without rel has no defined relationship — treat it as navigational and leave it.
+        if (!rel.Success) return false;
+        foreach (var token in rel.Groups[1].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            if (SelfHostableLinkRels.Contains(token)) return true;
+        return false;
     }
 
     private static string LocalNameFor(string url, string? mediaType)
@@ -188,6 +240,9 @@ public static partial class SelfHostAssets
 
     [GeneratedRegex("<link\\b[^>]*?\\shref=[\"'](https?://[^\"']+)[\"'][^>]*>", RegexOptions.IgnoreCase)]
     private static partial Regex LinkRegex();
+
+    [GeneratedRegex("\\srel=[\"']([^\"']*)[\"']", RegexOptions.IgnoreCase)]
+    private static partial Regex RelAttrRegex();
 
     [GeneratedRegex("import\\(\\s*[\"'](https?://[^\"']+)[\"']\\s*\\)", RegexOptions.IgnoreCase)]
     private static partial Regex ImportRegex();

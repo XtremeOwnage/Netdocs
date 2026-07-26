@@ -31,7 +31,10 @@ public sealed partial class TagsPlugin : IPlugin, IBuildHook
 
     public Task OnBuildStartAsync(SiteContext site, CancellationToken ct)
     {
-        var hideShadow = _shadow && !(site.Options.IsServe && _shadowOnServe);
+        // Shadow tags are hidden only in production builds, so authors still see Draft/Internal/
+        // ToDo tags on the dev site and in `serve`. `shadow_on_serve` keeps them visible even when
+        // serving a production build (e.g. `serve --prod`).
+        var hideShadow = _shadow && site.Options.IsProduction && !(site.Options.IsServe && _shadowOnServe);
         var index = new SortedDictionary<string, List<Page>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var page in site.Pages)

@@ -1,0 +1,28 @@
+{{~ # ---------------------------------------------------------------------------
+   # partials/source.html — Repository link (icon + name) shown at the top-right of
+   # the header, mirroring Material for MkDocs' `.md-source`. Rendered only when a
+   # repository URL is configured; hidden on narrow viewports by the theme CSS.
+   #
+   # Data:  config.repo_url        — link target (required; nothing renders without it)
+   #        config.repo_name       — display text (falls back to the URL host/path)
+   #        config.theme.icon.repo — mkdocs-style icon name for the glyph
+   #                                 (default "fontawesome/brands/git-alt")
+   #
+   # Override: drop a file at `<custom_dir>/partials/source.html` to change how the
+   #        repository link renders. Return nothing to hide it.
+   # --------------------------------------------------------------------------- ~}}
+{{~ repo_url = config.repo_url ~}}
+{{~ if repo_url && (repo_url | string.strip) != "" ~}}
+{{~ repo_icon = config.theme.icon.repo ~}}
+{{~ if !repo_icon || (repo_icon | string.strip) == "" ~}}{{~ repo_icon = "fontawesome/brands/git-alt" ~}}{{~ end ~}}
+{{~ repo_label = config.repo_name ~}}
+{{~ if !repo_label || (repo_label | string.strip) == "" ~}}{{~ repo_label = repo_url | string.replace "https://" "" | string.replace "http://" "" ~}}{{~ end ~}}
+<a href="{{ repo_url }}" title="{{ repo_label }}" class="md-source" data-md-component="source" target="_blank" rel="noopener">
+  <div class="md-source__icon md-icon">
+    {{ nav_icon repo_icon }}
+  </div>
+  <div class="md-source__repository">
+    {{ repo_label }}
+  </div>
+</a>
+{{~ end ~}}

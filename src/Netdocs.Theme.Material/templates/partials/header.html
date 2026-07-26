@@ -24,6 +24,13 @@
         </div>
       </div>
     </div>
+    {{~ # Repository source link (icon + name) at the right — see partials/source.html.
+       # Rendered only when config.repo_url is set; hidden on narrow viewports. ~}}
+    {{~ if config.repo_url && (config.repo_url | string.strip) != "" ~}}
+    <div class="md-header__source">
+      {{ include "partials/source.html" }}
+    </div>
+    {{~ end ~}}
     {{~ # Version selector (versioning plugin) — see partials/version-select.html. ~}}
     {{ include "partials/version-select.html" }}
     {{~ # Social links (right) — see partials/social.html. ~}}

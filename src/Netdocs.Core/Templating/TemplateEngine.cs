@@ -1,7 +1,7 @@
-using Scriban;
-using Scriban.Runtime;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Scriban;
+using Scriban.Runtime;
 
 namespace Netdocs.Core.Templating;
 

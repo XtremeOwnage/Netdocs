@@ -25,12 +25,13 @@ namespace Netdocs.Plugins;
 /// still accepted.
 /// </para>
 /// </summary>
-public sealed class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
+public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
 {
     private sealed record DomainRule(string Domain, string? QueryContains);
-    private sealed record Rule(string Id, DomainRule[] Domains, Regex[] Patterns, string Note, string Label);
+    private sealed record Rule(string Id, DomainRule[] Domains, Regex[] Patterns, string Note, string Label, string Kind);
 
     private readonly List<Rule> _rules = [];
+    private readonly List<string> _snippetBasePaths = [];
     private ILogger? _log;
 
     public string Name => "link-notes";
@@ -49,6 +50,16 @@ public sealed class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
     {
         _log = ctx.Logger;
 
+        // Snippet search roots (mirrors SnippetsPlugin): the project root and docs dir, each with a
+        // conventional `snippets` subdirectory. A `note_snippet` path is resolved against these so a
+        // rule can reuse the same admonition snippet included elsewhere on the site.
+        var root = ctx.Config.ProjectRoot ?? "";
+        void AddBase(string p) { if (p.Length > 0 && !_snippetBasePaths.Contains(p)) _snippetBasePaths.Add(p); }
+        AddBase(Path.GetFullPath(root.Length == 0 ? "." : root));
+        AddBase(Path.GetFullPath(Path.Combine(root, "snippets")));
+        AddBase(Path.GetFullPath(ctx.Config.AbsoluteDocsDir));
+        AddBase(Path.GetFullPath(Path.Combine(ctx.Config.AbsoluteDocsDir, "snippets")));
+
         // Accept the new `rules` key; fall back to the legacy `programs` key (affiliate-links).
         if (!ctx.PluginOptions.TryGetValue("rules", out var raw) || raw is not IEnumerable<object?>)
             ctx.PluginOptions.TryGetValue("programs", out raw);
@@ -60,10 +71,11 @@ public sealed class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
                 if (item is not IReadOnlyDictionary<string, object?> map) continue;
 
                 var id = map.TryGetValue("name", out var n) ? n?.ToString() : null;
-                // `note` (new) or `disclosure` (legacy alias).
+                if (string.IsNullOrWhiteSpace(id)) continue;
+
+                // `note` (new) or `disclosure` (legacy alias) supply the note markdown inline.
                 var note = (map.TryGetValue("note", out var nt) ? nt?.ToString() : null)
                          ?? (map.TryGetValue("disclosure", out var d) ? d?.ToString() : null);
-                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(note)) continue;
 
                 // Rule-level query marker is the default for any domain that doesn't override it.
                 var defaultQuery = map.TryGetValue("query_contains", out var q) ? q?.ToString() : null;
@@ -77,18 +89,88 @@ public sealed class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
                     continue;
                 }
 
-                // Title used for the standalone fallback admonition (table-only links).
-                var label = map.TryGetValue("label", out var lv) && !string.IsNullOrWhiteSpace(lv?.ToString())
+                // Explicit `label` overrides everything; otherwise a snippet's admonition title is used.
+                var explicitLabel = map.TryGetValue("label", out var lv) && !string.IsNullOrWhiteSpace(lv?.ToString())
                     ? lv!.ToString()!.Trim()
-                    : "Links";
+                    : null;
 
-                _rules.Add(new Rule(id!, domains, patterns, note!.Trim(), label));
+                // `note_snippet` (or legacy `disclosure_snippet`) points at a markdown snippet whose
+                // content becomes the note. When the snippet is a single admonition, its title/kind
+                // drive the standalone fallback box and its body becomes the tooltip/footnote text.
+                var snippetPath = (map.TryGetValue("note_snippet", out var ns) ? ns?.ToString() : null)
+                                ?? (map.TryGetValue("disclosure_snippet", out var ds) ? ds?.ToString() : null);
+
+                var kind = "info";
+                string? snippetTitle = null;
+                if (!string.IsNullOrWhiteSpace(snippetPath))
+                {
+                    var content = ReadSnippet(snippetPath!, id!);
+                    if (content is not null)
+                    {
+                        (kind, snippetTitle, note) = ExtractNote(content);
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(note))
+                {
+                    _log.LogWarning("link-notes: rule '{Id}' has no note (inline or snippet); skipping", id);
+                    continue;
+                }
+
+                var label = explicitLabel ?? snippetTitle ?? "Links";
+                _rules.Add(new Rule(id!, domains, patterns, note!.Trim('\n'), label, kind));
             }
         }
 
         if (_rules.Count == 0)
             _log.LogWarning("link-notes: no link rules configured; plugin is a no-op");
     }
+
+    // Resolves a snippet path against the configured base directories and returns its text, or null.
+    private string? ReadSnippet(string path, string ruleId)
+    {
+        if (Path.IsPathRooted(path) && File.Exists(path)) return File.ReadAllText(path);
+        foreach (var basePath in _snippetBasePaths)
+        {
+            var candidate = Path.GetFullPath(Path.Combine(basePath, path));
+            if (File.Exists(candidate)) return File.ReadAllText(candidate);
+        }
+        _log?.LogWarning("link-notes: rule '{Id}' snippet '{Path}' not found; falling back to inline note", ruleId, path);
+        return null;
+    }
+
+    // Splits snippet content into (kind, title, body). If the snippet is a single admonition
+    // (`!!! kind "Title"` with a 4-space indented body), the title/kind are returned and the body is
+    // de-indented so it renders as plain paragraphs inside a footnote tooltip (an admonition cannot
+    // render inside a footnote) while still driving the standalone fallback box. Otherwise the whole
+    // trimmed content is treated as the body with kind "info" and no title.
+    private static (string Kind, string? Title, string Body) ExtractNote(string content)
+    {
+        var text = content.Replace("\r\n", "\n").Trim('\n');
+        var lines = text.Split('\n');
+        var first = lines.Length > 0 ? lines[0] : "";
+        var m = AdmonitionHeader().Match(first);
+        if (!m.Success)
+            return ("info", null, text.Trim());
+
+        var kind = m.Groups["kind"].Value.Trim();
+        if (kind.Length == 0) kind = "info";
+        var title = m.Groups["title"].Success ? m.Groups["title"].Value : null;
+
+        // De-indent the admonition body (strip one 4-space / tab indent from each line).
+        var body = new StringBuilder();
+        for (var i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.StartsWith("    ", StringComparison.Ordinal)) line = line[4..];
+            else if (line.StartsWith("\t", StringComparison.Ordinal)) line = line[1..];
+            body.Append(line).Append('\n');
+        }
+        return (kind, string.IsNullOrWhiteSpace(title) ? null : title.Trim(), body.ToString().Trim('\n'));
+    }
+
+    [GeneratedRegex("""^(?:!!!|\?\?\?\+?)\s+(?<kind>[^"\n]*?)\s*(?:"(?<title>[^"]*)")?\s*$""")]
+    private static partial Regex AdmonitionHeader();
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
     {
@@ -138,15 +220,17 @@ public sealed class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
         sb.Append("\n\n");
 
         // Footnote definitions for referenced rules: Markdig renders these at the bottom of the
-        // page (the footer note) and links every reference to them (the hover tooltip).
+        // page (the footer note) and links every reference to them (the hover tooltip). Continuation
+        // lines are indented 4 spaces so multi-paragraph notes stay within the footnote definition.
         foreach (var rule in _rules.Where(r => referenced.Contains(r.Id)))
-            sb.Append("[^linknote-").Append(rule.Id).Append("]: ").Append(rule.Note).Append('\n');
+            sb.Append("[^linknote-").Append(rule.Id).Append("]: ")
+              .Append(rule.Note.Replace("\n", "\n    ", StringComparison.Ordinal)).Append('\n');
 
         // Rules seen only inside tables get a standalone note admonition so the footer note
         // requirement is still met even though the individual links can't carry a tooltip.
         foreach (var rule in _rules.Where(r => tableOnly.Contains(r.Id)))
         {
-            sb.Append("\n!!! info \"").Append(rule.Label).Append("\"\n    ");
+            sb.Append("\n!!! ").Append(rule.Kind).Append(" \"").Append(rule.Label).Append("\"\n    ");
             sb.Append(rule.Note.Replace("\n", "\n    ", StringComparison.Ordinal));
             sb.Append('\n');
         }

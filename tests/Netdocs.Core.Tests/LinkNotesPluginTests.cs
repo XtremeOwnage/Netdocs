@@ -364,4 +364,127 @@ public class LinkNotesPluginTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // --- Tooltip mode (link_snippet) -------------------------------------------------------------
+
+    private static Dictionary<string, object?> TooltipRule(string dir, string name, string[] domains, string linkSnippet, string noteSnippet)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["domains"] = domains.Cast<object?>().ToList(),
+            ["link_snippet"] = linkSnippet,
+            ["note_snippet"] = noteSnippet,
+        };
+    }
+
+    [Fact]
+    public void LinkSnippet_ReplacesLinkWithRenderedPopup_AndBoxOncePerPage()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ebay-link.html"),
+                "<span class=\"affiliate-wrapper\"><a href=\"${url}\" class=\"affiliate-link\">${text}</a><span class=\"affiliate-tooltip\">eBay: ${domain}</span></span>");
+            File.WriteAllText(Path.Combine(dir, "ebay-affiliate.md"),
+                "!!! info \"eBay Affiliate Links Used\"\n    This post uses eBay affiliate links.\n");
+
+            var plugin = ConfiguredWithRoot(dir, TooltipRule(dir, "ebay", ["ebay.us"], "ebay-link.html", "ebay-affiliate.md"));
+            var result = Run(plugin, "Buy this [used PDU](https://ebay.us/abc123) here and [another](https://ebay.us/def456).");
+
+            // No footnotes at all in tooltip mode.
+            Assert.DoesNotContain("[^linknote", result);
+            // Each link is replaced with the rendered popup carrying the real url/text/domain.
+            Assert.Contains("<a href=\"https://ebay.us/abc123\" class=\"affiliate-link\">used PDU</a>", result);
+            Assert.Contains("<a href=\"https://ebay.us/def456\" class=\"affiliate-link\">another</a>", result);
+            Assert.Contains("eBay: ebay.us", result);
+            // The disclosure box is emitted exactly once for the page.
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(result, @"!!! info ""eBay Affiliate Links Used"""));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LinkSnippet_WorksInsidePipeTableCell()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ebay-link.html"),
+                "<span class=\"affiliate-wrapper\"><a href=\"${url}\">${text}</a></span>");
+            File.WriteAllText(Path.Combine(dir, "ebay-affiliate.md"),
+                "!!! info \"eBay Affiliate Links Used\"\n    eBay disclosure.\n");
+
+            var plugin = ConfiguredWithRoot(dir, TooltipRule(dir, "ebay", ["ebay.us"], "ebay-link.html", "ebay-affiliate.md"));
+            var md = "| Item | Buy |\n| --- | --- |\n| Widget | [eBay](https://ebay.us/xyz) |";
+            var result = Run(plugin, md);
+
+            // Inline HTML is safe in a table cell (unlike a footnote reference), so the link is replaced.
+            Assert.Contains("<a href=\"https://ebay.us/xyz\">eBay</a>", result);
+            Assert.DoesNotContain("[^linknote", result);
+            // The disclosure box is still emitted once.
+            Assert.Contains("!!! info \"eBay Affiliate Links Used\"", result);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LinkSnippet_EscapesUrlAndText()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "ebay-link.html"),
+                "<a href=\"${url}\">${text}</a>");
+
+            var rule = new Dictionary<string, object?>
+            {
+                ["name"] = "ebay",
+                ["domains"] = new List<object?> { "ebay.us" },
+                ["link_snippet"] = "ebay-link.html",
+            };
+            var plugin = ConfiguredWithRoot(dir, rule);
+            var result = Run(plugin, "[A & B <buy>](https://ebay.us/x?a=1&b=2)");
+
+            Assert.Contains("href=\"https://ebay.us/x?a=1&amp;b=2\"", result);
+            Assert.Contains(">A &amp; B &lt;buy&gt;</a>", result);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LinkSnippet_MissingFile_FailsBuild()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "netdocs-linknotes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var rule = new Dictionary<string, object?>
+            {
+                ["name"] = "ebay",
+                ["domains"] = new List<object?> { "ebay.us" },
+                ["link_snippet"] = "missing-link.html",
+            };
+            var plugin = ConfiguredWithRoot(dir, rule);
+            var ex = Assert.Throws<FileNotFoundException>(
+                () => Run(plugin, "Buy on [eBay](https://ebay.us/abc)."));
+            Assert.Contains("missing-link.html", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

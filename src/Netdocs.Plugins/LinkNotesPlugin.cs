@@ -6,18 +6,22 @@ using Netdocs.Abstractions;
 namespace Netdocs.Plugins;
 
 /// <summary>
-/// Annotates outbound links that match configured rules with an automatic footnote
-/// reference. The footnote carries a note (arbitrary markdown), so:
+/// Annotates outbound links that match configured rules, so a note (arbitrary markdown) is
+/// attached to them automatically. Two render modes are supported per rule:
 /// <list type="bullet">
-///   <item>hovering the link shows the note as a tooltip (via
-///   <c>content.footnote.tooltips</c>), and</item>
-///   <item>the note is emitted once at the bottom of the page (the footnote list).</item>
+///   <item><b>Footnote mode</b> (default): the link gets a footnote reference whose definition is
+///   emitted once at the bottom of the page. With <c>content.footnote.tooltips</c> the note also
+///   shows on hover.</item>
+///   <item><b>Tooltip mode</b> (<c>link_snippet</c> set): each matching link is replaced inline
+///   with the snippet rendered as a template — the matched URL and link text are substituted for
+///   <c>${url}</c>/<c>${text}</c> — producing a hover popup, and the rule's disclosure box is
+///   emitted once per page instead of a footnote. Works inside pipe-table cells too.</item>
 /// </list>
 /// The plugin is generic and data-driven: each <em>rule</em> declares the domains
 /// (with an optional query marker) and/or regular expressions that identify its links,
-/// plus the note markdown. A common use-case is attaching affiliate-disclosure text to
-/// eBay Partner Network / tagged Amazon links (which also satisfies the once-per-page
-/// disclosure requirement automatically), but any note works.
+/// plus the note markdown and/or link snippet. A common use-case is attaching an
+/// affiliate-disclosure to eBay Partner Network / tagged Amazon links (which also satisfies the
+/// once-per-page disclosure requirement automatically), but any note works.
 /// <para>
 /// It runs after snippets/table-reader/macros so links injected by those plugins are
 /// covered. Registered as both <c>link-notes</c> and the legacy alias
@@ -28,7 +32,7 @@ namespace Netdocs.Plugins;
 public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
 {
     private sealed record DomainRule(string Domain, string? QueryContains);
-    private sealed record Rule(string Id, DomainRule[] Domains, Regex[] Patterns, string Note, string Label, string Kind);
+    private sealed record Rule(string Id, DomainRule[] Domains, Regex[] Patterns, string Note, string Label, string Kind, string? LinkSnippet);
 
     private readonly List<Rule> _rules = [];
     private readonly List<string> _snippetBasePaths = [];
@@ -122,14 +126,36 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
                     (kind, snippetTitle, note) = ExtractNote(content);
                 }
 
-                if (string.IsNullOrWhiteSpace(note))
+                // `link_snippet` opts the rule into *tooltip mode*: instead of appending a footnote,
+                // every matching link is replaced inline with this snippet rendered as a template
+                // (the matched URL and link text are substituted for `${url}`/`${text}`), producing a
+                // hover popup. This is the pretty per-link affiliate popup; a referenced-but-missing
+                // snippet fails the build for the same reason `note_snippet` does.
+                var linkSnippetPath = map.TryGetValue("link_snippet", out var lsp) ? lsp?.ToString() : null;
+                string? linkSnippet = null;
+                if (!string.IsNullOrWhiteSpace(linkSnippetPath))
                 {
-                    _log.LogWarning("link-notes: rule '{Id}' has no note (inline or snippet); skipping", id);
+                    linkSnippet = ReadSnippet(linkSnippetPath!);
+                    if (linkSnippet is null)
+                    {
+                        _configErrors.Add(
+                            $"rule '{id}' references link_snippet '{linkSnippetPath}' which was not found " +
+                            $"(searched: {string.Join(", ", _snippetBasePaths)})");
+                        continue;
+                    }
+                    linkSnippet = linkSnippet.Replace("\r\n", "\n").Trim('\n');
+                }
+
+                // A rule needs *something* to attach: either a note (footnote / page box) or a
+                // link_snippet (per-link popup). A rule with neither is a no-op.
+                if (string.IsNullOrWhiteSpace(note) && linkSnippet is null)
+                {
+                    _log.LogWarning("link-notes: rule '{Id}' has no note (inline or snippet) or link_snippet; skipping", id);
                     continue;
                 }
 
                 var label = explicitLabel ?? snippetTitle ?? "Links";
-                _rules.Add(new Rule(id!, domains, patterns, note!.Trim('\n'), label, kind));
+                _rules.Add(new Rule(id!, domains, patterns, note?.Trim('\n') ?? "", label, kind, linkSnippet));
             }
         }
 
@@ -200,6 +226,9 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
         // (pipe-table cells), which need a standalone note block appended instead.
         var referenced = new HashSet<string>();
         var tableOnly = new HashSet<string>();
+        // Tooltip-mode rules (with a link_snippet) that matched at least one link on this page and so
+        // need their disclosure box emitted once at the bottom.
+        var boxed = new HashSet<string>();
 
         var lines = markdown.Split('\n');
         var inFence = false;
@@ -214,26 +243,19 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
             }
             if (inFence) continue;
 
-            // Markdig does not reliably parse footnote references inside pipe-table cells, so injecting
-            // one there breaks the table. Detect matching links there (to guarantee the footer
-            // note) but don't annotate the link.
-            if (trimmed.StartsWith("|", StringComparison.Ordinal))
-            {
-                foreach (Match m in LinkRegex.Matches(lines[i]))
-                {
-                    var rule = MatchRule(m.Groups["url"].Value);
-                    if (rule is not null && !m.Groups["existing"].Success) tableOnly.Add(rule.Id);
-                }
-                continue;
-            }
-
-            lines[i] = LinkRegex.Replace(lines[i], m => AnnotateLink(m, referenced, tableOnly));
+            // Inside a pipe-table cell a footnote reference breaks the table (Markdig can't parse it
+            // there), but a tooltip-mode rule replaces the link with inline HTML, which is safe in a
+            // cell — so table rows are still processed; AnnotateLink is told it is in a table so a
+            // footnote-mode rule falls back to the standalone box instead of injecting a reference.
+            var inTable = trimmed.StartsWith("|", StringComparison.Ordinal);
+            lines[i] = LinkRegex.Replace(lines[i], m => AnnotateLink(m, referenced, tableOnly, boxed, inTable));
         }
 
         // A rule that got at least one inline reference doesn't also need a standalone block.
         tableOnly.ExceptWith(referenced);
 
-        if (referenced.Count == 0 && tableOnly.Count == 0) return Task.FromResult(markdown);
+        if (referenced.Count == 0 && tableOnly.Count == 0 && boxed.Count == 0)
+            return Task.FromResult(markdown);
 
         var sb = new StringBuilder(string.Join('\n', lines));
         sb.Append("\n\n");
@@ -248,24 +270,53 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
         // Rules seen only inside tables get a standalone note admonition so the footer note
         // requirement is still met even though the individual links can't carry a tooltip.
         foreach (var rule in _rules.Where(r => tableOnly.Contains(r.Id)))
-        {
-            sb.Append("\n!!! ").Append(rule.Kind).Append(" \"").Append(rule.Label).Append("\"\n    ");
-            sb.Append(rule.Note.Replace("\n", "\n    ", StringComparison.Ordinal));
-            sb.Append('\n');
-        }
+            AppendBox(sb, rule);
+
+        // Tooltip-mode rules emit their disclosure admonition once per page (the per-link popups
+        // carry the hover text; this keeps a single always-visible disclosure without any footnotes).
+        foreach (var rule in _rules.Where(r => boxed.Contains(r.Id) && r.Note.Length > 0))
+            AppendBox(sb, rule);
 
         return Task.FromResult(sb.ToString());
     }
 
-    private string AnnotateLink(Match m, HashSet<string> referenced, HashSet<string> fallback)
+    // Appends a standalone `!!! kind "label"` admonition carrying a rule's note (indented body).
+    private static void AppendBox(StringBuilder sb, Rule rule)
+    {
+        sb.Append("\n!!! ").Append(rule.Kind).Append(" \"").Append(rule.Label).Append("\"\n    ");
+        sb.Append(rule.Note.Replace("\n", "\n    ", StringComparison.Ordinal));
+        sb.Append('\n');
+    }
+
+    private string AnnotateLink(Match m, HashSet<string> referenced, HashSet<string> fallback, HashSet<string> boxed, bool inTable)
     {
         var whole = m.Value;
         var rule = MatchRule(m.Groups["url"].Value);
         if (rule is null) return whole;
 
         // A footnote reference already follows this link (e.g. a hand-authored `[^ebay]`); leave it
-        // untouched so we don't produce duplicate references during content migration.
+        // untouched so we don't produce duplicate references / double-wrap during content migration.
         if (m.Groups["existing"].Success) return whole;
+
+        // Tooltip mode: replace the whole link with the link_snippet rendered as a template, passing
+        // the matched URL and link text. This works in table cells and next to adjacent links (it is
+        // inline HTML, not a footnote), and the disclosure box is emitted once per page.
+        if (rule.LinkSnippet is not null)
+        {
+            boxed.Add(rule.Id);
+            var text = ExtractLinkText(m.Groups["link"].Value);
+            var popup = RenderLinkSnippet(rule.LinkSnippet, m.Groups["url"].Value, text);
+            // Preserve any trailing attr-list the author added (rare, but keep it after the popup).
+            return popup + m.Groups["attr"].Value;
+        }
+
+        // Footnote mode inside a pipe-table cell: a reference would break the table, so record the
+        // rule for a standalone box instead of annotating the link.
+        if (inTable)
+        {
+            fallback.Add(rule.Id);
+            return whole;
+        }
 
         // Another link/reference is glued directly after this one (e.g. `[a](x)[b](y)`); a footnote
         // ref wedged between the `][` renders ambiguously, so skip it and rely on the fallback block.
@@ -278,6 +329,42 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
         referenced.Add(rule.Id);
         return whole + $"[^linknote-{rule.Id}]";
     }
+
+    // Extracts the display text of a markdown link `[text](url ...)` — everything between the first
+    // `[` and its matching `]`. Unescapes `\]` back to `]`.
+    private static string ExtractLinkText(string link)
+    {
+        var open = link.IndexOf('[');
+        if (open < 0) return "";
+        var i = open + 1;
+        var sb = new StringBuilder();
+        while (i < link.Length && link[i] != ']')
+        {
+            if (link[i] == '\\' && i + 1 < link.Length && link[i + 1] == ']') { sb.Append(']'); i += 2; continue; }
+            sb.Append(link[i]);
+            i++;
+        }
+        return sb.ToString();
+    }
+
+    // Renders a link_snippet template by substituting the matched URL / link text (HTML-escaped) for
+    // the `${url}`, `${text}` and `${domain}` placeholders — the same `${key}` convention the
+    // snippets plugin uses for parameterized includes.
+    private static string RenderLinkSnippet(string template, string url, string text)
+    {
+        var domain = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : "";
+        return template
+            .Replace("${url}", HtmlEscape(url), StringComparison.Ordinal)
+            .Replace("${text}", HtmlEscape(text), StringComparison.Ordinal)
+            .Replace("${domain}", HtmlEscape(domain), StringComparison.Ordinal);
+    }
+
+    private static string HtmlEscape(string s) => s
+        .Replace("&", "&amp;", StringComparison.Ordinal)
+        .Replace("\"", "&quot;", StringComparison.Ordinal)
+        .Replace("<", "&lt;", StringComparison.Ordinal)
+        .Replace(">", "&gt;", StringComparison.Ordinal)
+        .Replace("'", "&#39;", StringComparison.Ordinal);
 
     private Rule? MatchRule(string url)
     {

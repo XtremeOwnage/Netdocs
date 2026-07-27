@@ -19,6 +19,16 @@ without you having to hand-add a footnote to every post. It is a first-party Net
     **alias**, and the legacy `programs` / `disclosure` config keys are still accepted — no
     changes are required to existing configs.
 
+## Two render modes: footnote or hover popup
+
+Each rule renders its note in one of two ways:
+
+- **Footnote mode** (default) — the link gets a small footnote marker; the note appears both as a
+  hover tooltip (with Material's `content.footnote.tooltips`) and once in the page's footnote list.
+- **Tooltip mode** (`link_snippet` set) — each matching link is *replaced inline* with a snippet
+  rendered as a template (a hover popup), and the rule's disclosure box is emitted **once per page**
+  instead of per-link footnotes. See [Pretty hover popups](#pretty-hover-popups-tooltip-mode) below.
+
 ## A common use-case: affiliate disclosures
 
 Attaching an affiliate-disclosure note to eBay Partner Network / tagged Amazon links means
@@ -88,6 +98,49 @@ When the snippet is a single **admonition** — the usual pretty affiliate box:
 - its **body** becomes the tooltip / footer-note text. (An admonition can't render *inside*
   a footnote, so the body is used directly there; the pretty box is reproduced for
   table-only links via the standalone admonition.)
+
+## Pretty hover popups (tooltip mode)
+
+Footnotes are great for a plain disclosure, but sometimes you want a *nicer* per-link popup — a
+styled card that appears on hover — instead of a superscript number and a footnote list. Point a
+rule at a **`link_snippet`** to switch it into tooltip mode:
+
+```json
+{
+  "name": "ebay",
+  "domains": [ "ebay.us" ],
+  "link_snippet": "snippets/ebay-link.html",
+  "note_snippet": "snippets/ebay-affiliate.md"
+}
+```
+
+In this mode, **every matching link is replaced inline** with `link_snippet` rendered as a template,
+and the `note_snippet` disclosure box is emitted **once at the bottom of the page** (no per-link
+footnotes at all). The snippet receives the matched link as template parameters, using the same
+`${key}` convention as parameterized [snippets](snippets.md) includes:
+
+| Placeholder | Value |
+|---|---|
+| `${url}` | The matched link URL (HTML-escaped). |
+| `${text}` | The link's display text (HTML-escaped). |
+| `${domain}` | The URL host, e.g. `ebay.us` (HTML-escaped). |
+
+A `link_snippet` is typically a small HTML fragment that wraps the link with a CSS-styled tooltip:
+
+```html
+<span class="affiliate-wrapper"><a href="${url}" target="_blank" rel="nofollow sponsored noopener"
+class="affiliate-link">${text}</a><span class="affiliate-tooltip"><span class="tooltip-title">eBay
+Affiliate Link</span><span class="tooltip-content">This is an eBay affiliate link…</span></span></span>
+```
+
+Because the replacement is inline HTML (not a footnote), tooltip mode also works **inside pipe-table
+cells** — where footnote references can't go — so links generated from CSVs by the
+[table-reader](table-reader.md) get the same pretty popup. A referenced-but-missing `link_snippet`
+**fails the build**, exactly like `note_snippet`.
+
+!!! tip "Style it once"
+    Put the tooltip CSS (`.affiliate-wrapper` / `.affiliate-tooltip` etc.) in your `extra_css` and
+    reuse the same classes across every affiliate snippet so all popups look consistent.
 
 ## How it works
 
@@ -173,14 +226,15 @@ Each **rule** object:
 | `name` | string | yes | Rule id; used to build the footnote label (`linknote-<name>`). |
 | `note` | string | yes* | Markdown shown as the tooltip and footer note. Legacy alias: `disclosure`. |
 | `note_snippet` | string | yes* | Path to a Markdown snippet whose content is used as the note (resolved against the project root / `docs` dir and their `snippets` subdirs). A single-admonition snippet contributes its title (→ `label`) and kind, and its body becomes the note. A referenced-but-missing snippet **fails the build**. Legacy alias: `disclosure_snippet`. |
+| `link_snippet` | string | no | Path to an HTML/Markdown snippet template. When set the rule switches to **tooltip mode**: each matching link is replaced inline with this snippet rendered with `${url}`/`${text}`/`${domain}` substituted, and the `note`/`note_snippet` box is emitted once per page (no footnotes). A referenced-but-missing snippet **fails the build**. |
 | `domains` | array | no† | Hosts that identify the link. Each entry is a domain string or `{ "domain": "...", "query_contains": "..." }`. Subdomains match automatically. |
 | `patterns` | array | no† | Regular expressions matched (case-insensitively) against the full URL. |
 | `query_contains` | string | no | Default substring a matching URL must contain (per-domain values override this). |
 | `label` | string | no | Title for the standalone fallback admonition (table-only links). Defaults to the snippet's admonition title, else `Links`. |
 
-\* A rule must provide the note text via either `note` or `note_snippet`. If `note_snippet`
-is set it takes precedence; a referenced snippet that cannot be found fails the build rather
-than falling back, so a mistyped path is caught instead of silently dropping the note.
+\* A rule must provide either a note (`note` or `note_snippet`) or a `link_snippet`. If `note_snippet`
+is set it takes precedence over `note`; any referenced snippet that cannot be found fails the build
+rather than falling back, so a mistyped path is caught instead of silently dropping the note.
 
 † A rule must provide at least one of `domains` or `patterns`.
 

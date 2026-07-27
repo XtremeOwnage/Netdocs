@@ -7,6 +7,33 @@ title: redirects
 Emits tiny client-side redirect pages that forward old URLs to new destinations. Useful
 for vanity links and for preserving inbound links after restructuring.
 
+Redirects can be declared in three ways, from most to least local:
+
+1. **Per-page front matter** (`redirect_from`) — recommended for content that moved or was
+   renamed, because the old URLs live next to the page and travel with it.
+2. **`redirect_maps`** — a small inline table in the config.
+3. **`redirect_files`** — one or more external JSON files for large bulk tables.
+
+All three are merged. On a conflicting source, an explicitly configured `redirect_maps`/
+`redirect_files` entry wins over a per-page `redirect_from`.
+
+## Per-page redirects (`redirect_from`)
+
+List the old URLs a page replaces in its front matter under `redirect_from` (a single string
+or a list). Each becomes a redirect to that page's current URL — so when you rename or move
+the page later, its redirects move with it. `aliases` is accepted as a synonym.
+
+```markdown
+---
+title: LS – How to turn on the alternator
+redirect_from:
+  - blog/2018/ls--how-to-turn-on-the-alternator/
+  - 2018/03/20/ls-how-to-turn-on-the-alternator/
+---
+```
+
+No plugin options are required for this; just enable the `redirects` plugin.
+
 ## Options
 
 | Option | Type | Default | Description |

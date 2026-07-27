@@ -21,18 +21,36 @@ namespace Netdocs.Plugins;
 ///     or an array of objects <c>[{ "source": "old/path", "target": "new/url", "status": 308 }]</c>.
 ///     Paths are resolved relative to the project root, then the docs directory, then treated as
 ///     absolute. This lets large migration redirect tables live outside the config file.</item>
+///   <item><c>slugify_redirects</c> — one or more <em>previous</em> slugify configurations
+///     (each an object of <c>{ "case", "separator", "ascii" }</c>, or an array of them). When the
+///     site's <c>slugify</c> settings change, every page's URL is re-slugified under each old
+///     configuration; wherever the old slug differs from the current one, a redirect from the old
+///     URL to the current URL is generated automatically. This means changing a slugify parameter
+///     (for example the separator from <c>_</c> to <c>-</c>) does not silently break every existing
+///     link — the old URLs keep resolving. Only URLs that the <em>current</em> slugify config would
+///     itself produce are considered (so hand-authored, non-slugified paths are left untouched), and
+///     a generated redirect is never emitted at a path already occupied by a real page.
+///     Note: this reconstructs old URLs by re-slugifying the current URL, so it captures
+///     <c>separator</c> and <c>case</c> changes; a change to <c>ascii</c> folding cannot be
+///     reconstructed (the dropped characters are already gone) and should be handled with an explicit
+///     <c>redirect_from</c>.</item>
 /// </list>
-/// Later entries win on conflict, so an explicitly configured <c>redirect_maps</c>/<c>redirect_files</c>
-/// value overrides a per-page <c>redirect_from</c> for the same source.
+/// Merge order (later wins): generated <c>slugify_redirects</c>, then per-page <c>redirect_from</c>,
+/// then explicitly configured <c>redirect_maps</c>/<c>redirect_files</c>. So an explicit redirect
+/// always overrides an automatically generated one for the same source.
 /// </summary>
 public sealed class RedirectsPlugin : IPlugin, IBuildHook
 {
     private readonly Dictionary<string, string> _maps = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<SlugifyConfig> _slugifyOldConfigs = [];
 
     public string Name => "redirects";
 
     public void Configure(IPluginContext ctx)
     {
+        // Previous slugify configuration(s), used to regenerate old URLs after a slugify change.
+        _slugifyOldConfigs.AddRange(ParseSlugifyConfigs(ctx.PluginOptions));
+
         // 1) External JSON file(s) first, so inline entries can override them.
         foreach (var file in FileList(ctx.PluginOptions))
         {
@@ -62,8 +80,10 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
     {
-        // Merge sources: per-page front matter first, then explicitly configured maps (which win).
+        // Merge sources (lowest precedence first): generated slugify redirects, then per-page
+        // front matter, then explicitly configured maps (which win).
         var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        CollectSlugifyRedirects(site, redirects);
         CollectFrontMatterRedirects(site, redirects);
         foreach (var (source, target) in _maps)
             redirects[source] = target;
@@ -123,6 +143,93 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
                 break;
         }
     }
+
+    /// <summary>Generates redirects for a slugify-configuration change: every page URL that the
+    /// current slugify config would produce is re-slugified under each previously configured
+    /// slugify config; where the old slug differs, a redirect from the old URL to the current URL
+    /// is added. Sources that collide with a real page URL are skipped so a stub never clobbers an
+    /// actual page.</summary>
+    private void CollectSlugifyRedirects(SiteContext site, Dictionary<string, string> into)
+    {
+        if (_slugifyOldConfigs.Count == 0) return;
+
+        var current = site.Config.Slugify;
+        var pageUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var page in site.Pages)
+            if (!string.IsNullOrWhiteSpace(page.Url))
+                pageUrls.Add(page.Url.Trim().Trim('/'));
+
+        foreach (var page in site.Pages)
+        {
+            if (string.IsNullOrWhiteSpace(page.Url)) continue;
+            var cur = page.Url.Trim().TrimStart('/');
+
+            // Only act on URLs the current slugify config would itself produce; this leaves
+            // hand-authored, non-slugified paths (e.g. when slugify.urls is off) untouched.
+            if (!string.Equals(ReSlugifyUrl(cur, current), EnsureTrailingSlash(cur), StringComparison.Ordinal))
+                continue;
+
+            var target = "/" + cur.TrimStart('/');
+            foreach (var old in _slugifyOldConfigs)
+            {
+                var oldUrl = ReSlugifyUrl(cur, old);
+                if (string.Equals(oldUrl, EnsureTrailingSlash(cur), StringComparison.Ordinal)) continue; // unchanged
+                if (pageUrls.Contains(oldUrl.Trim('/'))) continue;                                        // would clobber a real page
+                into[oldUrl] = target;
+            }
+        }
+    }
+
+    /// <summary>Re-slugifies each path segment of a site-relative URL under the given config,
+    /// preserving <c>.</c> (matching content-URL slugification), and returns it with a trailing
+    /// slash. An empty URL (site root) maps to the empty string.</summary>
+    private static string ReSlugifyUrl(string url, SlugifyConfig config)
+    {
+        var trimmed = url.Trim().Trim('/');
+        if (trimmed.Length == 0) return "";
+        var segments = trimmed.Split('/');
+        return string.Join('/', segments.Select(s => Slug.Make(s, config, "."))) + "/";
+    }
+
+    private static string EnsureTrailingSlash(string url)
+    {
+        var trimmed = url.Trim().Trim('/');
+        return trimmed.Length == 0 ? "" : trimmed + "/";
+    }
+
+    /// <summary>Parses the <c>slugify_redirects</c> option, which may be a single object
+    /// (<c>{ case, separator, ascii }</c>) or an array of such objects.</summary>
+    private static IEnumerable<SlugifyConfig> ParseSlugifyConfigs(IReadOnlyDictionary<string, object?> options)
+    {
+        if (!options.TryGetValue("slugify_redirects", out var value) || value is null)
+            yield break;
+
+        switch (value)
+        {
+            case IReadOnlyDictionary<string, object?> single:
+                yield return ToSlugifyConfig(single);
+                break;
+            case IEnumerable<object?> list:
+                foreach (var item in list)
+                    if (item is IReadOnlyDictionary<string, object?> m)
+                        yield return ToSlugifyConfig(m);
+                break;
+        }
+    }
+
+    private static SlugifyConfig ToSlugifyConfig(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Case = m.TryGetValue("case", out var c) && c?.ToString() is { Length: > 0 } cs ? cs : "lower",
+        Separator = m.TryGetValue("separator", out var s) && s?.ToString() is { } ss ? ss : "-",
+        Ascii = m.TryGetValue("ascii", out var a) && ToBool(a),
+    };
+
+    private static bool ToBool(object? value) => value switch
+    {
+        bool b => b,
+        string s => string.Equals(s.Trim(), "true", StringComparison.OrdinalIgnoreCase),
+        _ => false,
+    };
 
     /// <summary>Maps a redirect source path to the relative output HTML file it is written to.</summary>
     private static string OutputPathFor(string source)

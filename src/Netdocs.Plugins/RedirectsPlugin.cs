@@ -9,8 +9,12 @@ namespace Netdocs.Plugins;
 /// Emits client-side redirect pages (an <c>index.html</c> with a canonical link plus a
 /// <c>meta refresh</c>) for every <c>source → target</c> mapping.
 ///
-/// Mappings come from two places, merged together:
+/// Mappings come from three places, merged together:
 /// <list type="bullet">
+///   <item>Per-page front matter — a page may list the old URLs it replaces under
+///     <c>redirect_from</c> (or <c>aliases</c>), as a single string or a list. Each becomes a
+///     redirect to that page's current URL. This keeps a page's old locations next to the page
+///     itself, so a redirect travels with the content when it is renamed or moved.</item>
 ///   <item><c>redirect_maps</c> — an inline object of <c>{ "old/path": "new/url" }</c> pairs.</item>
 ///   <item><c>redirect_files</c> — a single path or an array of paths to JSON file(s) holding
 ///     bulk redirects. Each file may be either an object map <c>{ "old/path": "new/url" }</c>
@@ -18,8 +22,8 @@ namespace Netdocs.Plugins;
 ///     Paths are resolved relative to the project root, then the docs directory, then treated as
 ///     absolute. This lets large migration redirect tables live outside the config file.</item>
 /// </list>
-/// Later entries win on conflict, so an inline <c>redirect_maps</c> value overrides one loaded
-/// from a file with the same source.
+/// Later entries win on conflict, so an explicitly configured <c>redirect_maps</c>/<c>redirect_files</c>
+/// value overrides a per-page <c>redirect_from</c> for the same source.
 /// </summary>
 public sealed class RedirectsPlugin : IPlugin, IBuildHook
 {
@@ -58,7 +62,13 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
 
     public async Task OnBuildCompleteAsync(SiteContext site, CancellationToken ct)
     {
+        // Merge sources: per-page front matter first, then explicitly configured maps (which win).
+        var redirects = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        CollectFrontMatterRedirects(site, redirects);
         foreach (var (source, target) in _maps)
+            redirects[source] = target;
+
+        foreach (var (source, target) in redirects)
         {
             var relative = OutputPathFor(source);
             var dest = Path.Combine(site.Config.AbsoluteSiteDir, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -77,6 +87,40 @@ public sealed class RedirectsPlugin : IPlugin, IBuildHook
                 </html>
                 """;
             await OutputWriter.WriteTextIfChangedAsync(site, dest, html, ct);
+        }
+    }
+
+    /// <summary>Collects redirects declared in page front matter (<c>redirect_from</c> or
+    /// <c>aliases</c>), each pointing at that page's current site-relative URL.</summary>
+    private static void CollectFrontMatterRedirects(SiteContext site, Dictionary<string, string> into)
+    {
+        foreach (var page in site.Pages)
+        {
+            if (string.IsNullOrWhiteSpace(page.Url)) continue;
+            var target = "/" + page.Url.TrimStart('/');
+
+            foreach (var key in new[] { "redirect_from", "aliases" })
+            {
+                if (!page.FrontMatter.TryGetValue(key, out var value)) continue;
+                foreach (var source in AsStrings(value))
+                    into[source] = target;
+            }
+        }
+    }
+
+    /// <summary>Yields the trimmed string values of a front-matter scalar or list.</summary>
+    private static IEnumerable<string> AsStrings(object? value)
+    {
+        switch (value)
+        {
+            case string s when s.Trim().Length > 0:
+                yield return s.Trim();
+                break;
+            case IEnumerable<object?> list:
+                foreach (var item in list)
+                    if (item?.ToString() is { } s && s.Trim().Length > 0)
+                        yield return s.Trim();
+                break;
         }
     }
 

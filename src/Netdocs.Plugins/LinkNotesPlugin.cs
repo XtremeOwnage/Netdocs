@@ -32,6 +32,7 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
 
     private readonly List<Rule> _rules = [];
     private readonly List<string> _snippetBasePaths = [];
+    private readonly List<string> _configErrors = [];
     private ILogger? _log;
 
     public string Name => "link-notes";
@@ -104,11 +105,21 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
                 string? snippetTitle = null;
                 if (!string.IsNullOrWhiteSpace(snippetPath))
                 {
-                    var content = ReadSnippet(snippetPath!, id!);
-                    if (content is not null)
+                    var content = ReadSnippet(snippetPath!);
+                    if (content is null)
                     {
-                        (kind, snippetTitle, note) = ExtractNote(content);
+                        // An explicitly referenced snippet that cannot be found is a configuration
+                        // mistake (typically a typo in the path). Silently dropping the rule would
+                        // omit an affiliate disclosure without any signal, which is worse than a
+                        // failed build — so record it as a fatal error. It is thrown from
+                        // ProcessAsync (below) rather than here so it aborts the build even outside
+                        // `--strict` (plugin Configure exceptions are otherwise swallowed).
+                        _configErrors.Add(
+                            $"rule '{id}' references note_snippet '{snippetPath}' which was not found " +
+                            $"(searched: {string.Join(", ", _snippetBasePaths)})");
+                        continue;
                     }
+                    (kind, snippetTitle, note) = ExtractNote(content);
                 }
 
                 if (string.IsNullOrWhiteSpace(note))
@@ -126,8 +137,9 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
             _log.LogWarning("link-notes: no link rules configured; plugin is a no-op");
     }
 
-    // Resolves a snippet path against the configured base directories and returns its text, or null.
-    private string? ReadSnippet(string path, string ruleId)
+    // Resolves a snippet path against the configured base directories and returns its text, or null
+    // when it cannot be found (the caller turns an unresolved explicit reference into a build error).
+    private string? ReadSnippet(string path)
     {
         if (Path.IsPathRooted(path) && File.Exists(path)) return File.ReadAllText(path);
         foreach (var basePath in _snippetBasePaths)
@@ -135,7 +147,6 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
             var candidate = Path.GetFullPath(Path.Combine(basePath, path));
             if (File.Exists(candidate)) return File.ReadAllText(candidate);
         }
-        _log?.LogWarning("link-notes: rule '{Id}' snippet '{Path}' not found; falling back to inline note", ruleId, path);
         return null;
     }
 
@@ -174,6 +185,14 @@ public sealed partial class LinkNotesPlugin : IPlugin, IMarkdownPreprocessor
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
     {
+        // A referenced-but-missing note_snippet is a fatal configuration error. Throwing here (from
+        // the build's preprocess loop, outside PluginHost.Configure's try/catch) aborts the build
+        // with a non-zero exit even without `--strict`, so a mistyped snippet path can never
+        // silently omit an affiliate disclosure.
+        if (_configErrors.Count > 0)
+            throw new FileNotFoundException(
+                "link-notes: " + string.Join("; ", _configErrors));
+
         if (_rules.Count == 0 || markdown.Length == 0) return Task.FromResult(markdown);
 
         // Rules whose links got an inline footnote reference (definition will be rendered by the

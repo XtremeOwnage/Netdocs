@@ -170,7 +170,7 @@ your `customDir` and it wins over the bundled version.
 | `partials/breadcrumbs.html` | Breadcrumb trail above the page title (`navigation.path`, driven by `breadcrumbs`). |
 | `partials/source-file.html` | "Last updated / Created" line under the article body (`show_source_meta`, non-post pages). |
 | `partials/toc.html` | Right-hand table of contents. |
-| `partials/footer.html` | Site footer: prev/next nav, copyright, social links. |
+| `partials/footer.html` | Site footer: prev/next nav, copyright, footer links, social links. |
 | `partials/post-meta.html` | Blog-post byline: author avatar/name, date, reading time, categories. |
 | `partials/blog-nav.html` | Blog sidebar: recent posts / categories / archive listing. |
 | `partials/scripts.html` | End-of-body scripts: Material `__config` blob, the vendored bundle, hashed site scripts, inline scripts, and the highlight/mermaid loaders. |
@@ -343,4 +343,28 @@ only the last path segment is used.
 
 Need one that isn't listed? Add it via [`extra.social_icons`](#custom-icons) — the override map
 feeds nav icons and [badges](../plugins/macros.md) too.
+
+## Footer links
+
+Add a row of text links to the footer meta area (below the copyright/attribution line) with
+`extra.footer_links`. Each entry has a `name` and a `link`. Use this for pages such as
+Disclaimers, Privacy, or Terms:
+
+```json
+{
+  "Netdocs": {
+    "extra": {
+      "footer_links": [
+        { "name": "Disclaimers", "link": "/pages/disclaimers/" },
+        { "name": "Privacy", "link": "/pages/privacy/" },
+        { "name": "Source", "link": "https://github.com/you/repo" }
+      ]
+    }
+  }
+}
+```
+
+Links are resolved relative to the current page automatically: an internal path (e.g.
+`/pages/disclaimers/`) is prefixed with the correct `base_url` so it works from any depth,
+while absolute URLs (starting with `http` or `//`) are left as-is and open in a new tab.
 

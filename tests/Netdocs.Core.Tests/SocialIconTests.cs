@@ -59,4 +59,28 @@ public class SocialIconTests : IDisposable
         var html = Render("fontawesome/brands/bluesky", extra);
         Assert.Contains("d=\"M1 2 3 4\"", html);
     }
+
+    [Theory]
+    [InlineData("fontawesome/brands/github", "GitHub")]
+    [InlineData("fontawesome/brands/discord", "Discord")]
+    [InlineData("fontawesome/brands/reddit", "Reddit")]
+    [InlineData("fontawesome/solid/rss", "RSS Feed")]
+    [InlineData("fontawesome/solid/globe", "Website")]
+    [InlineData("fontawesome/brands/x-twitter", "X (Twitter)")]
+    [InlineData("fontawesome/brands/linkedin", "LinkedIn")]
+    [InlineData("fontawesome/brands/youtube", "YouTube")]
+    [InlineData("material/email", "Email")]
+    public void SocialLabelMapsKnownIconsToFriendlyNames(string icon, string expected)
+        => Assert.Equal(expected, TemplateFunctions.SocialLabel(icon));
+
+    [Theory]
+    [InlineData("some/cool-thing", "Cool Thing")]
+    [InlineData("simple/my_service", "My Service")]
+    [InlineData("bare-name", "Bare Name")]
+    public void SocialLabelTitleCasesUnknownIcons(string icon, string expected)
+        => Assert.Equal(expected, TemplateFunctions.SocialLabel(icon));
+
+    [Fact]
+    public void SocialLabelReturnsEmptyForBlank()
+        => Assert.Equal("", TemplateFunctions.SocialLabel("  "));
 }

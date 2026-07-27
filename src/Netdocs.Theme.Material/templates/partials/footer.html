@@ -34,7 +34,9 @@
       {{~ if extra.social ~}}
       <div class="md-social">
         {{~ for link in extra.social ~}}
-        <a href="{{ link.link }}" target="_blank" rel="noopener" title="{{ link.icon }}" class="md-social__link">{{ social_icon link.icon }}</a>
+        {{~ label = link.name ~}}
+        {{~ if !label || (label | string.strip) == "" ~}}{{~ label = social_label link.icon ~}}{{~ end ~}}
+        <a href="{{ link.link }}" target="_blank" rel="noopener" title="{{ label }}" aria-label="{{ label }}" class="md-social__link">{{ social_icon link.icon }}</a>
         {{~ end ~}}
       </div>
       {{~ end ~}}

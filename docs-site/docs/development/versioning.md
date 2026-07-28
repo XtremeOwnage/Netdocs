@@ -17,26 +17,27 @@ a `1.x` package range) so a future major can't surprise you.
 
 ## Moving tags
 
-Every release gets an immutable `vX.Y.Z` git tag, and every image build gets an immutable
-`:sha-<commit>` tag. The only tags that **move** are:
+Every release publishes an immutable `vX.Y.Z` git tag and an immutable `:X.Y.Z` container image,
+and every image build also gets an immutable `:sha-<commit>` tag. A few convenience tags **move**
+over time:
 
 | Tag | Where | Points at | Stability |
 | --- | --- | --- | --- |
-| `latest` / `main` | container image | The latest build of `main` — every merged PR. | Bleeding edge, not release-tested. |
+| `latest` | container image | The newest stable `vX.Y.Z` release. | Safe default. |
+| `1` / `1.2` | container image | The newest release within that major / minor line. | Follows a release line. |
+| `main` | container image | The tip of `main` — every merged PR. | Bleeding edge, not release-tested. |
 | `v1` | git tag (Action ref) | The newest `1.x` release, used by `XtremeOwnage/Netdocs@v1`. | Tracks the current major. |
 
-There is no separate `stable`, `dev`, or `edge` tag. `latest` and `main` are the same
-bleeding-edge image today, and a specific release is only reachable by its exact version.
-
-For a pinned, reproducible build, use the full `vX.Y.Z` git tag, or the `:vX.Y.Z` / `:sha-<commit>`
-image tag.
+There is no `dev`, `stable`, `unstable`, or `edge` tag: `:latest` is the newest release and
+`:main` is the bleeding edge. For a pinned, reproducible build, use the full `:X.Y.Z` image, the
+`vX.Y.Z` git tag, or a `:sha-<commit>` image.
 
 ## Release checklist
 
 1. Ensure `main` is green (build + tests + `dotnet format --verify-no-changes`).
 2. Update the changelog / release notes.
-3. Tag `vX.Y.Z` and push the tag — CI publishes the release binaries/packages and the
-   `:vX.Y.Z` container image.
+3. Tag `vX.Y.Z` and push the tag — CI publishes the release binaries/packages and moves the
+   container `:X.Y.Z`, `:X.Y`, `:X`, and `:latest` tags onto it.
 4. Move the `v1` alias tag onto the new release so `XtremeOwnage/Netdocs@v1` picks it up.
 
 ## Suggestions welcome

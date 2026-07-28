@@ -39,12 +39,26 @@ the derived defaults:
 | `link` / `id` | `site_url` + post URL | — |
 | `pubDate` / `published`, `updated` | Post creation date | — |
 | `category` (RSS) / `category term` (Atom) | Blog `categories` | — |
-| `description` / `summary` | Post excerpt | `rss_description` |
+| `description` / `summary` | Rendered HTML of the post intro (content before `<!-- more -->`, or the first paragraph) | `rss_description` |
 | `content:encoded` / `content` | Rendered HTML *(only when `full_content: true`)* | — |
 | `enclosure` (RSS image) | Front-matter `image`, else the first `<img>` in the post | `image` |
+| `guid` (RSS) / `id` (Atom) | `site_url` + post URL (`isPermaLink="true"`) | `rss_guid` |
 
 Relative image paths are resolved against the post URL; a leading `/` is resolved against
-`site_url`; absolute (`http(s)://`) URLs are used as-is.
+`site_url`; absolute (`http(s)://`) URLs are used as-is. Links and images inside the rendered
+`description` are absolutized the same way so they resolve in any reader.
+
+### Stable GUIDs across URL changes
+
+The `guid` (RSS) / `id` (Atom) uniquely identifies each item; readers use it to tell new posts
+from ones they've already shown. By default it's the post's permalink, so **changing a post's
+slug or URL changes its guid**, and readers re-surface it as new. To keep a post's identity
+stable across such a move, pin an explicit `rss_guid` in front matter (any stable string — a URN,
+a UUID, or the post's original URL). When set, the guid is emitted with `isPermaLink="false"`:
+
+```yaml
+rss_guid: https://static.xtremeownage.com/blog/2024/01/04/power-consumption-versus-price/
+```
 
 Example front matter using the overrides:
 
@@ -53,6 +67,7 @@ Example front matter using the overrides:
 title: My Post
 rss_title: A snappier title just for feed readers
 rss_description: A custom one-line summary for the feed.
+rss_guid: urn:uuid:1e5f2c9a-0b3d-4a1e-9c2f-8b7a6d5e4c3b
 image: hero.png
 ---
 ```

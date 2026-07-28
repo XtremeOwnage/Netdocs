@@ -89,7 +89,11 @@ runs:
           version="${tag#v}"
         fi
 
-        ref="${image}:v${version}"
+        # Release images are tagged with the bare semver (e.g. `:1.2.0`), matching
+        # docker/metadata-action's `type=semver,pattern={{version}}` and the scheme
+        # documented in docs/development/versioning.md. (Older <=1.1.29 images used a
+        # `v`-prefixed tag; those predate the current tagging workflow.)
+        ref="${image}:${version}"
         echo "Using Netdocs image ${ref}"
         docker pull "${ref}"
 

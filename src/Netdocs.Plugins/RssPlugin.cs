@@ -107,7 +107,7 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
     private string BuildRss(SiteContext site, string siteUrl, List<FeedItem> items)
     {
         var sb = new StringBuilder();
-        using var writer = XmlWriter.Create(sb, XmlSettings());
+        using var writer = XmlWriter.Create(new Utf8StringWriter(sb), XmlSettings());
 
         writer.WriteStartDocument();
         writer.WriteStartElement("rss");
@@ -119,8 +119,14 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
         writer.WriteElementString("title", _feedTitle ?? site.Config.SiteName);
         writer.WriteElementString("link", siteUrl + "/");
         writer.WriteElementString("description", _feedDescription ?? site.Config.SiteDescription ?? site.Config.SiteName);
+        if (!string.IsNullOrWhiteSpace(site.Config.Theme.Language))
+            writer.WriteElementString("language", site.Config.Theme.Language);
         if (items.Count > 0)
+        {
+            writer.WriteElementString("pubDate", items[0].Date.ToString("r"));
             writer.WriteElementString("lastBuildDate", items[0].Date.ToString("r"));
+        }
+        writer.WriteElementString("generator", "Netdocs");
         if (_ttl > 0)
             writer.WriteElementString("ttl", _ttl.ToString());
 
@@ -176,7 +182,7 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
     private string BuildAtom(SiteContext site, string siteUrl, List<FeedItem> items)
     {
         var sb = new StringBuilder();
-        using var writer = XmlWriter.Create(sb, XmlSettings());
+        using var writer = XmlWriter.Create(new Utf8StringWriter(sb), XmlSettings());
 
         writer.WriteStartDocument();
         writer.WriteStartElement("feed", AtomNs);
@@ -233,6 +239,18 @@ public sealed partial class RssPlugin : IPlugin, IBuildHook
 
     private static XmlWriterSettings XmlSettings() =>
         new() { Indent = true, Encoding = new UTF8Encoding(false) };
+
+    /// <summary>
+    /// <see cref="XmlWriter"/> stamps the XML declaration with the writer's reported encoding.
+    /// The default <see cref="StringWriter"/> reports UTF-16, so the declaration ends up as
+    /// <c>encoding="utf-16"</c> even though the string is later persisted as UTF-8 — a mismatch
+    /// that makes strict RSS parsers reject the feed. Reporting UTF-8 keeps the declaration
+    /// consistent with the bytes actually written to disk.
+    /// </summary>
+    private sealed class Utf8StringWriter(StringBuilder sb) : StringWriter(sb)
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+    }
 
     private static string? FrontMatterString(Page page, string key) =>
         page.FrontMatter.TryGetValue(key, out var v) ? v?.ToString() : null;

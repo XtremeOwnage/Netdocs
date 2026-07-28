@@ -17,24 +17,27 @@ a `1.x` package range) so a future major can't surprise you.
 
 ## Moving tags
 
-In addition to immutable `vX.Y.Z` release tags, these convenience tags move over time:
+Every release gets an immutable `vX.Y.Z` git tag, and every image build gets an immutable
+`:sha-<commit>` tag. The only tags that **move** are:
 
-| Tag | Points at | Stability |
-| --- | --- | --- |
-| `latest` / `stable` | The most recent stable release. | Safe default. |
-| `dev` | The latest build off `main`. | Usually fine, not release-tested. |
-| `main` / `unstable` | The tip of `main` — every merged PR. | May be unstable. |
+| Tag | Where | Points at | Stability |
+| --- | --- | --- | --- |
+| `latest` / `main` | container image | The latest build of `main` — every merged PR. | Bleeding edge, not release-tested. |
+| `v1` | git tag (Action ref) | The newest `1.x` release, used by `XtremeOwnage/Netdocs@v1`. | Tracks the current major. |
 
-For containers this maps to image tags (`ghcr.io/xtremeownage/netdocs:1`,
-`:1.2.3`, `:latest`, `:dev`). For a pinned, reproducible build, always use the full
-`vX.Y.Z` / `:1.2.3` form.
+There is no separate `stable`, `dev`, or `edge` tag. `latest` and `main` are the same
+bleeding-edge image today, and a specific release is only reachable by its exact version.
+
+For a pinned, reproducible build, use the full `vX.Y.Z` git tag, or the `:vX.Y.Z` / `:sha-<commit>`
+image tag.
 
 ## Release checklist
 
 1. Ensure `main` is green (build + tests + `dotnet format --verify-no-changes`).
 2. Update the changelog / release notes.
-3. Tag `vX.Y.Z` and push the tag — CI publishes artifacts and moves `latest`/`stable`.
-4. `dev` continues to track `main`.
+3. Tag `vX.Y.Z` and push the tag — CI publishes the release binaries/packages and the
+   `:vX.Y.Z` container image.
+4. Move the `v1` alias tag onto the new release so `XtremeOwnage/Netdocs@v1` picks it up.
 
 ## Suggestions welcome
 

@@ -1,5 +1,7 @@
 using Scriban;
 using Scriban.Runtime;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Netdocs.Core.Templating;
 
@@ -12,11 +14,13 @@ public sealed class TemplateEngine
     private readonly IReadOnlyList<string> _searchDirs;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Template> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ThemeTemplateLoader _loader;
+    private readonly TemplateBlockValidator _blockValidator;
 
-    public TemplateEngine(IEnumerable<string> searchDirsHighestPriorityFirst)
+    public TemplateEngine(IEnumerable<string> searchDirsHighestPriorityFirst, ILogger? logger = null)
     {
         _searchDirs = searchDirsHighestPriorityFirst.Where(Directory.Exists).ToList();
         _loader = new ThemeTemplateLoader(_searchDirs);
+        _blockValidator = new TemplateBlockValidator(logger ?? NullLogger.Instance);
     }
 
     public bool TryResolve(string templateName, out string path) => _loader.TryResolvePath(templateName, out path);
@@ -43,7 +47,9 @@ public sealed class TemplateEngine
         {
             if (!_loader.TryResolvePath(key, out var path))
                 throw new FileNotFoundException($"Template '{key}' not found in: {string.Join(", ", _searchDirs)}");
-            var template = Template.Parse(File.ReadAllText(path), path);
+            var content = File.ReadAllText(path);
+            _blockValidator.Validate(path, content);
+            var template = Template.Parse(content, path);
             if (template.HasErrors)
                 throw new InvalidOperationException($"Template '{key}' has errors:\n{string.Join('\n', template.Messages)}");
             return template;

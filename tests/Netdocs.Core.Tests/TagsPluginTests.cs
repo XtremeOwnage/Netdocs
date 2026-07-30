@@ -45,12 +45,14 @@ public class TagsPluginTests
         FrontMatter = new Dictionary<string, object?>(),
     };
 
-    private static SiteContext BuildSite(params Page[] pages)
+    private static SiteContext BuildSite(params Page[] pages) => BuildSite(new BuildOptions(), pages);
+
+    private static SiteContext BuildSite(BuildOptions options, params Page[] pages)
     {
         var site = new SiteContext
         {
             Config = new SiteConfig { ProjectRoot = Path.GetTempPath() },
-            Options = new BuildOptions(),
+            Options = options,
             LoggerFactory = NullLoggerFactory.Instance,
         };
         foreach (var p in pages) site.Pages.Add(p);
@@ -61,6 +63,18 @@ public class TagsPluginTests
     {
         var plugin = new TagsPlugin();
         plugin.Configure(new FakeContext(new Dictionary<string, object?> { ["export"] = false }));
+        return plugin;
+    }
+
+    private static TagsPlugin ConfiguredWithShadow()
+    {
+        var plugin = new TagsPlugin();
+        plugin.Configure(new FakeContext(new Dictionary<string, object?>
+        {
+            ["export"] = false,
+            ["shadow"] = true,
+            ["shadow_tags"] = new List<object?> { "Draft", "Internal", "ToDo" },
+        }));
         return plugin;
     }
 
@@ -174,5 +188,47 @@ public class TagsPluginTests
 
         Assert.Contains("{ #tag:energy-monitoring }", index.RawMarkdown);
         Assert.Contains("{ #tag:development/net }", index.RawMarkdown);
+    }
+
+    [Fact]
+    public async Task ShadowTags_HiddenInProductionBuild()
+    {
+        var draft = Tagged("draft.md", "Draft Page", "Draft", "Process");
+        var index = Marker("tags/index.md", "<!-- material/tags -->");
+        var site = BuildSite(new BuildOptions { IsProduction = true }, draft, index);
+
+        await ConfiguredWithShadow().OnBuildStartAsync(site, CancellationToken.None);
+
+        // The shadow tag is dropped from the index, but non-shadow tags on the same page remain.
+        Assert.DoesNotContain("## Draft", index.RawMarkdown);
+        Assert.Contains("## Process", index.RawMarkdown);
+        Assert.Equal(new[] { "Process" }, (IEnumerable<string>)draft.Meta["tags"]!);
+    }
+
+    [Fact]
+    public async Task ShadowTags_VisibleInDevelopmentBuild()
+    {
+        var draft = Tagged("draft.md", "Draft Page", "Draft", "Process");
+        var index = Marker("tags/index.md", "<!-- material/tags -->");
+        // Non-production build (e.g. the nonprod/dev deploy) keeps shadow tags visible.
+        var site = BuildSite(new BuildOptions { IsProduction = false }, draft, index);
+
+        await ConfiguredWithShadow().OnBuildStartAsync(site, CancellationToken.None);
+
+        Assert.Contains("## Draft", index.RawMarkdown);
+        Assert.Contains("## Process", index.RawMarkdown);
+    }
+
+    [Fact]
+    public async Task ShadowTags_VisibleWhenServingProductionBuild()
+    {
+        var draft = Tagged("draft.md", "Draft Page", "Draft");
+        var index = Marker("tags/index.md", "<!-- material/tags -->");
+        // shadow_on_serve (default true) keeps them visible even under `serve --prod`.
+        var site = BuildSite(new BuildOptions { IsProduction = true, IsServe = true }, draft, index);
+
+        await ConfiguredWithShadow().OnBuildStartAsync(site, CancellationToken.None);
+
+        Assert.Contains("## Draft", index.RawMarkdown);
     }
 }

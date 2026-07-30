@@ -83,6 +83,7 @@ public sealed partial class SnippetsPlugin : IPlugin, IMarkdownPreprocessor
         return IncludeRegex().Replace(markdown, match =>
         {
             var spec = match.Groups["spec"].Value.Trim();
+            var indent = match.Groups["indent"].Value;
             string? section = null;
             var path = spec;
             var colon = spec.LastIndexOf(':');
@@ -94,13 +95,39 @@ public sealed partial class SnippetsPlugin : IPlugin, IMarkdownPreprocessor
 
             var resolved = Resolve(path);
             if (resolved is null || !File.Exists(resolved))
-                return $"<!-- snippet not found: {path} -->";
+                return $"{indent}<!-- snippet not found: {path} -->";
 
             var content = File.ReadAllText(resolved);
             if (section is not null)
                 content = ExtractSection(content, section);
-            return Expand(content, depth + 1);
+            var expanded = Expand(content, depth + 1);
+            return Reindent(expanded, indent);
         });
+    }
+
+    /// <summary>Prepends the snippet marker's leading indentation to every line of the
+    /// included content. pymdownx.snippets does this so that an include placed inside an
+    /// indented context (a code fence within an admonition, a nested list item, etc.)
+    /// keeps that context instead of breaking out of it. Without this, an indented
+    /// <c>--8&lt;--</c> inside a fenced code block yields an empty fence and dumps the file
+    /// as top-level markdown.</summary>
+    private static string Reindent(string content, string indent)
+    {
+        if (indent.Length == 0) return content;
+
+        var normalized = content.Replace("\r\n", "\n");
+        var lines = normalized.Split('\n');
+        var sb = new StringBuilder();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            // Don't indent blank lines (avoids trailing whitespace-only lines).
+            if (lines[i].Length > 0)
+                sb.Append(indent);
+            sb.Append(lines[i]);
+            if (i < lines.Length - 1)
+                sb.Append('\n');
+        }
+        return sb.ToString();
     }
 
     /// <summary>Parses trailing <c>key="value"</c> pairs from a parameterized include.</summary>
@@ -156,7 +183,7 @@ public sealed partial class SnippetsPlugin : IPlugin, IMarkdownPreprocessor
         _ => []
     };
 
-    [GeneratedRegex(@"^[ \t]*(?:;\s*)?--8<--(?:-)?[ \t]+""(?<spec>[^""]+)""[ \t]*\r?$", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^(?<indent>[ \t]*)(?:;\s*)?--8<--(?:-)?[ \t]+""(?<spec>[^""]+)""[ \t]*\r?$", RegexOptions.Multiline)]
     private static partial Regex IncludeRegex();
 
     // Inline parameterized include: `--8<-- "file" key="value" ...` (at least one argument).

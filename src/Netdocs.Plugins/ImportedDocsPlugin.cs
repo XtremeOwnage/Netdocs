@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
 
@@ -88,15 +89,136 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         ImportedDocsPullSource source,
         CancellationToken ct)
     {
-        // TODO: Implement git pulling, cloning, branch/tag/commit checkout
-        // For now, log that pull-based imports are not yet implemented
-        _logger.LogWarning("Pull-based imports not yet implemented for {Repository}", source.Repository);
-        return 0;
+        try
+        {
+            // Setup temporary directory for cloning
+            var tempDir = Path.Combine(Path.GetTempPath(), "netdocs-import", Path.GetRandomFileName());
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                return await PullAndImportAsync(site, source, tempDir, ct);
+            }
+            finally
+            {
+                // Cleanup temp directory
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+                catch
+                {
+                    _logger.LogWarning("Failed to clean up temporary directory: {Path}", tempDir);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to import from pull source {Repository}", source.Repository);
+            return 0;
+        }
+    }
+
+    private async Task<int> PullAndImportAsync(
+        SiteContext site,
+        ImportedDocsPullSource source,
+        string tempDir,
+        CancellationToken ct)
+    {
+        _logger.LogInformation("Cloning {Repository} (ref: {Reference})", 
+            source.Repository, source.Reference ?? "default");
+
+        try
+        {
+            // Prepare clone options
+            var cloneOptions = new CloneOptions();
+
+            // Set branch if specified
+            if (!string.IsNullOrEmpty(source.Reference))
+            {
+                cloneOptions.BranchName = source.Reference;
+            }
+
+            // Clone the repository
+            // Note: For private repos, ensure SSH key is configured or use https with token in URL
+            Repository.Clone(source.Repository, tempDir, cloneOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to clone repository {Repository}", source.Repository);
+            return 0;
+        }
+
+        using var repo = new Repository(tempDir);
+
+        // Discover and import markdown files
+        var sourcePath = source.SourcePath ?? "docs";
+        var docsPath = Path.Combine(tempDir, sourcePath);
+
+        if (!Directory.Exists(docsPath))
+        {
+            _logger.LogWarning("Source path does not exist in {Repository}: {SourcePath}", 
+                source.Repository, sourcePath);
+            return 0;
+        }
+
+        var count = 0;
+        var excludePatterns = source.Exclude?.ToList() ?? [];
+        var mdFiles = Directory.EnumerateFiles(docsPath, "*.md", SearchOption.AllDirectories);
+
+        foreach (var file in mdFiles)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            // Check if file matches exclusion patterns
+            var relPath = Path.GetRelativePath(docsPath, file);
+            if (ShouldExclude(relPath, excludePatterns))
+            {
+                _logger.LogTrace("Skipping excluded file: {File}", relPath);
+                continue;
+            }
+
+            var page = await LoadPageFromFileAsync(file, docsPath, source, site);
+            if (page is not null)
+            {
+                site.Pages.Add(page);
+                count++;
+                _logger.LogTrace("Imported pulled page {Url} from {File}", page.Url, file);
+            }
+        }
+
+        _logger.LogInformation("Imported {Count} pages from {Repository}", count, source.Repository);
+        return count;
+    }
+
+    private bool ShouldExclude(string relativePath, List<string> patterns)
+    {
+        if (patterns.Count == 0) return false;
+
+        var pathForwardSlash = relativePath.Replace('\\', '/');
+        foreach (var pattern in patterns)
+        {
+            // Simple glob matching: * = any chars in segment, ** = any dirs
+            if (GlobMatch(pathForwardSlash, pattern))
+                return true;
+        }
+        return false;
+    }
+
+    private bool GlobMatch(string path, string pattern)
+    {
+        // Convert glob pattern to regex
+        var regexPattern = "^" + Regex.Escape(pattern)
+            .Replace(@"\*\*", "(?:.*/)?")
+            .Replace(@"\*", "[^/]*")
+            .Replace(@"\?", ".") + "$";
+
+        return Regex.IsMatch(path, regexPattern);
     }
 
     private async Task<Page?> LoadPageFromFileAsync(
         string filePath,
-        string projectRoot,
+        string baseDir,
         ImportedDocsPullSource? source,
         SiteContext site)
     {
@@ -106,7 +228,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
             if (string.IsNullOrWhiteSpace(content))
                 return null;
 
-            var relPath = Path.GetRelativePath(projectRoot, filePath).Replace('\\', '/');
+            var relPath = Path.GetRelativePath(baseDir, filePath).Replace('\\', '/');
             var url = ComputeUrl(relPath, source?.DestinationPath);
 
             var page = new Page

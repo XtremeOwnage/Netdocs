@@ -1,9 +1,9 @@
-using Netdocs.Abstractions;
-using Netdocs.Plugins;
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using Netdocs.Abstractions;
+using Netdocs.Plugins;
 using Xunit;
 
 namespace Netdocs.Core.Tests;
@@ -48,7 +48,7 @@ public class ImportedDocsPluginTests
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         var projectDir = tempDir;
         var pushedDocsDir = Path.Combine(projectDir, "imported");
-        
+
         // Create empty directory
         Directory.CreateDirectory(pushedDocsDir);
 

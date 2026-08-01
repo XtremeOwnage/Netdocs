@@ -252,7 +252,8 @@ public static class CliApp
         .Register<ArithmatexPlugin>("arithmatex", "pymdownx.arithmatex")
         .Register<CalculatorPlugin>("calculator", "calc")
         .Register<VersioningPlugin>("versioning")
-        .Register<MacrosPlugin>("macros");
+        .Register<MacrosPlugin>("macros")
+        .Register<ImportedDocsPlugin>("imported-docs");
 
     private static string? ResolveConfigPath(string? provided)
     {

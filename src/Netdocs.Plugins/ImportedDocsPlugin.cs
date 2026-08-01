@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using Amazon.S3;
+using Amazon.S3.Model;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
@@ -15,6 +17,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
     private string _projectRoot = "";
     private string? _pushedDocsDir;
     private IReadOnlyList<ImportedDocsPullSource> _pullSources = [];
+    private IReadOnlyList<ImportedDocsS3Source> _s3Sources = [];
     private ILogger _logger = null!;
 
     public string Name => "imported-docs";
@@ -27,11 +30,13 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         var config = ctx.Config.ImportedDocs;
         _pushedDocsDir = config.PushedDocsDir;
         _pullSources = config.PullSources;
+        _s3Sources = config.S3Sources;
 
         _logger.LogInformation(
-            "Imported docs plugin configured: {PushedDir} (pushed), {PullSources} pull sources",
+            "Imported docs plugin configured: {PushedDir} (pushed), {PullSources} pull sources, {S3Sources} S3 sources",
             _pushedDocsDir ?? "disabled",
-            _pullSources.Count);
+            _pullSources.Count,
+            _s3Sources.Count);
     }
 
     public async Task OnImportAsync(SiteContext site, CancellationToken ct)
@@ -48,6 +53,12 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         foreach (var source in _pullSources)
         {
             imported += await ImportPullSourceAsync(site, source, ct);
+        }
+
+        // 3. Import S3 docs (from S3 buckets).
+        foreach (var source in _s3Sources)
+        {
+            imported += await ImportS3SourceAsync(site, source, ct);
         }
 
         if (imported > 0)
@@ -330,5 +341,155 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         }
 
         return "/" + path.Trim('/') + "/";
+    }
+
+    private async Task<int> ImportS3SourceAsync(SiteContext site, ImportedDocsS3Source source, CancellationToken ct)
+    {
+        _logger.LogInformation("Importing docs from S3: s3://{Bucket}/{Prefix}", source.Bucket, source.Prefix);
+
+        try
+        {
+            var s3Client = CreateS3Client(source);
+            var count = 0;
+            var excludePatterns = source.Exclude?.ToList() ?? [];
+
+            // List all objects in the bucket with the given prefix
+            var request = new ListObjectsV2Request
+            {
+                BucketName = source.Bucket,
+                Prefix = source.Prefix
+            };
+
+            ListObjectsV2Response? response = null;
+            do
+            {
+                if (ct.IsCancellationRequested) break;
+
+                response = await s3Client.ListObjectsV2Async(request, ct);
+
+                foreach (var obj in response.S3Objects)
+                {
+                    if (ct.IsCancellationRequested) break;
+
+                    // Only process markdown files
+                    if (!obj.Key.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // Get relative path from the prefix
+                    var relPath = obj.Key.Substring(source.Prefix.Length).TrimStart('/');
+
+                    if (ShouldExclude(relPath, excludePatterns))
+                    {
+                        _logger.LogTrace("Skipping excluded file: {File}", relPath);
+                        continue;
+                    }
+
+                    var page = await LoadPageFromS3Async(s3Client, source, obj.Key, relPath, ct);
+                    if (page is not null)
+                    {
+                        site.Pages.Add(page);
+                        count++;
+                        _logger.LogTrace("Imported S3 page {Url} from s3://{Bucket}/{Key}", page.Url, source.Bucket, obj.Key);
+                    }
+                }
+
+                request.ContinuationToken = response.ContinuationToken;
+            } while (response.IsTruncated && !ct.IsCancellationRequested);
+
+            _logger.LogInformation("Imported {Count} pages from S3 bucket {Bucket}", count, source.Bucket);
+            return count;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to import from S3 bucket {Bucket}", source.Bucket);
+            return 0;
+        }
+    }
+
+    private IAmazonS3 CreateS3Client(ImportedDocsS3Source source)
+    {
+        var config = new AmazonS3Config { RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(source.Region) };
+
+        // Check for explicit credentials in environment variable
+        if (!string.IsNullOrEmpty(source.CredentialsEnvVar))
+        {
+            var credsStr = Environment.GetEnvironmentVariable(source.CredentialsEnvVar);
+            if (!string.IsNullOrEmpty(credsStr))
+            {
+                var parts = credsStr.Split(':');
+                if (parts.Length == 2)
+                {
+                    var credentials = new Amazon.Runtime.BasicAWSCredentials(parts[0], parts[1]);
+                    return new AmazonS3Client(credentials, config);
+                }
+            }
+        }
+
+        // Use default credential chain (IAM role, ~/.aws/credentials, env vars, etc.)
+        return new AmazonS3Client(config);
+    }
+
+    private async Task<Page?> LoadPageFromS3Async(
+        IAmazonS3 s3Client,
+        ImportedDocsS3Source source,
+        string s3Key,
+        string relPath,
+        CancellationToken ct)
+    {
+        try
+        {
+            // Download the object
+            var getRequest = new GetObjectRequest { BucketName = source.Bucket, Key = s3Key };
+            using var response = await s3Client.GetObjectAsync(getRequest, ct);
+            using var reader = new StreamReader(response.ResponseStream);
+            var content = await reader.ReadToEndAsync(ct);
+
+            var page = new Page
+            {
+                SourcePath = $"s3://{source.Bucket}/{s3Key}",
+                RelativePath = relPath,
+                Url = ComputeUrl(relPath, source.DestinationPath),
+                Title = Path.GetFileNameWithoutExtension(relPath),
+                RawMarkdown = content,
+            };
+
+            // Extract front-matter and apply overrides
+            ExtractFrontMatterAndApplyOverrides(page, null);
+
+            // Add S3-specific front-matter defaults
+            var meta = new Dictionary<string, object?>(page.FrontMatter, StringComparer.OrdinalIgnoreCase);
+            
+            // Apply front-matter defaults from source config
+            if (source.FrontMatterDefaults is not null)
+            {
+                foreach (var (key, value) in source.FrontMatterDefaults)
+                {
+                    meta.TryAdd(key, value);
+                }
+            }
+
+            // Add source marker if requested
+            if (source.IncludeSourceMarker)
+            {
+                var s3Url = $"https://{source.Bucket}.s3.amazonaws.com/{s3Key}";
+                meta.TryAdd("import_source", s3Url);
+                meta.TryAdd("import_url", ComputeUrl(relPath, source.DestinationPath));
+            }
+
+            page.FrontMatter = meta;
+
+            // Update title from front-matter if present
+            if (meta.TryGetValue("title", out var titleObj) && titleObj is string title)
+            {
+                page.Title = title;
+            }
+
+            return page;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load S3 object s3://{Bucket}/{Key}", source.Bucket, s3Key);
+            return null;
+        }
     }
 }

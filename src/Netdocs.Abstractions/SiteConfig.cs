@@ -269,6 +269,9 @@ public sealed class ImportedDocsConfig
 
     /// <summary>List of external repositories to pull documentation from.</summary>
     public IReadOnlyList<ImportedDocsPullSource> PullSources { get; set; } = [];
+
+    /// <summary>List of S3 buckets to pull documentation from.</summary>
+    public IReadOnlyList<ImportedDocsS3Source> S3Sources { get; set; } = [];
 }
 
 /// <summary>Configuration for pulling docs from an external repository.</summary>
@@ -320,6 +323,57 @@ public sealed class ImportedDocsPullSource
 
     /// <summary>
     /// Optional glob patterns (relative to source docs path) to exclude from import.
+    /// e.g., ["*.draft.md", "private/**"]
+    /// </summary>
+    public IReadOnlyList<string>? Exclude { get; init; }
+}
+
+/// <summary>Configuration for pulling docs from an S3 bucket.</summary>
+public sealed class ImportedDocsS3Source
+{
+    /// <summary>
+    /// S3 bucket name, e.g. "my-docs-bucket".
+    /// The bucket must be readable by the configured credentials.
+    /// </summary>
+    public required string Bucket { get; init; }
+
+    /// <summary>
+    /// S3 object prefix/folder path where docs are stored, e.g. "docs/" or "external-docs/api/".
+    /// Objects matching this prefix will be scanned for markdown files.
+    /// </summary>
+    public required string Prefix { get; init; }
+
+    /// <summary>
+    /// AWS region, e.g. "us-east-1" or "eu-west-1".
+    /// </summary>
+    public required string Region { get; init; }
+
+    /// <summary>
+    /// Directory within the site where imported docs should be placed, e.g. "products/api".
+    /// If omitted, docs are imported to the root of the site.
+    /// </summary>
+    public string? DestinationPath { get; init; }
+
+    /// <summary>
+    /// Optional environment variable name containing AWS credentials in format "ACCESS_KEY:SECRET_KEY".
+    /// If omitted, uses default AWS credential chain (IAM role, ~/.aws/credentials, environment variables, etc.).
+    /// </summary>
+    public string? CredentialsEnvVar { get; init; }
+
+    /// <summary>
+    /// Optional front-matter overrides to apply to all imported pages from this source.
+    /// Common use cases: nav_title remapping, tags, custom metadata.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> FrontMatterDefaults { get; init; } = new Dictionary<string, object?>();
+
+    /// <summary>
+    /// When true, includes an "import_source" front-matter field with S3 object URL.
+    /// Helps document origins of external content.
+    /// </summary>
+    public bool IncludeSourceMarker { get; init; }
+
+    /// <summary>
+    /// Optional glob patterns to exclude from import.
     /// e.g., ["*.draft.md", "private/**"]
     /// </summary>
     public IReadOnlyList<string>? Exclude { get; init; }

@@ -48,6 +48,7 @@ This enables push-based imports. External repos can push documentation to the `/
 |---------|------|---------|-------------|
 | `pushedDocsDir` | string | `"imported"` | Directory where external repos push docs. Created as a subdirectory in your project root. |
 | `pullSources` | array | `[]` | List of external repositories to pull from (see below). |
+| `s3Sources` | array | `[]` | List of S3 buckets to pull documentation from (see below). |
 
 ### Pull Source Configuration
 
@@ -79,6 +80,36 @@ Each pull source is a repository to pull documentation from:
 | `includeSourceMarker` | bool | `false` | If `true`, adds `import_source` and `import_url` metadata to imported pages. Useful for displaying "view source" links. |
 | `exclude` | array | `[]` | Glob patterns for files to exclude (e.g., `["draft/**", "INTERNAL-*.md"]`). Supports `*` (segment) and `**` (any dirs). |
 | `frontMatterDefaults` | object | `{}` | Front-matter key-value pairs to apply as fallback for imported pages. Extracted values take precedence. |
+
+### S3 Source Configuration
+
+Pull documentation directly from S3 buckets (no git clone overhead):
+
+```json
+{
+  "bucket": "my-docs-bucket",
+  "prefix": "docs/",
+  "region": "us-east-1",
+  "destinationPath": "products/external",
+  "credentialsEnvVar": "AWS_CREDENTIALS",
+  "includeSourceMarker": true,
+  "exclude": ["*.draft.md", "private/**"],
+  "frontMatterDefaults": {
+    "nav_title": "External Docs"
+  }
+}
+```
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `bucket` | string | _(required)_ | S3 bucket name (e.g., `"my-docs-bucket"`). |
+| `prefix` | string | _(required)_ | S3 object prefix/folder (e.g., `"docs/"` or `"external-docs/api/"`). Only objects under this prefix are imported. |
+| `region` | string | _(required)_ | AWS region (e.g., `"us-east-1"`, `"eu-west-1"`). |
+| `destinationPath` | string | _(optional)_ | Path on main site where imported docs appear (e.g., `"products/api"`). |
+| `credentialsEnvVar` | string | _(optional)_ | Environment variable containing AWS credentials in format `"ACCESS_KEY:SECRET_KEY"`. If omitted, uses default AWS credential chain (IAM role, `~/.aws/credentials`, env vars). |
+| `includeSourceMarker` | bool | `false` | If `true`, adds `import_source` with S3 URL and `import_url` metadata. |
+| `exclude` | array | `[]` | Glob patterns for files to exclude. |
+| `frontMatterDefaults` | object | `{}` | Front-matter key-value pairs to apply as fallback. |
 
 ## Use Cases
 
@@ -211,6 +242,83 @@ jobs:
 }
 ```
 
+### S3-Based: Direct S3 Bucket Import
+
+**Scenario**: You want to pull documentation directly from S3 buckets without requiring git operations. Faster and simpler for large documentation sets.
+
+**Flow**:
+1. External repos upload markdown to a shared S3 bucket (via CI/CD or manually)
+2. Configure S3 bucket paths in main docs `appsettings.json`
+3. Main docs build downloads files directly from S3
+4. Imported docs integrated into main site
+
+**Main Docs Config** (`appsettings.json`):
+
+```json
+{
+  "plugins": [
+    { "name": "imported-docs" }
+  ],
+  "siteConfig": {
+    "importedDocs": {
+      "s3Sources": [
+        {
+          "bucket": "shared-docs",
+          "prefix": "api-docs/",
+          "region": "us-east-1",
+          "destinationPath": "products/api",
+          "exclude": ["draft/**", "*.internal.md"]
+        },
+        {
+          "bucket": "shared-docs",
+          "prefix": "sdk-docs/",
+          "region": "us-east-1",
+          "destinationPath": "products/sdk"
+        }
+      ]
+    }
+  }
+}
+```
+
+**Example External Repo Workflow** (to upload to S3):
+
+```yaml
+name: Upload docs to S3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: shared-docs
+  S3_PREFIX: api-docs/
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::ACCOUNT_ID:role/GithubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync ./docs s3://${{ env.S3_BUCKET }}/${{ env.S3_PREFIX }} \
+            --delete \
+            --exclude ".git/*" \
+            --exclude "node_modules/*"
+```
+
 ## Authentication
 
 ### Public Repositories
@@ -296,6 +404,54 @@ Use SSH repository URL:
 ```
 
 No `authTokenEnvVar` needed — git will use SSH agent.
+
+### S3 Bucket Authentication
+
+For S3-based imports, credentials can come from multiple sources (in order of precedence):
+
+1. **Environment variable** (format: `ACCESS_KEY:SECRET_KEY`)
+2. **IAM role** (automatic on AWS EC2, Lambda, or GitHub Actions OIDC)
+3. **`~/.aws/credentials`** file
+4. **Environment variables** (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+
+#### Using Environment Variables (Simple)
+
+Store credentials as a GitHub secret and pass via environment:
+
+```yaml
+env:
+  AWS_CREDENTIALS: ${{ secrets.AWS_CREDENTIALS }}
+```
+
+In config:
+
+```json
+{
+  "bucket": "shared-docs",
+  "prefix": "docs/",
+  "region": "us-east-1",
+  "credentialsEnvVar": "AWS_CREDENTIALS",
+  "destinationPath": "products/docs"
+}
+```
+
+#### Using IAM Role (Recommended)
+
+For AWS-hosted or OIDC-enabled workflows, use IAM roles instead of credentials:
+
+```yaml
+permissions:
+  id-token: write
+
+steps:
+  - name: Configure AWS credentials
+    uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::ACCOUNT_ID:role/GithubActionsRole
+      aws-region: us-east-1
+```
+
+Then omit `credentialsEnvVar` in config and the plugin uses the assumed role automatically.
 
 ## Front-Matter Overrides
 
@@ -451,10 +607,15 @@ See [Build lifecycle](../development/lifecycle.md) for the full pipeline diagram
 ## Performance
 
 - **Push-based**: No performance impact. Only processes files pushed to staging directory.
-- **Pull-based**: Clones repositories to temp directory on each build. For large repos or frequent builds, consider:
+- **Pull-based (Git)**: Clones repositories to temp directory on each build. For large repos or frequent builds, consider:
   - Using scheduled workflows (fewer builds)
   - Shallow clones with specific branches/tags
   - Filtering large repos with `exclude` patterns
+- **Pull-based (S3)**: Direct download from S3 bucket without git operations. Generally faster than git clones, especially for large doc sets:
+  - Parallel object listing for efficient bucket scanning
+  - Configurable credentials via IAM role or environment variables
+  - No temporary directory cleanup overhead (streaming downloads)
+  - Suitable for frequently-updated doc sources
 
 ## See Also
 

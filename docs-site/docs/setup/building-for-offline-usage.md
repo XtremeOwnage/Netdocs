@@ -43,16 +43,25 @@ info: Offline: self-hosted 27 external asset(s) into assets/external across 45 p
 
 During the build (after pages and assets are written) Netdocs:
 
-1. Scans every emitted page for external assets — `<script src>`, `<link rel="stylesheet">`,
-   `<img src>`, and the Mermaid dynamic `import()`.
+1. Scans every emitted page for external assets — `<script src>`, `<img src>`, the Mermaid dynamic
+   `import()`, and `<link>` tags whose `rel` actually fetches a subresource: `stylesheet`, `icon`,
+   `apple-touch-icon`, `apple-touch-icon-precomposed`, `mask-icon`, `manifest`, `preload`,
+   `modulepreload`.
 2. Downloads each one **once** into `assets/external/`.
 3. Follows `url(...)` references inside downloaded CSS (e.g. web-font `.woff2`/`.ttf` files) and
    self-hosts those too, rewriting the stylesheet to the local copies.
 4. Rewrites every page to point at the local files using **page-relative** paths, so the site
    works from a sub-folder *and* from `file://`.
 
-Only asset tags are rewritten — ordinary `<a href="https://…">` links and `rel="preconnect"`
-hints are left untouched.
+Only the matched asset attributes are rewritten, and only where they matched. Everything else that
+happens to contain the same URL is left exactly as authored:
+
+- Ordinary `<a href="https://…">` links.
+- `<link>` tags pointing at documents rather than assets — `canonical`, `alternate`, `prev`/`next`,
+  `author`.
+- Connection and navigation hints — `preconnect`, `dns-prefetch`, `prefetch`, `prerender`.
+- Redirect pages produced by the [redirects plugin](../plugins/redirects.md), whose `meta refresh`
+  and canonical link must keep pointing at the real destination.
 
 !!! note "Network is required **at build time**"
     Offline mode downloads the CDN assets while building, so the build machine needs internet

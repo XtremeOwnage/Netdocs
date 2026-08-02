@@ -71,6 +71,47 @@ public sealed class SelfHostAssetsTests : IDisposable
     }
 
     [Fact]
+    public async Task LeavesNavigationalLinkRelsAlone()
+    {
+        var site = NewSite();
+        var page = WritePage("discord",
+            "<link rel=\"canonical\" href=\"https://cdn.example.com/lib.js\">"
+            + "<link rel=\"alternate\" type=\"application/rss+xml\" href=\"https://cdn.example.com/lib.js\">"
+            + "<link rel=\"prefetch\" href=\"https://cdn.example.com/lib.js\">");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        var html = File.ReadAllText(page);
+        // canonical/alternate point at documents and prefetch warms a page, not an asset. None of
+        // them may be downloaded or repointed at a local copy.
+        Assert.Equal(3, html.Split("https://cdn.example.com/lib.js").Length - 1);
+        Assert.DoesNotContain("assets/external", html);
+    }
+
+    [Fact]
+    public async Task RewritesOnlyTheAssetTagWhenSameUrlIsAlsoLinked()
+    {
+        var site = NewSite();
+        // A redirect page shape: the target URL appears as navigable content in three places, and
+        // the very same URL is a real asset elsewhere on the page.
+        var page = WritePage("discord",
+            "<link rel=\"canonical\" href=\"https://cdn.example.com/lib.js\">"
+            + "<meta http-equiv=\"refresh\" content=\"0; url=https://cdn.example.com/lib.js\">"
+            + "<script src=\"https://cdn.example.com/lib.js\"></script>"
+            + "<body>Redirecting to <a href=\"https://cdn.example.com/lib.js\">https://cdn.example.com/lib.js</a>…</body>");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        var html = File.ReadAllText(page);
+        // The <script src> is now local...
+        Assert.Contains("<script src=\"../assets/external/", html);
+        // ...while the canonical, the meta refresh, and both halves of the anchor are untouched.
+        Assert.Contains("<link rel=\"canonical\" href=\"https://cdn.example.com/lib.js\">", html);
+        Assert.Contains("content=\"0; url=https://cdn.example.com/lib.js\"", html);
+        Assert.Contains("<a href=\"https://cdn.example.com/lib.js\">https://cdn.example.com/lib.js</a>", html);
+    }
+
+    [Fact]
     public async Task RewritesMermaidDynamicImport()
     {
         var site = NewSite();

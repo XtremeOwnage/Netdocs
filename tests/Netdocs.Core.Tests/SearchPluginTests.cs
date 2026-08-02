@@ -200,7 +200,7 @@ public class SearchPluginTests
     }
 
     [Fact]
-    public void IncludeTags_CanBeDisabled()
+    public async Task IncludeTags_CanBeDisabled()
     {
         var dir = Path.Combine(Path.GetTempPath(), "netdocs-search-" + Guid.NewGuid().ToString("N"));
         try
@@ -227,7 +227,7 @@ public class SearchPluginTests
             };
             site.Pages.Add(page);
 
-            plugin.OnBuildCompleteAsync(site, CancellationToken.None).GetAwaiter().GetResult();
+            await plugin.OnBuildCompleteAsync(site, CancellationToken.None);
             var json = File.ReadAllText(Path.Combine(config.AbsoluteSiteDir, "search", "search_index.json"));
             var index = JsonDocument.Parse(json).RootElement;
             var doc = index.GetProperty("docs").EnumerateArray().First(d => d.GetProperty("location").GetString() == "test/");

@@ -63,6 +63,9 @@ public sealed class SiteConfig
     /// <summary>Optional build-time validation (internal links, anchors, orphaned files).</summary>
     public ValidationConfig Validation { get; set; } = new();
 
+    /// <summary>Optional federated documentation imports (push/pull external repos).</summary>
+    public ImportedDocsConfig ImportedDocs { get; set; } = new();
+
     /// <summary>Absolute path to the project root (folder containing mkdocs.yml).</summary>
     public string ProjectRoot { get; set; } = "";
 
@@ -253,4 +256,71 @@ public sealed class NavItem
     public string? Icon { get; init; }
     public IReadOnlyList<NavItem> Children { get; init; } = [];
     public bool IsSection => Children.Count > 0 || Path is null;
+}
+
+/// <summary>
+/// Federated documentation configuration. Supports both push-based (external repos push to this repo)
+/// and pull-based (this site pulls from external repos) integration modes.
+/// </summary>
+public sealed class ImportedDocsConfig
+{
+    /// <summary>Directory where pushed docs are staged (push-based imports). Docs-relative path, e.g. "imported".</summary>
+    public string? PushedDocsDir { get; set; }
+
+    /// <summary>List of external repositories to pull documentation from.</summary>
+    public IReadOnlyList<ImportedDocsPullSource> PullSources { get; set; } = [];
+}
+
+/// <summary>Configuration for pulling docs from an external repository.</summary>
+public sealed class ImportedDocsPullSource
+{
+    /// <summary>Repository URL (https or ssh), e.g. "https://github.com/org/repo.git" or "git@github.com:org/repo.git".</summary>
+    public required string Repository { get; init; }
+
+    /// <summary>Branch, tag, or commit to pull. Default is the repository's default branch.</summary>
+    public string? Reference { get; init; }
+
+    /// <summary>
+    /// Path within the repository where documentation lives, e.g. "docs" or "documentation".
+    /// If omitted, defaults to "docs".
+    /// </summary>
+    public string? SourcePath { get; init; } = "docs";
+
+    /// <summary>
+    /// Directory within the site where imported docs should be placed, e.g. "applications/my-feature".
+    /// If omitted, docs are imported to the root of the site.
+    /// </summary>
+    public string? DestinationPath { get; init; }
+
+    /// <summary>
+    /// Optional environment variable name containing authentication token (e.g., "GITHUB_TOKEN").
+    /// Used for private repositories. Token is passed as Authorization header for HTTP(S) or 
+    /// SSH identity for git protocols.
+    /// </summary>
+    public string? AuthTokenEnvVar { get; init; }
+
+    /// <summary>
+    /// Optional CRON expression for scheduling pulls (e.g., "0 2 * * *" for 2 AM daily).
+    /// When provided, documents the suggested schedule for CI workflows.
+    /// The actual scheduling is handled by the CI/CD system (GitHub Actions, etc.).
+    /// </summary>
+    public string? ScheduleCron { get; init; }
+
+    /// <summary>
+    /// Optional front-matter overrides to apply to all imported pages from this source.
+    /// Common use cases: nav_title remapping, tags, custom metadata.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> FrontMatterDefaults { get; init; } = new Dictionary<string, object?>();
+
+    /// <summary>
+    /// When true, includes an "import_source" front-matter field and "Imported from" marker visible in the page.
+    /// Helps document origins of external content.
+    /// </summary>
+    public bool IncludeSourceMarker { get; init; }
+
+    /// <summary>
+    /// Optional glob patterns (relative to source docs path) to exclude from import.
+    /// e.g., ["*.draft.md", "private/**"]
+    /// </summary>
+    public IReadOnlyList<string>? Exclude { get; init; }
 }

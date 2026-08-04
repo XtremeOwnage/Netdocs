@@ -59,18 +59,33 @@ public sealed class BuildEngine(
             pages = discovery.Discover().ToList();
         }
 
-        // 2. Navigation filters (file-filter, shadow tags).
-        using (Measure("2. navigation filters"))
+        // 2. Import hooks (federated docs from external repos).
+        using (Measure("2. import hooks"))
+        {
+            site.Pages.AddRange(pages);
+            _log.LogDebug("Running OnImport hooks ({Count})", host.ImportHooks.Count);
+            foreach (var hook in host.ImportHooks)
+            {
+                _log.LogTrace("OnImport: {Hook}", hook.GetType().Name);
+                using (Measure(PluginLabel(hook)))
+                    await hook.OnImportAsync(site, ct);
+            }
+            pages = site.Pages.ToList();
+        }
+
+        // 3. Navigation filters (file-filter, shadow tags).
+        using (Measure("3. navigation filters"))
         {
             var beforeFilter = pages.Count;
             pages = pages.Where(p => host.NavigationFilters.All(f => f.ShouldInclude(p, site))).ToList();
             _log.LogDebug("Navigation filters kept {Kept}/{Total} pages", pages.Count, beforeFilter);
+            site.Pages.Clear();
             site.Pages.AddRange(pages);
         }
 
-        // 3. OnBuildStart hooks.
+        // 4. OnBuildStart hooks.
         _log.LogDebug("Running OnBuildStart hooks ({Count})", host.BuildHooks.Count);
-        using (Measure("3. OnBuildStart hooks"))
+        using (Measure("4. OnBuildStart hooks"))
             foreach (var hook in host.BuildHooks)
             {
                 _log.LogTrace("OnBuildStart: {Hook}", hook.GetType().Name);
@@ -78,9 +93,9 @@ public sealed class BuildEngine(
                     await hook.OnBuildStartAsync(site, ct);
             }
 
-        // 4. Content generators (blog lists, tags, archives).
+        // 5. Content generators (blog lists, tags, archives).
         var generatedCount = 0;
-        using (Measure("4. content generators"))
+        using (Measure("5. content generators"))
             foreach (var generator in host.ContentGenerators)
                 using (Measure(PluginLabel(generator)))
                     await foreach (var generated in generator.GenerateAsync(site, ct))
@@ -91,9 +106,9 @@ public sealed class BuildEngine(
                     }
         _log.LogDebug("Content generators produced {Count} pages", generatedCount);
 
-        // 5. Preprocess markdown (snippets, abbreviations, macros).
+        // 6. Preprocess markdown (snippets, abbreviations, macros).
         _log.LogDebug("Preprocessing {Count} pages with {Preprocessors} preprocessor(s)", site.Pages.Count, host.Preprocessors.Count);
-        using (Measure("5. preprocess markdown"))
+        using (Measure("6. preprocess markdown"))
             foreach (var page in site.Pages)
             {
                 var md = page.RawMarkdown;
@@ -106,7 +121,7 @@ public sealed class BuildEngine(
                 page.ProcessedMarkdown = md;
             }
 
-        // 6. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
+        // 7. Parse + render markdown in parallel (one pipeline per thread; Markdig state is not shared-safe).
         //    A content-hash cache reuses the (pure) render artifacts for pages whose markdown,
         //    pipeline, and link map are unchanged since the last build.
         _log.LogDebug("Rendering markdown for {Count} pages (parallel)", site.Pages.Count);
@@ -117,7 +132,7 @@ public sealed class BuildEngine(
         var pipelineSalt = ComputePipelineSalt(host);
         var linkMapHash = ComputeLinkMapHash(linkMap);
 
-        using (Measure("6. render markdown"))
+        using (Measure("7. render markdown"))
         {
             using var pipelines = new ThreadLocal<MarkdownPipeline>(
                 () => MarkdownPipelineFactory.Build(site, host.MarkdigContributors), trackAllValues: false);
@@ -137,15 +152,15 @@ public sealed class BuildEngine(
             }
         }
 
-        // 7. Resolve navigation.
-        using (Measure("7. resolve navigation"))
+        // 8. Resolve navigation.
+        using (Measure("8. resolve navigation"))
         {
             site.Navigation = NavigationBuilder.Build(config, site.Pages);
             site.State["nav_pages"] = NavigationBuilder.Flatten(site.Navigation);
             _log.LogDebug("Resolved navigation ({Count} top-level nodes)", site.Navigation.Count);
         }
 
-        // 8. Template render (parallel) + emit.
+        // 9. Template render (parallel) + emit.
         var templateEngine = CreateTemplateEngine();
         Directory.CreateDirectory(config.AbsoluteSiteDir);
         site.State["asset_versioner"] = new AssetVersioner(ThemePaths.AssetsDir, config.AbsoluteDocsDir);
@@ -154,7 +169,7 @@ public sealed class BuildEngine(
         var renderedPages = new ConcurrentBag<Validation.RenderedPage>();
         var minify = config.Optimize.MinifyHtml;
         var webpWrap = config.Optimize.ConvertImagesToWebp;
-        using (Measure("8. template render"))
+        using (Measure("9. template render"))
             Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
             {
                 var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
@@ -164,7 +179,7 @@ public sealed class BuildEngine(
                 renderedPages.Add(new Validation.RenderedPage(page, html));
             });
         var changed = 0;
-        using (Measure("8. write output"))
+        using (Measure("9. write output"))
             foreach (var (path, html) in rendered)
             {
                 if (await OutputWriter.WriteTextIfChangedAsync(site, path, html, ct))
@@ -175,7 +190,7 @@ public sealed class BuildEngine(
             }
         _log.LogInformation("Emitted {Count} HTML pages ({Changed} changed)", rendered.Count, changed);
 
-        // 8b. 404 page.
+        // 9b. 404 page.
         if (templateEngine.TryResolve("404.html", out _))
         {
             var notFound = new Page { SourcePath = "", RelativePath = "404.md", Url = "404.html", Title = "404" };
@@ -186,8 +201,8 @@ public sealed class BuildEngine(
             await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(config.AbsoluteSiteDir, "404.html"), html404, ct);
         }
 
-        // 9. OnPageRendered hooks (search docs, etc.).
-        using (Measure("9. OnPageRendered hooks"))
+        // 10. OnPageRendered hooks (search docs, etc.).
+        using (Measure("10. OnPageRendered hooks"))
             foreach (var hook in host.BuildHooks)
                 using (Measure(PluginLabel(hook)))
                     foreach (var page in site.Pages)
@@ -196,13 +211,13 @@ public sealed class BuildEngine(
                         await hook.OnPageRenderedAsync(page, site, ct);
                     }
 
-        // 10. Copy assets (theme + docs static + plugin-registered).
-        using (Measure("10. copy assets"))
+        // 11. Copy assets (theme + docs static + plugin-registered).
+        using (Measure("11. copy assets"))
             await AssetPipeline.CopyAllAsync(site, host.Assets, ct);
         _log.LogDebug("Copied theme, static, and plugin assets to {Dir}", config.AbsoluteSiteDir);
 
-        // 11. OnBuildComplete hooks (search index, rss, sitemap).
-        using (Measure("11. OnBuildComplete hooks"))
+        // 12. OnBuildComplete hooks (search index, rss, sitemap).
+        using (Measure("12. OnBuildComplete hooks"))
             foreach (var hook in host.BuildHooks)
             {
                 _log.LogTrace("OnBuildComplete: {Hook}", hook.GetType().Name);
@@ -210,30 +225,30 @@ public sealed class BuildEngine(
                     await hook.OnBuildCompleteAsync(site, ct);
             }
 
-        // 12. Built-in sitemap.xml.
-        using (Measure("12. sitemap"))
+        // 13. Built-in sitemap.xml.
+        using (Measure("13. sitemap"))
             await EmitSitemapAsync(site, ct);
 
-        // 13. Prune stale files: anything in the output dir this build did not (re)produce.
+        // 14. Prune stale files: anything in the output dir this build did not (re)produce.
         // This replaces an up-front wipe so unchanged files keep their bytes and timestamps,
         // which is what makes incremental republishing cheap for the watch daemon.
-        using (Measure("13. prune stale"))
+        using (Measure("14. prune stale"))
         {
             var pruned = OutputWriter.PruneStale(site, config.AbsoluteSiteDir);
             if (pruned > 0) _log.LogInformation("Pruned {Count} stale output files", pruned);
         }
 
-        // 13b. Offline self-hosting: download external CDN assets and rewrite pages to local copies.
+        // 14b. Offline self-hosting: download external CDN assets and rewrite pages to local copies.
         // Tri-state: null => self-host on production builds only (not serve/dev); true/false forces it.
         var offline = config.Optimize.Offline ?? (options.IsProduction && !options.IsServe);
         if (offline)
-            using (Measure("13b. self-host assets"))
+            using (Measure("14b. self-host assets"))
                 await Optimization.SelfHostAssets.RunAsync(site, _log, ct);
 
-        // 14. Optional build-time validation (links, anchors, unused images, orphan pages).
+        // 15. Optional build-time validation (links, anchors, unused images, orphan pages).
         // Runs last so every page/asset/plugin output is materialized on disk. Problems are
         // logged as warnings; `--strict` (or MKDOCS_STRICT) turns them into a failing build.
-        using (Measure("14. validation"))
+        using (Measure("15. validation"))
             Validation.BuildValidator.Validate(site, renderedPages.ToList(), _log);
 
         sw.Stop();

@@ -15,6 +15,7 @@ public sealed class PluginHost
     public IReadOnlyList<IContentGenerator> ContentGenerators { get; }
     public IReadOnlyList<IBuildHook> BuildHooks { get; }
     public IReadOnlyList<INavigationFilter> NavigationFilters { get; }
+    public IReadOnlyList<IImportHook> ImportHooks { get; }
 
     private PluginHost(List<IPlugin> plugins, PluginAssets assets, IReadOnlyDictionary<IPlugin, int?> orderOverrides)
     {
@@ -27,6 +28,7 @@ public sealed class PluginHost
         ContentGenerators = plugins.OfType<IContentGenerator>().ToList();
         BuildHooks = plugins.OfType<IBuildHook>().ToList();
         NavigationFilters = plugins.OfType<INavigationFilter>().ToList();
+        ImportHooks = plugins.OfType<IImportHook>().ToList();
     }
 
     public static PluginHost Build(

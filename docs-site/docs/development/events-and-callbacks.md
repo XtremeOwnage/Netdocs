@@ -75,13 +75,13 @@ public interface IPluginContext
 | `AddStylesheet(href)` | Inject a `<link rel="stylesheet">` into every page head. |
 | `AddScript(src, defer)` | Inject a `<script src>` before `</body>`. |
 | `AddInlineScript(js)` | Emit a raw inline `<script>` before `</body>`. |
-| `AddAsset(src, dest)` | Copy a file into the output at `dest` (lifecycle stage 14). |
+| `AddAsset(src, dest)` | Copy a file into the output at `dest` (lifecycle stage 15). |
 
 ---
 
 ## `IMarkdownPreprocessor`
 
-Transform **raw Markdown text** before it is parsed. Fires at lifecycle stage 8 for every
+Transform **raw Markdown text** before it is parsed. Fires at lifecycle stage 9 for every
 page, ordered by `Order` (ascending).
 
 ```csharp
@@ -114,7 +114,7 @@ public sealed class ShoutPlugin : IPlugin, IMarkdownPreprocessor
 ## `IMarkdigContributor`
 
 Add [Markdig](https://github.com/xoofx/markdig) extensions to the shared parse pipeline.
-`Extend` is called once while the pipeline is built (lifecycle stage 9).
+`Extend` is called once while the pipeline is built (lifecycle stage 10).
 
 ```csharp
 public interface IMarkdigContributor
@@ -143,7 +143,7 @@ public sealed class TypesetPlugin : IPlugin, IMarkdigContributor
 ## `IContentGenerator`
 
 Produce **virtual pages** that were not authored in `docs/` — blog indexes, tag pages,
-archives. Fires at lifecycle stage 7; generated pages are added to `site.Pages` and then
+archives. Fires at lifecycle stage 8; generated pages are added to `site.Pages` and then
 flow through preprocessing, rendering, and templating like any other page.
 
 ```csharp
@@ -177,6 +177,37 @@ public sealed class HelloGenerator : IPlugin, IContentGenerator
 
 ---
 
+## `IImportHook`
+
+Import external docs after content discovery and before navigation filtering.
+
+```csharp
+public interface IImportHook
+{
+    Task OnImportAsync(SiteContext site, CancellationToken ct);
+}
+```
+
+```csharp
+public sealed class ImportedDocsPlugin : IPlugin, IImportHook
+{
+    public string Name => "imported-docs";
+    public void Configure(IPluginContext ctx) { }
+
+    public Task OnImportAsync(SiteContext site, CancellationToken ct)
+    {
+        // Add imported pages into site.Pages.
+        return Task.CompletedTask;
+    }
+}
+```
+
+- **`OnImportAsync`** — called once after discovery and before navigation filters
+  (lifecycle stage 5). Add imported pages to `site.Pages`, remap paths, and attach source
+  metadata here.
+
+---
+
 ## `IBuildHook`
 
 Lifecycle callbacks across the whole build. All three methods have default (no-op)
@@ -193,9 +224,9 @@ public interface IBuildHook
 
 | Callback | Fires at | Typical use |
 | --- | --- | --- |
-| `OnBuildStartAsync` | Stage 6 — after discovery + filtering | Seed state, validate config, prepare output dirs. |
-| `OnPageRenderedAsync` | Stage 13 — once per page, after HTML is written | Collect search documents, per-page side outputs. |
-| `OnBuildCompleteAsync` | Stage 15 — once, near the end | Emit whole-site artifacts: `search_index.json`, RSS, `tags.json`, social cards. |
+| `OnBuildStartAsync` | Stage 7 — after discovery + filtering | Seed state, validate config, prepare output dirs. |
+| `OnPageRenderedAsync` | Stage 14 — once per page, after HTML is written | Collect search documents, per-page side outputs. |
+| `OnBuildCompleteAsync` | Stage 16 — once, near the end | Emit whole-site artifacts: `search_index.json`, RSS, `tags.json`, social cards. |
 
 ```csharp
 public sealed class WordCountPlugin : IPlugin, IBuildHook
@@ -226,7 +257,7 @@ public sealed class WordCountPlugin : IPlugin, IBuildHook
 
 ## `INavigationFilter`
 
-Decide whether a discovered page is included. Fires at lifecycle stage 5; a page survives
+Decide whether a discovered page is included. Fires at lifecycle stage 6; a page survives
 only if **every** filter returns `true`.
 
 ```csharp

@@ -6,6 +6,8 @@ title: Imported Docs
 
 The **Imported Docs** plugin enables **federated documentation** — external repositories can contribute documentation to your main docs site while keeping their docs at source. This plugin supports both **push-based** (external repos push to you) and **pull-based** (you pull from external repos) approaches.
 
+It implements `IImportHook.OnImportAsync`, which runs after content discovery and before navigation filtering. That gives imported pages the same downstream processing as native docs: navigation, preprocessing, rendering, and templates all see the imported pages as if they lived in the site tree from the start.
+
 ## Quick Start
 
 ### Minimal Configuration
@@ -26,6 +28,15 @@ Enable the plugin in your `appsettings.json`:
 ```
 
 This enables push-based imports. External repos can push documentation to the `/imported` directory.
+
+## Import hook behavior
+
+`imported-docs` is the built-in plugin that implements `IImportHook.OnImportAsync`.
+
+- It runs after source docs are discovered.
+- It can add pages directly into `site.Pages`.
+- Imported pages then flow through the normal build pipeline.
+- Use it for push-based staging, Git pull imports, or S3 pull imports.
 
 ## Configuration Reference
 

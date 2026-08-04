@@ -45,12 +45,15 @@ content that uses them (for example [table-reader](table-reader.md) is a no-op o
 ```
 
 Add [`blog`](blog.md) if you publish posts, [`file-filter`](file-filter.md) for
-environment-driven content gating, and [`link-notes`](link-notes.md) if you want to
-annotate outbound links (e.g. affiliate disclosures). A few plugins are intentionally left out of the "enable everything" default:
+environment-driven content gating, [`link-notes`](link-notes.md) if you want to
+annotate outbound links (e.g. affiliate disclosures), and [`imported-docs`](imported-docs.md)
+if you want to pull/push documentation from external repositories through the `IImportHook`
+stage. A few plugins are intentionally left out of the "enable everything" default:
 
 | Plugin | Why it's opt-in |
 |---|---|
 | [blog](blog.md) | Only meaningful for sites with a `blog/` posts directory. |
+| [imported-docs](imported-docs.md) | Federated docs: pull/push docs from external repositories via `IImportHook`. |
 | [social](social.md) | Generates images (slower); best gated behind `netdocs build --prod`. |
 | [file-filter](file-filter.md) | Needs a `.file-filter.yml` and env vars to do anything. |
 | [link-notes](link-notes.md) | Requires you to declare your affiliate programs / link rules. |
@@ -85,6 +88,7 @@ content generators — are not page-scoped and always apply.
 
 | Plugin | Purpose |
 |---|---|
+| [imported-docs](imported-docs.md) | Federated docs: push/pull documentation from external repositories. |
 | [search](search.md) | Material-compatible `search_index.json` (page + per-section docs). |
 | [social](social.md) | 1200×630 Open Graph social cards. |
 | [blog](blog.md) | Posts, paginated index, categories, archive, post metadata. |
@@ -107,8 +111,8 @@ content generators — are not page-scoped and always apply.
 ## How plugins hook into the build
 
 A plugin implements `IPlugin` (with `Configure`) plus any of the opt-in hook interfaces
-(`IMarkdownPreprocessor`, `IMarkdigContributor`, `IContentGenerator`, `IBuildHook`,
-`INavigationFilter`, …). Rather than duplicate that here, see:
+(`IImportHook`, `IMarkdownPreprocessor`, `IMarkdigContributor`, `IContentGenerator`,
+`IBuildHook`, `INavigationFilter`, …). Rather than duplicate that here, see:
 
 - **[Build lifecycle](../development/lifecycle.md)** — a visual diagram of *where* each hook runs in
   the pipeline, so you know which interface to implement for a given job.

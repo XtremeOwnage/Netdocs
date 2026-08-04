@@ -69,3 +69,17 @@ public interface INavigationFilter
 {
     bool ShouldInclude(Page page, SiteContext site);
 }
+
+/// <summary>
+/// Imports or injects additional pages after content discovery but before navigation filtering.
+/// Runs between stages 4 and 5 in the build pipeline. Plugins can fetch external docs,
+/// remap paths, apply metadata, and add pages to the site.
+/// </summary>
+public interface IImportHook
+{
+    /// <summary>
+    /// Called after content discovery and before navigation filters. 
+    /// Pages may be added to <see cref="SiteContext.Pages"/>.
+    /// </summary>
+    Task OnImportAsync(SiteContext site, CancellationToken ct) => Task.CompletedTask;
+}

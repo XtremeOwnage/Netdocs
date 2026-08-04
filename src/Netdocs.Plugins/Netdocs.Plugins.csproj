@@ -9,5 +9,6 @@
     <PackageReference Include="LibGit2Sharp" />
     <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" />
+    <PackageReference Include="AWSSDK.S3" />
   </ItemGroup>
 </Project>

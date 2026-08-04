@@ -1,0 +1,76 @@
+# Example GitHub Actions workflow for the MAIN docs site
+# to pull documentation from external repositories (pull-based approach)
+#
+# This workflow should be added to your MAIN documentation repository.
+#
+# Setup:
+# 1. Add this file to your main docs repo at .github/workflows/pull-external-docs.yml
+# 2. Configure pull sources in your appsettings.json
+# 3. For private external repos, add secrets (e.g., GITHUB_TOKEN) to GitHub Actions
+#
+# How it works:
+# - Runs on schedule (default: daily at 2 AM UTC)
+# - Builds your Netdocs site, which pulls from configured external repositories
+# - Optionally deploys the built site
+
+name: Pull external docs and build
+
+on:
+  # Run on schedule (daily at 2 AM UTC)
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  # GitHub token for cloning private repositories
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  build-with-external-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main docs repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Run Netdocs build
+        run: dotnet run --project src/Netdocs.Cli -- build
+        env:
+          # Environment variables are passed to pull operations for authentication
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: docs-site
+          path: ./dist/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist/
+          cname: docs.example.com  # Replace with your domain
+
+      - name: Build summary
+        run: |
+          echo "## Documentation Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ External repositories pulled and imported" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Site built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Deployed to production" >> $GITHUB_STEP_SUMMARY

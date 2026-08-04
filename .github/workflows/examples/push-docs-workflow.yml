@@ -1,0 +1,77 @@
+# Example GitHub Actions workflow for external repositories
+# to push documentation to the main docs site (push-based approach)
+#
+# This workflow should be added to an EXTERNAL repository that has docs
+# you want to contribute to a main documentation site.
+#
+# Setup:
+# 1. Add this file to your repo at .github/workflows/push-docs.yml
+# 2. Create/replace MAIN_DOCS_REPO with your main docs repo
+# 3. Ensure your external repo has a docs/ directory with markdown files
+# 4. Configure GitHub token (default GITHUB_TOKEN usually sufficient)
+
+name: Push docs to main site
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/push-docs.yml'
+  workflow_dispatch:
+
+env:
+  # GitHub token for authentication
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Path on main docs site where this project's docs should appear
+  DOCS_DESTINATION: my-project
+
+jobs:
+  push-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      - name: Checkout main docs repository
+        uses: actions/checkout@v4
+        with:
+          # Replace with your main docs repo
+          repository: myorg/main-docs
+          token: ${{ env.GITHUB_TOKEN }}
+          path: ./docs-site
+
+      - name: Create destination directory
+        run: |
+          mkdir -p ./docs-site/imported/${{ env.DOCS_DESTINATION }}
+
+      - name: Copy documentation
+        run: |
+          # Copy all markdown files from this repo's docs to the main site
+          cp -r ./docs/* ./docs-site/imported/${{ env.DOCS_DESTINATION }}/
+
+      - name: Commit and push to docs repo
+        working-directory: ./docs-site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Stage imported docs
+          git add imported/
+          
+          # Only commit if there are changes
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: push docs from ${{ github.repository }} (${{ github.ref }})"
+            git push
+          else
+            echo "No changes to documentation"
+          fi
+
+      - name: Push summary
+        run: |
+          echo "## Documentation Push Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Destination**: imported/${{ env.DOCS_DESTINATION }}/" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

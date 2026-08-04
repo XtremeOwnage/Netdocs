@@ -136,7 +136,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         string tempDir,
         CancellationToken ct)
     {
-        _logger.LogInformation("Cloning {Repository} (ref: {Reference})", 
+        _logger.LogInformation("Cloning {Repository} (ref: {Reference})",
             source.Repository, source.Reference ?? "default");
 
         try
@@ -168,7 +168,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
 
         if (!Directory.Exists(docsPath))
         {
-            _logger.LogWarning("Source path does not exist in {Repository}: {SourcePath}", 
+            _logger.LogWarning("Source path does not exist in {Repository}: {SourcePath}",
                 source.Repository, sourcePath);
             return 0;
         }
@@ -458,7 +458,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
 
             // Add S3-specific front-matter defaults
             var meta = new Dictionary<string, object?>(page.FrontMatter, StringComparer.OrdinalIgnoreCase);
-            
+
             // Apply front-matter defaults from source config
             if (source.FrontMatterDefaults is not null)
             {

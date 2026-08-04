@@ -162,4 +162,42 @@ public class ImportedDocsPluginTests
         Assert.Equal("docs", source.SourcePath);
         Assert.Equal("external/docs", source.DestinationPath);
     }
+
+    [Fact]
+    public void ImportedDocsS3Source_CanBeCreated()
+    {
+        // Arrange & Act
+        var source = new ImportedDocsS3Source
+        {
+            Bucket = "my-docs-bucket",
+            Prefix = "docs/",
+            Region = "us-east-1",
+            DestinationPath = "products/api"
+        };
+
+        // Assert
+        Assert.NotNull(source);
+        Assert.Equal("my-docs-bucket", source.Bucket);
+        Assert.Equal("docs/", source.Prefix);
+        Assert.Equal("us-east-1", source.Region);
+        Assert.Equal("products/api", source.DestinationPath);
+    }
+
+    [Fact]
+    public void ImportedDocsS3Source_WithCredentials()
+    {
+        // Arrange & Act
+        var source = new ImportedDocsS3Source
+        {
+            Bucket = "private-bucket",
+            Prefix = "docs/",
+            Region = "eu-west-1",
+            DestinationPath = "external/docs",
+            CredentialsEnvVar = "AWS_CREDENTIALS"
+        };
+
+        // Assert
+        Assert.NotNull(source);
+        Assert.Equal("AWS_CREDENTIALS", source.CredentialsEnvVar);
+    }
 }

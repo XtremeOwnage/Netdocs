@@ -15,22 +15,23 @@ flowchart TD
     A[Load appsettings.json to SiteConfig] --> B[Load external plugins<br/>plugins/*.dll]
     B --> C[Build plugin host<br/>IPlugin.Configure on every plugin]
     C --> D[Discover docs/**<br/>ContentDiscovery]
-    D --> E{INavigationFilter<br/>ShouldInclude}
-    E -->|kept| F[IBuildHook.OnBuildStartAsync]
-    F --> G[IContentGenerator.GenerateAsync<br/>virtual pages: blog, tags, archives]
-    G --> H[IMarkdownPreprocessor.ProcessAsync<br/>ordered by Order — snippets, abbr, macros]
-    H --> I[Parse + render Markdown<br/>Markdig pipeline + IMarkdigContributor.Extend<br/>parallel, render-cache aware]
-    I --> J[Resolve navigation<br/>NavigationBuilder]
-    J --> K[Template render<br/>Scriban + theme, parallel to HTML]
-    K --> L[Emit 404.html]
-    L --> M[IBuildHook.OnPageRenderedAsync<br/>per page]
-    M --> N[Copy assets<br/>theme + docs static + plugin-registered]
-    N --> O[IBuildHook.OnBuildCompleteAsync<br/>search index, rss, tags.json]
-    O --> P[Emit sitemap.xml]
-    P --> Q[Prune stale output files]
+    D --> E[IImportHook.OnImportAsync<br/>federated docs]
+    E --> F{INavigationFilter<br/>ShouldInclude}
+    F -->|kept| G[IBuildHook.OnBuildStartAsync]
+    G --> H[IContentGenerator.GenerateAsync<br/>virtual pages: blog, tags, archives]
+    H --> I[IMarkdownPreprocessor.ProcessAsync<br/>ordered by Order — snippets, abbr, macros]
+    I --> J[Parse + render Markdown<br/>Markdig pipeline + IMarkdigContributor.Extend<br/>parallel, render-cache aware]
+    J --> K[Resolve navigation<br/>NavigationBuilder]
+    K --> L[Template render<br/>Scriban + theme, parallel to HTML]
+    L --> M[Emit 404.html]
+    M --> N[IBuildHook.OnPageRenderedAsync<br/>per page]
+    N --> O[Copy assets<br/>theme + docs static + plugin-registered]
+    O --> P[IBuildHook.OnBuildCompleteAsync<br/>search index, rss, tags.json]
+    P --> Q[Emit sitemap.xml]
+    Q --> R[Prune stale output files]
 
     classDef hook fill:#e8f0fe,stroke:#3f51b5,color:#1a237e;
-    class E,F,G,H,I,M,O hook;
+    class E,F,G,H,I,N,P hook;
 ```
 
 The **blue** nodes are the extension points a plugin can implement. Everything else is
@@ -44,19 +45,20 @@ engine-owned.
 | 2 | Load external plugins | *(discovery)* | `plugins/*.dll` are registered but not yet enabled. See [External plugins](external-plugins.md). |
 | 3 | Configure plugins | `IPlugin.Configure` | Called **once** per enabled plugin. Register assets/scripts/services here. Runs in `appsettings.json` plugin order. |
 | 4 | Discover content | — | Walks `docs/**`, honoring `.mkdocsignore` / `exclude`. |
-| 5 | Navigation filters | `INavigationFilter.ShouldInclude` | A page is kept only if **all** filters return `true`. |
-| 6 | Build start | `IBuildHook.OnBuildStartAsync` | First async hook. The full (filtered) page set is on `site.Pages`. |
-| 7 | Content generation | `IContentGenerator.GenerateAsync` | Emit virtual pages (blog lists, tag pages). Generated pages join `site.Pages`. |
-| 8 | Preprocess Markdown | `IMarkdownPreprocessor.ProcessAsync` | Runs **in ascending `Order`** for every page (including generated). Text-in/text-out. |
-| 9 | Parse + render | `IMarkdigContributor.Extend` | Markdig extensions are contributed once; pages render in parallel and results are cached by content hash. |
-| 10 | Resolve navigation | — | Builds the nav tree used by templates. |
-| 11 | Template render | *(theme templates)* | Scriban renders each page (parallel) to HTML. See [Template render order](#template-render-order). |
-| 12 | 404 page | *(theme templates)* | `404.html` is rendered if the theme provides it. |
-| 13 | Page rendered | `IBuildHook.OnPageRenderedAsync` | Called for every page after HTML is written. Good for indexing (search). |
-| 14 | Copy assets | `IPluginContext.AddAsset` | Theme assets, `docs/` static files, and plugin-registered assets are copied. |
-| 15 | Build complete | `IBuildHook.OnBuildCompleteAsync` | Last hook. Emit whole-site artifacts (search index, RSS, tag exports, social cards). |
-| 16 | Sitemap | — | Built-in `sitemap.xml`. |
-| 17 | Prune | — | Removes output files this build did not (re)produce. |
+| 5 | Import docs | `IImportHook.OnImportAsync` | Load imported pages before navigation filters so they participate in the full build. |
+| 6 | Navigation filters | `INavigationFilter.ShouldInclude` | A page is kept only if **all** filters return `true`. |
+| 7 | Build start | `IBuildHook.OnBuildStartAsync` | First async hook. The full (filtered) page set is on `site.Pages`. |
+| 8 | Content generation | `IContentGenerator.GenerateAsync` | Emit virtual pages (blog lists, tag pages). Generated pages join `site.Pages`. |
+| 9 | Preprocess Markdown | `IMarkdownPreprocessor.ProcessAsync` | Runs **in ascending `Order`** for every page (including generated). Text-in/text-out. |
+| 10 | Parse + render | `IMarkdigContributor.Extend` | Markdig extensions are contributed once; pages render in parallel and results are cached by content hash. |
+| 11 | Resolve navigation | — | Builds the nav tree used by templates. |
+| 12 | Template render | *(theme templates)* | Scriban renders each page (parallel) to HTML. See [Template render order](#template-render-order). |
+| 13 | 404 page | *(theme templates)* | `404.html` is rendered if the theme provides it. |
+| 14 | Page rendered | `IBuildHook.OnPageRenderedAsync` | Called for every page after HTML is written. Good for indexing (search). |
+| 15 | Copy assets | `IPluginContext.AddAsset` | Theme assets, `docs/` static files, and plugin-registered assets are copied. |
+| 16 | Build complete | `IBuildHook.OnBuildCompleteAsync` | Last hook. Emit whole-site artifacts (search index, RSS, tag exports, social cards). |
+| 17 | Sitemap | — | Built-in `sitemap.xml`. |
+| 18 | Prune | — | Removes output files this build did not (re)produce. |
 
 ### Preprocessor ordering
 
@@ -87,7 +89,7 @@ is all that's needed for them.
 
 ## Template render order
 
-Stage 11 renders each page with [Scriban](https://github.com/scriban/scriban). The theme's
+Stage 12 renders each page with [Scriban](https://github.com/scriban/scriban). The theme's
 `main.html` is the root layout; it pulls in partials in roughly this order:
 
 ```mermaid
@@ -114,13 +116,14 @@ that mirror the theme layout. (Material's Jinja2 overrides are detected and igno
 | I want to… | Implement | Runs at |
 | --- | --- | --- |
 | Register CSS/JS/assets or read options | `IPlugin.Configure` | Stage 3 |
-| Include/exclude pages | `INavigationFilter` | Stage 5 |
-| Do setup once the page set is known | `IBuildHook.OnBuildStartAsync` | Stage 6 |
-| Create new pages | `IContentGenerator` | Stage 7 |
-| Rewrite Markdown text | `IMarkdownPreprocessor` | Stage 8 |
-| Add Markdown syntax/extensions | `IMarkdigContributor` | Stage 9 |
-| React to each rendered page | `IBuildHook.OnPageRenderedAsync` | Stage 13 |
-| Emit a whole-site artifact | `IBuildHook.OnBuildCompleteAsync` | Stage 15 |
+| Import external docs | `IImportHook.OnImportAsync` | Stage 5 |
+| Include/exclude pages | `INavigationFilter` | Stage 6 |
+| Do setup once the page set is known | `IBuildHook.OnBuildStartAsync` | Stage 7 |
+| Create new pages | `IContentGenerator` | Stage 8 |
+| Rewrite Markdown text | `IMarkdownPreprocessor` | Stage 9 |
+| Add Markdown syntax/extensions | `IMarkdigContributor` | Stage 10 |
+| React to each rendered page | `IBuildHook.OnPageRenderedAsync` | Stage 14 |
+| Emit a whole-site artifact | `IBuildHook.OnBuildCompleteAsync` | Stage 16 |
 
 See the [Events & callbacks reference](events-and-callbacks.md) for the exact method
 signatures and examples.

@@ -1,0 +1,62 @@
+## Overview
+
+Add support for federated documentation imports that allows external repositories to contribute documentation while maintaining sources in their origin repos.
+
+## Changes
+
+### New Hook: IImportHook
+- Added `IImportHook` interface to plugin contracts
+- Runs at stage 2 of build pipeline (after content discovery, before navigation filters)
+- Enables plugins to inject/modify discovered pages before processing
+
+### Configuration Schema
+- Added `ImportedDocsConfig` to `SiteConfig`
+- `ImportedDocsPullSource` configuration with:
+  - Repository URL (https/ssh support)
+  - Branch/tag/commit reference
+  - Source path in repo (default: "docs")
+  - Destination path in site docs
+  - Auth token env var support
+  - CRON schedule documentation
+  - Front-matter defaults and overrides
+  - Optional source markers
+  - Exclude patterns
+
+### Build Pipeline Integration
+- Integrated `IImportHook` into `BuildEngine`
+- Updated `PluginHost` to expose `ImportHooks`
+- Renumbered stages 3-15 (old 2-14) to accommodate new stage 2
+
+### ImportedDocsPlugin Implementation
+- **Pushed docs support**: Load markdown files from configured staging directory
+- **YAML front-matter**: Extract and parse YAML front-matter, apply config overrides
+- **URL remapping**: Map imported pages to destination paths in site structure
+- **Metadata**: Add import_source and import_url markers when configured
+- **Pull-based placeholder**: Structure for future git pulling (LibGit2Sharp)
+
+## How It Works
+
+### Push-Based (Recommended for Workflows)
+1. External repos have GitHub Actions workflow that pushes docs to main docs repo
+2. Docs land in `imported/` (or configured `pushedDocsDir`)
+3. ImportedDocsPlugin discovers and integrates them during build
+
+### Pull-Based (Centralized Control)
+1. Configure external repos in `appsettings.json` `ImportedDocs.PullSources`
+2. Main docs site pulls on each build (or via scheduled workflow)
+3. Supports branch/tag/commit pinning and token-based auth
+
+## Next Steps
+
+Subsequent PRs will implement:
+- Git pulling capability (LibGit2Sharp integration)
+- Advanced path remapping (URL rewriting for internal links)
+- Comprehensive documentation and examples
+- GitHub Actions workflow examples
+- Tests and validation
+
+## Breaking Changes
+
+None. New feature is opt-in via configuration.
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

@@ -29,7 +29,9 @@ public class ImportedDocsPluginTests
     {
         // Arrange
         var site = CreateTestSiteContext();
+#pragma warning disable CS8625 // Cannot convert null literal to non-nullable reference type
         site.Config.ImportedDocs = null;
+#pragma warning restore CS8625
         var plugin = new ImportedDocsPlugin();
 
         // Act

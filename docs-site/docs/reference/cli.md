@@ -71,13 +71,14 @@ counts how many times a scope ran (for example, a preprocessor invoked once per 
 ```text
 Build profile (time by phase):
 
-  6. render markdown                        263.4 ms   30.0%
-  8. template render                        242.1 ms   27.6%
-  11. OnBuildComplete hooks                 142.2 ms   16.2%
+  7. render markdown                        263.4 ms   30.0%
+  10. template render                       242.1 ms   27.6%
+  12. OnBuildComplete hooks                 142.2 ms   16.2%
     search                                     81.9 ms   57.7%
     social                                     57.6 ms   40.6%
     tags                                        2.4 ms    1.7%
-  5. preprocess markdown                     18.0 ms    2.0%
+  9. copy assets                             31.5 ms    3.6%
+  6. preprocess markdown                     18.0 ms    2.0%
     calculator                                 17.6 ms   98.1% x48
   ...
 

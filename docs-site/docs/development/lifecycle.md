@@ -22,16 +22,16 @@ flowchart TD
     H --> I[IMarkdownPreprocessor.ProcessAsync<br/>ordered by Order — snippets, abbr, macros]
     I --> J[Parse + render Markdown<br/>Markdig pipeline + IMarkdigContributor.Extend<br/>parallel, render-cache aware]
     J --> K[Resolve navigation<br/>NavigationBuilder]
-    K --> L[Template render<br/>Scriban + theme, parallel to HTML]
-    L --> M[Emit 404.html]
-    M --> N[IBuildHook.OnPageRenderedAsync<br/>per page]
-    N --> O[Copy assets<br/>theme + docs static + plugin-registered]
+    K --> L[Copy assets<br/>theme + docs static + plugin-registered]
+    L --> M[Template render<br/>Scriban + theme, parallel to HTML]
+    M --> N[Emit 404.html]
+    N --> O[IBuildHook.OnPageRenderedAsync<br/>per page]
     O --> P[IBuildHook.OnBuildCompleteAsync<br/>search index, rss, tags.json]
     P --> Q[Emit sitemap.xml]
     Q --> R[Prune stale output files]
 
     classDef hook fill:#e8f0fe,stroke:#3f51b5,color:#1a237e;
-    class E,F,G,H,I,N,P hook;
+    class E,F,G,H,I,O,P hook;
 ```
 
 The **blue** nodes are the extension points a plugin can implement. Everything else is
@@ -52,10 +52,10 @@ engine-owned.
 | 9 | Preprocess Markdown | `IMarkdownPreprocessor.ProcessAsync` | Runs **in ascending `Order`** for every page (including generated). Text-in/text-out. |
 | 10 | Parse + render | `IMarkdigContributor.Extend` | Markdig extensions are contributed once; pages render in parallel and results are cached by content hash. |
 | 11 | Resolve navigation | — | Builds the nav tree used by templates. |
-| 12 | Template render | *(theme templates)* | Scriban renders each page (parallel) to HTML. See [Template render order](#template-render-order). |
-| 13 | 404 page | *(theme templates)* | `404.html` is rendered if the theme provides it. |
-| 14 | Page rendered | `IBuildHook.OnPageRenderedAsync` | Called for every page after HTML is written. Good for indexing (search). |
-| 15 | Copy assets | `IPluginContext.AddAsset` | Theme assets, `docs/` static files, and plugin-registered assets are copied. |
+| 12 | Copy assets | `IPluginContext.AddAsset` | Theme assets, `docs/` static files, and plugin-registered assets are copied. Runs **before** rendering so the pages can reference what was produced — notably which images gained a `.webp` sibling. |
+| 13 | Template render | *(theme templates)* | Scriban renders each page (parallel) to HTML. See [Template render order](#template-render-order). |
+| 14 | 404 page | *(theme templates)* | `404.html` is rendered if the theme provides it. |
+| 15 | Page rendered | `IBuildHook.OnPageRenderedAsync` | Called for every page after HTML is written. Good for indexing (search). |
 | 16 | Build complete | `IBuildHook.OnBuildCompleteAsync` | Last hook. Emit whole-site artifacts (search index, RSS, tag exports, social cards). |
 | 17 | Sitemap | — | Built-in `sitemap.xml`. |
 | 18 | Prune | — | Removes output files this build did not (re)produce. |
@@ -89,7 +89,7 @@ is all that's needed for them.
 
 ## Template render order
 
-Stage 12 renders each page with [Scriban](https://github.com/scriban/scriban). The theme's
+Stage 13 renders each page with [Scriban](https://github.com/scriban/scriban). The theme's
 `main.html` is the root layout; it pulls in partials in roughly this order:
 
 ```mermaid
@@ -122,7 +122,7 @@ that mirror the theme layout. (Material's Jinja2 overrides are detected and igno
 | Create new pages | `IContentGenerator` | Stage 8 |
 | Rewrite Markdown text | `IMarkdownPreprocessor` | Stage 9 |
 | Add Markdown syntax/extensions | `IMarkdigContributor` | Stage 10 |
-| React to each rendered page | `IBuildHook.OnPageRenderedAsync` | Stage 14 |
+| React to each rendered page | `IBuildHook.OnPageRenderedAsync` | Stage 15 |
 | Emit a whole-site artifact | `IBuildHook.OnBuildCompleteAsync` | Stage 16 |
 
 See the [Events & callbacks reference](events-and-callbacks.md) for the exact method

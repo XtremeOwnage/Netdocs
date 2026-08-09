@@ -200,7 +200,7 @@ builds stay fast and output stays debuggable; turn them on for production publis
 | `minifyHtml` | bool | `false` | Collapse insignificant whitespace/comments in emitted HTML. |
 | `minifyCss` | bool | `false` | Collapse whitespace/comments in emitted CSS assets. |
 | `minifyJs` | bool | `false` | Collapse whitespace/comments in emitted JavaScript assets. |
-| `convertImagesToWebp` | bool | `false` | Generate a `.webp` sibling for each raster image and wrap `<img>` in `<picture>` (originals are kept as fallback). |
+| `convertImagesToWebp` | bool | `false` | Generate a `.webp` sibling for each raster image and wrap `<img>` in `<picture>` when that sibling was produced (originals are kept as fallback). |
 | `webpQuality` | int | `80` | Quality (1–100) for generated webp images. |
 | `offline` | bool | `false` | Self-host every CDN asset into the output so the site runs from `file://`. Requires network access at build time. See [building for offline usage](../setup/building-for-offline-usage.md). |
 

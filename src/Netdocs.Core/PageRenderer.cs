@@ -16,9 +16,14 @@ public static class PageRenderer
         var palette = site.Config.Theme.Palette.Count > 0 ? site.Config.Theme.Palette[0] : null;
         var font = site.Config.Theme.Font;
         var siteUrl = (site.Config.SiteUrl ?? "").TrimEnd('/');
-        var socialPath = SocialImagePath.For(page);
         var description = page.FrontMatter.TryGetValue("description", out var d) && d is string ds && ds.Length > 0
             ? ds : site.Config.SiteDescription ?? "";
+
+        // og:image: an explicit front-matter image wins, then a generated social card. When
+        // neither exists the tag is omitted entirely rather than pointing at a missing file.
+        var ogImage = FrontMatterText(page, "image")
+            ?? FrontMatterText(page, "og_image")
+            ?? SocialImagePath.Resolve(site, page);
 
         Page? prev = null, next = null;
         if (site.State.GetValueOrDefault("nav_pages") is List<Page> navPages)
@@ -85,7 +90,7 @@ public static class PageRenderer
             ["edit_url"] = editUrl,
             ["view_url"] = viewUrl,
             ["page_description"] = description,
-            ["og_image"] = siteUrl.Length > 0 ? $"{siteUrl}/{socialPath}" : "/" + socialPath,
+            ["og_image"] = ogImage is null ? null : Absolute(siteUrl, ogImage),
             ["og_url"] = siteUrl.Length > 0 ? $"{siteUrl}/{page.Url}" : "/" + page.Url,
         };
 
@@ -98,6 +103,25 @@ public static class PageRenderer
         model["version_label"] = site.State.GetValueOrDefault("version_label") as string ?? "Version";
 
         return engine.Render(template, model);
+    }
+
+    private static string? FrontMatterText(Page page, string key) =>
+        page.FrontMatter.TryGetValue(key, out var v) && v is string s && s.Trim().Length > 0 ? s.Trim() : null;
+
+    /// <summary>
+    /// Social meta tags must carry absolute URLs to be usable by crawlers, so a site-relative path
+    /// is prefixed with <c>site_url</c>. Already-absolute values are passed through untouched.
+    /// </summary>
+    private static string Absolute(string siteUrl, string path)
+    {
+        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith("//", StringComparison.Ordinal)
+            || path.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return path;
+
+        var relative = path.TrimStart('/');
+        return siteUrl.Length > 0 ? $"{siteUrl}/{relative}" : "/" + relative;
     }
 
     private static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();

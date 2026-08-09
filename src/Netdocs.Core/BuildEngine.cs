@@ -160,26 +160,35 @@ public sealed class BuildEngine(
             _log.LogDebug("Resolved navigation ({Count} top-level nodes)", site.Navigation.Count);
         }
 
-        // 9. Template render (parallel) + emit.
-        var templateEngine = CreateTemplateEngine();
+        // 9. Copy assets (theme + docs static + plugin-registered). This runs before the pages are
+        // rendered so the webp rewrite below knows which .webp files actually exist: an image
+        // ImageSharp cannot decode must keep its plain <img> rather than advertise a 404 source.
         Directory.CreateDirectory(config.AbsoluteSiteDir);
+        Optimization.WebpManifest webpManifest;
+        using (Measure("9. copy assets"))
+            webpManifest = await AssetPipeline.CopyAllAsync(site, host.Assets, ct);
+        _log.LogDebug("Copied theme, static, and plugin assets to {Dir}", config.AbsoluteSiteDir);
+        if (webpManifest.Count > 0)
+            _log.LogInformation("Converted {Count} image(s) to webp", webpManifest.Count);
+
+        // 10. Template render (parallel) + emit.
+        var templateEngine = CreateTemplateEngine();
         site.State["asset_versioner"] = new AssetVersioner(ThemePaths.AssetsDir, config.AbsoluteDocsDir);
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
         var renderedPages = new ConcurrentBag<Validation.RenderedPage>();
         var minify = config.Optimize.MinifyHtml;
-        var webpWrap = config.Optimize.ConvertImagesToWebp;
-        using (Measure("9. template render"))
+        using (Measure("10. template render"))
             Parallel.ForEach(site.Pages, new ParallelOptions { CancellationToken = ct }, page =>
             {
                 var html = PageRenderer.Render(templateEngine, site, page, host.Assets);
-                if (webpWrap) html = Optimization.WebpHtmlRewriter.Rewrite(html);
+                html = Optimization.WebpHtmlRewriter.Rewrite(html, page.Url, webpManifest);
                 if (minify) html = Optimization.HtmlMinifier.Minify(html);
                 rendered.Add((page.OutputPath, html));
                 renderedPages.Add(new Validation.RenderedPage(page, html));
             });
         var changed = 0;
-        using (Measure("9. write output"))
+        using (Measure("10. write output"))
             foreach (var (path, html) in rendered)
             {
                 if (await OutputWriter.WriteTextIfChangedAsync(site, path, html, ct))
@@ -190,19 +199,19 @@ public sealed class BuildEngine(
             }
         _log.LogInformation("Emitted {Count} HTML pages ({Changed} changed)", rendered.Count, changed);
 
-        // 9b. 404 page.
+        // 10b. 404 page.
         if (templateEngine.TryResolve("404.html", out _))
         {
             var notFound = new Page { SourcePath = "", RelativePath = "404.md", Url = "404.html", Title = "404" };
             notFound.Meta["template"] = "404.html";
             var html404 = PageRenderer.Render(templateEngine, site, notFound, host.Assets);
-            if (config.Optimize.ConvertImagesToWebp) html404 = Optimization.WebpHtmlRewriter.Rewrite(html404);
+            html404 = Optimization.WebpHtmlRewriter.Rewrite(html404, notFound.Url, webpManifest);
             if (config.Optimize.MinifyHtml) html404 = Optimization.HtmlMinifier.Minify(html404);
             await OutputWriter.WriteTextIfChangedAsync(site, Path.Combine(config.AbsoluteSiteDir, "404.html"), html404, ct);
         }
 
-        // 10. OnPageRendered hooks (search docs, etc.).
-        using (Measure("10. OnPageRendered hooks"))
+        // 11. OnPageRendered hooks (search docs, etc.).
+        using (Measure("11. OnPageRendered hooks"))
             foreach (var hook in host.BuildHooks)
                 using (Measure(PluginLabel(hook)))
                     foreach (var page in site.Pages)
@@ -210,11 +219,6 @@ public sealed class BuildEngine(
                         if (hook is IPlugin p && !PagePluginGate.IsEnabled(page, p.Name)) continue;
                         await hook.OnPageRenderedAsync(page, site, ct);
                     }
-
-        // 11. Copy assets (theme + docs static + plugin-registered).
-        using (Measure("11. copy assets"))
-            await AssetPipeline.CopyAllAsync(site, host.Assets, ct);
-        _log.LogDebug("Copied theme, static, and plugin assets to {Dir}", config.AbsoluteSiteDir);
 
         // 12. OnBuildComplete hooks (search index, rss, sitemap).
         using (Measure("12. OnBuildComplete hooks"))

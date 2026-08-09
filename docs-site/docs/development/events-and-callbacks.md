@@ -75,7 +75,7 @@ public interface IPluginContext
 | `AddStylesheet(href)` | Inject a `<link rel="stylesheet">` into every page head. |
 | `AddScript(src, defer)` | Inject a `<script src>` before `</body>`. |
 | `AddInlineScript(js)` | Emit a raw inline `<script>` before `</body>`. |
-| `AddAsset(src, dest)` | Copy a file into the output at `dest` (lifecycle stage 15). |
+| `AddAsset(src, dest)` | Copy a file into the output at `dest` (lifecycle stage 12). |
 
 ---
 
@@ -225,7 +225,7 @@ public interface IBuildHook
 | Callback | Fires at | Typical use |
 | --- | --- | --- |
 | `OnBuildStartAsync` | Stage 7 — after discovery + filtering | Seed state, validate config, prepare output dirs. |
-| `OnPageRenderedAsync` | Stage 14 — once per page, after HTML is written | Collect search documents, per-page side outputs. |
+| `OnPageRenderedAsync` | Stage 15 — once per page, after HTML is written | Collect search documents, per-page side outputs. |
 | `OnBuildCompleteAsync` | Stage 16 — once, near the end | Emit whole-site artifacts: `search_index.json`, RSS, `tags.json`, social cards. |
 
 ```csharp

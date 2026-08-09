@@ -266,6 +266,13 @@ encoder quality. Conversions are cached by source content hash under `.cache/web
 unchanged images are not re-encoded on subsequent builds. Remote images (`http://`,
 `https://`, `//`, `data:`), SVGs, and images already in WebP format are left untouched.
 
+An `<img>` is only wrapped when the matching `.webp` was **actually produced** for that
+page's `src`. Images that cannot be decoded, that live outside the output, or that resolve
+somewhere else keep their plain `<img>` tag — a `<source>` pointing at a file that does not
+exist would break the image in every WebP-capable browser. A `<picture>` you wrote yourself
+is left alone rather than nested inside another one, and a cache-busting `?query` on the
+`src` is carried over to the generated `srcset`.
+
 ### Incremental builds and deploys
 
 Netdocs avoids redundant work through content-hash caches rather than a bespoke deploy

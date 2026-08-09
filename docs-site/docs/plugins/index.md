@@ -90,7 +90,7 @@ content generators — are not page-scoped and always apply.
 |---|---|
 | [imported-docs](imported-docs.md) | Federated docs: push/pull documentation from external repositories. |
 | [search](search.md) | Material-compatible `search_index.json` (page + per-section docs). |
-| [social](social.md) | 1200×630 Open Graph social cards. |
+| [social](social.md) | Open Graph social cards (1200×630 by default; size, colors, fonts, logo and format are configurable). |
 | [blog](blog.md) | Posts, paginated index, categories, archive, post metadata. |
 | [tags](tags.md) | Hierarchical tag index, shadow tags, `tags.json` export. |
 | [meta](meta.md) | Per-directory `.meta.yml` front-matter defaults. |

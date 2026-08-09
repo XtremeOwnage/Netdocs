@@ -20,12 +20,15 @@
     <meta property="og:site_name" content="{{ config.site_name }}">
     <meta property="og:title" content="{{ if page.display_title != '' }}{{ page.display_title }}{{ else }}{{ config.site_name }}{{ end }}">
     <meta property="og:description" content="{{ page_description }}">
-    <meta property="og:image" content="{{ og_image }}">
+    {{~ # og_image is empty when no social card is generated and the page declares no `image`
+       # front matter -- emitting the tag anyway would point crawlers at a file that does not
+       # exist, so the image tags (and the large-image card style) are conditional. ~}}
+    {{ if og_image }}<meta property="og:image" content="{{ og_image }}">{{ end }}
     <meta property="og:url" content="{{ og_url }}">
-    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:card" content="{{ if og_image }}summary_large_image{{ else }}summary{{ end }}">
     <meta name="twitter:title" content="{{ if page.display_title != '' }}{{ page.display_title }}{{ else }}{{ config.site_name }}{{ end }}">
     <meta name="twitter:description" content="{{ page_description }}">
-    <meta name="twitter:image" content="{{ og_image }}">
+    {{ if og_image }}<meta name="twitter:image" content="{{ og_image }}">{{ end }}
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
     <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
     <link rel="stylesheet" href="{{ base_url }}{{ asset "assets/netdocs.css" }}">

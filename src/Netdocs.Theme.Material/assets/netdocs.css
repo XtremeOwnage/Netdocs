@@ -578,8 +578,11 @@ body {
   overflow-x: auto;
 }
 
+/* Sized in JS to the greater of the container and a legible minimum (see MIN_DIAGRAM_WIDTH in
+   BinderJs), then pinned to that width. `max-width: 100%` here would scale it back down to fit a
+   narrow column, shrinking the labels until they are unreadable — the container scrolls instead. */
 .nd-timeline__diagram svg {
-  max-width: 100%;
+  max-width: none;
 }
 
 /* Mermaid's gantt "default" theme hardcodes the axis tick labels, section title, and

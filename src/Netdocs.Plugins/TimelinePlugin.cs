@@ -554,9 +554,16 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             return String(s).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
               .replace(/`/g, "'").replace(/"/g, "'").replace(/:/g, "-").replace(/,/g, ";");
           }
-          function buildMermaidSource(events) {
+          // `width` is the pixel width the diagram will actually be displayed at. Mermaid's gantt
+          // renderer otherwise takes its width from the parent of the element it renders into, and
+          // mermaid.render() with no container renders into a throwaway element on <body> -- so the
+          // diagram sizes itself to the whole window, and our `max-width: 100%` then scales that
+          // down into the content column. The wider the window, the smaller the result: readable on
+          // a narrow screen, unreadably tiny on a wide one. `useWidth` pins it to the real
+          // container so nothing has to be scaled at all.
+          function buildMermaidSource(events, width) {
             var lines = [];
-            lines.push("%%{init: {'gantt': {'fontSize': 16, 'sectionFontSize': 14}}}%%");
+            lines.push("%%{init: {'gantt': {'fontSize': 16, 'sectionFontSize': 14, 'useWidth': " + width + "}}}%%");
             lines.push("gantt");
             lines.push("    dateFormat YYYY-MM-DD");
             lines.push("    axisFormat %b %d");
@@ -743,6 +750,9 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             return mermaidPromise;
           }
           var renderSeq = 0;
+          // Narrowest width at which a gantt's task labels and axis ticks stay readable. Below
+          // this the diagram scrolls rather than shrinking.
+          var MIN_DIAGRAM_WIDTH = 720;
 
           function compute(block) {
             var spec = block.__ndTimelineSpec;
@@ -805,14 +815,29 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             }
 
             var gen = (block.__ndTimelineGen = (block.__ndTimelineGen || 0) + 1);
-            var src = buildMermaidSource(events);
             var diagram = block.querySelector(".nd-timeline__diagram");
+            // Draw at the container's width, but never below the point where the labels stop being
+            // legible: a gantt squeezed into a phone-width column overlaps its own task names and
+            // axis ticks. Below the floor the diagram keeps its readable size and the container
+            // scrolls (see the CSS for .nd-timeline__diagram) instead of scaling the text away.
+            // clientWidth is 0 for a block that is not laid out yet (or hidden); the floor covers
+            // that case too, and the resize handler corrects it once it is visible.
+            var width = Math.max(diagram.clientWidth || 0, MIN_DIAGRAM_WIDTH);
+            var src = buildMermaidSource(events, width);
             loadMermaid().then(function (mermaid) {
               if (block.__ndTimelineGen !== gen) return; // superseded by a newer edit
               var id = "nd-timeline-" + renderSeq++;
               return mermaid.render(id, src).then(function (result) {
                 if (block.__ndTimelineGen !== gen) return;
                 diagram.innerHTML = result.svg;
+                // Mermaid emits width="100%" with a max-width, which would shrink the diagram back
+                // into a narrow container and undo the floor above. Pin it to the width it was
+                // actually drawn at and let the container scroll.
+                var svg = diagram.querySelector("svg");
+                if (svg) {
+                  svg.setAttribute("width", width);
+                  svg.style.maxWidth = "none";
+                }
               });
             }).catch(function () {
               if (block.__ndTimelineGen === gen) diagram.textContent = "Could not render diagram.";
@@ -839,6 +864,23 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
           }
 
           function bindAll() { document.querySelectorAll(".nd-timeline").forEach(bind); }
+
+          // The diagram is rendered at the container's width rather than scaled to it, so a resize
+          // has to redraw rather than just restretch. Debounced, and bound once for the page: a
+          // resize is a drag, not a single event, and every bound block redraws on each one.
+          var resizeTimer = null;
+          if (!window.__ndTimelineResizeBound) {
+            window.__ndTimelineResizeBound = true;
+            window.addEventListener("resize", function () {
+              if (resizeTimer) clearTimeout(resizeTimer);
+              resizeTimer = setTimeout(function () {
+                document.querySelectorAll(".nd-timeline").forEach(function (block) {
+                  if (block.__ndTimelineBound) compute(block);
+                });
+              }, 150);
+            });
+          }
+
           if (window.document$ && typeof window.document$.subscribe === "function") {
             window.document$.subscribe(bindAll);
           } else if (document.readyState !== "loading") {

@@ -60,6 +60,9 @@ If you're migrating, read this alongside the [migration guide](../setup/migratin
 - **Output optimization.** Optional HTML/CSS/JS minification and WebP image conversion are
   first-class build toggles.
 - **A calculator plugin.** Interactive `calc` fences render as live forms — no MkDocs equivalent.
+- **A timeline plugin.** Interactive `timeline` fences render date pickers driving a live Mermaid
+  gantt chart, with business-day and holiday-aware date math — no MkDocs equivalent. See
+  [timeline](../plugins/timeline.md).
 - **Live-reload dev server.** `netdocs serve` runs a Kestrel dev server that watches your files,
   rebuilds incrementally, and pushes changes to the browser over a WebSocket.
 - **Config importer.** `netdocs import` gets you from `mkdocs.yml` to `appsettings.json` in one step.

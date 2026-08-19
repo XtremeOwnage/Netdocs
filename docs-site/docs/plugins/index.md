@@ -58,6 +58,7 @@ stage. A few plugins are intentionally left out of the "enable everything" defau
 | [file-filter](file-filter.md) | Needs a `.file-filter.yml` and env vars to do anything. |
 | [link-notes](link-notes.md) | Requires you to declare your affiliate programs / link rules. |
 | [arithmatex](arithmatex.md) / [b64](b64.md) | Enable when you actually use math or inline-image embedding. |
+| [timeline](timeline.md) | Enable when you actually author `timeline` fences (project schedules, rollout plans). |
 
 Ordering only matters for Markdown preprocessors (they transform source text in sequence);
 see each plugin page for its order. Plugins that emit assets or pages are order-independent.
@@ -107,6 +108,7 @@ content generators — are not page-scoped and always apply.
 | [b64](b64.md) | Embed local images as inline `data:` URIs (pymdownx.b64). |
 | [arithmatex](arithmatex.md) | LaTeX math typeset with MathJax (pymdownx.arithmatex). |
 | [typeset](typeset.md) | Smart typography (curly quotes, en/em dashes, ellipses) via SmartyPants. |
+| [timeline](timeline.md) | Interactive project timelines (offset dates, holiday exclusions) — date pickers driving a live Mermaid gantt diagram. |
 
 ## How plugins hook into the build
 

@@ -43,9 +43,9 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
     }
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct) =>
-        Task.FromResult(FencedBlocks.Rewrite(markdown, "calc", body => RenderBlock(body, page)));
+        Task.FromResult(FencedBlocks.Rewrite(markdown, "calc", (body, index) => RenderBlock(body, page, index)));
 
-    private string RenderBlock(string body, Page page)
+    private string RenderBlock(string body, Page page, int blockIndex)
     {
         object? tree;
         try
@@ -76,7 +76,7 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
         sb.Append("<div class=\"nd-calc__inputs\">");
         foreach (var input in inputs)
         {
-            var id = "ndc-" + Guid.NewGuid().ToString("N")[..8];
+            var id = FencedBlocks.ElementId("ndc", page.RelativePath, blockIndex, input.Name);
             sb.Append("<div class=\"nd-calc__field\">");
             sb.Append("<label for=\"").Append(id).Append("\">").Append(Esc(input.Label)).Append("</label>");
             if (input.Options.Count > 0)

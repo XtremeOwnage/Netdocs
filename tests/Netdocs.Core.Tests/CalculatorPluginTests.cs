@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -250,4 +251,74 @@ public class CalculatorPluginTests
         var md = $"```{infoWord}\ninputs:\n  - name: a\n    default: 1\n```";
         Assert.Contains("nd-calc", Run(md));
     }
+
+    // --- shared fence scanner (FencedBlocks, exercised through this plugin) ---------------
+
+    private const string Body = "inputs:\n  - name: a\n    default: 2\noutputs:\n  - name: b\n    expr: a * 3\n";
+
+    [Theory]
+    [InlineData("```calc\n{0}```")]                      // minimal backtick fence
+    [InlineData("~~~calc\n{0}~~~")]                      // tilde fence
+    [InlineData("`````calc\n{0}`````")]                  // longer-than-three fence
+    [InlineData("   ```calc\n{0}   ```")]                // indented up to 3 spaces
+    [InlineData("```calc title=\"x\" {{.cls}}\n{0}```")] // attributes after the info word
+    [InlineData("```calc\n{0}")]                          // never closed: runs to end of document
+    public void FenceShapesAreAllRecognised(string template)
+    {
+        var result = Run(string.Format(template, Body));
+
+        Assert.Contains("nd-calc__inputs", result);
+        Assert.DoesNotContain("nd-calc--error", result);
+    }
+
+    [Fact]
+    public void EveryBlockOnAPageIsRendered()
+    {
+        var md = $"```calc\n{Body}```\n\ntext\n\n```calc\n{Body}```";
+        Assert.Equal(2, Regex.Matches(Run(md), "nd-calc__inputs").Count);
+    }
+
+    [Fact]
+    public void ContentAroundABlockIsPreserved()
+    {
+        var md = $"before\n\n```calc\n{Body}```\nafter";
+        var result = Run(md);
+
+        Assert.Contains("before", result);
+        Assert.Contains("after", result);
+    }
+
+    [Fact]
+    public void TildeFenceInsideABacktickExample_IsLeftAsSource()
+    {
+        var md = $"````markdown\n~~~calc\n{Body}~~~\n````";
+        var result = Run(md);
+
+        Assert.DoesNotContain("nd-calc__inputs", result);
+        Assert.Contains("~~~calc", result);
+    }
+
+    /// <summary>
+    /// Control ids used to come from a fresh GUID per build, so every page holding a block differed
+    /// byte-for-byte on each run: OutputWriter rewrote it and the watch daemon republished it every
+    /// time. They must be stable across builds, and still unique within a page.
+    /// </summary>
+    [Fact]
+    public void ControlIdsAreStableAcrossBuilds()
+    {
+        var md = $"```calc\n{Body}```";
+        Assert.Equal(Ids(Run(md)), Ids(Run(md)));
+    }
+
+    [Fact]
+    public void ControlIdsAreUnique_ForIdenticalBlocksOnOnePage()
+    {
+        var ids = Ids(Run($"```calc\n{Body}```\n\n```calc\n{Body}```"));
+
+        Assert.Equal(2, ids.Count);
+        Assert.Equal(2, ids.Distinct().Count());
+    }
+
+    private static List<string> Ids(string html) =>
+        Regex.Matches(html, "id=\"(ndc-[0-9a-f]+)\"").Select(m => m.Groups[1].Value).ToList();
 }

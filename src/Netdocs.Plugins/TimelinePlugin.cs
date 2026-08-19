@@ -61,9 +61,9 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
     }
 
     public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct) =>
-        Task.FromResult(FencedBlocks.Rewrite(markdown, "timeline", body => RenderBlock(body, page)));
+        Task.FromResult(FencedBlocks.Rewrite(markdown, "timeline", (body, index) => RenderBlock(body, page, index)));
 
-    private string RenderBlock(string body, Page page)
+    private string RenderBlock(string body, Page page, int blockIndex)
     {
         object? tree;
         try
@@ -188,7 +188,8 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             displayDateFormat,
             editExclusions);
 
-        return RenderForm(title, inputFields, spec);
+        return RenderForm(title, inputFields, spec,
+            name => FencedBlocks.ElementId("ndt", page.RelativePath, blockIndex, name));
     }
 
     // --- reading ---------------------------------------------------------
@@ -332,7 +333,7 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
         string DisplayDateFormat,
         bool EditExclusions);
 
-    private static string RenderForm(string? title, IReadOnlyList<(string Name, string Label, string DefaultIso, bool Editable)> inputFields, TimelineSpec spec)
+    private static string RenderForm(string? title, IReadOnlyList<(string Name, string Label, string DefaultIso, bool Editable)> inputFields, TimelineSpec spec, Func<string, string> idFor)
     {
         var sb = new StringBuilder();
         sb.Append("<div class=\"nd-timeline\">");
@@ -344,7 +345,7 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
         {
             if (field.Editable)
             {
-                var id = "ndt-" + Guid.NewGuid().ToString("N")[..8];
+                var id = idFor(field.Name);
                 sb.Append("<div class=\"nd-timeline__field\">");
                 sb.Append("<label for=\"").Append(id).Append("\">").Append(Esc(field.Label)).Append("</label>");
                 sb.Append("<input id=\"").Append(id).Append("\" type=\"date\" data-timeline-var=\"").Append(field.Name).Append('"');

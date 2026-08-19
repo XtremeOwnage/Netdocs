@@ -183,6 +183,14 @@ whole page.
     it is reported as a build warning and the output is dropped, rather than published as a date
     that looks right and isn't.
 
+### Diagram size
+
+The gantt is drawn at the width of the block it sits in, so its labels render at their intended
+size rather than being scaled down to fit. It is never drawn narrower than **720px**, though: below
+that a gantt starts overlapping its own task names and axis ticks. On a narrow screen the diagram
+keeps its readable size and scrolls horizontally instead, and the exact-date table underneath stays
+fully readable either way. Resizing the window redraws it at the new width.
+
 ### Duration and end dates
 
 Every input and output has a `duration` (whole days, default `0`), stepped the same way an

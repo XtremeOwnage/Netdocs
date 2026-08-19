@@ -250,7 +250,26 @@ public class TimelinePluginTests
         var js = ctx.InlineScripts[0];
 
         Assert.Contains("'useWidth': \" + width + \"", js);
-        Assert.Contains("buildMermaidSource(events, diagram.clientWidth || 900)", js);
+        Assert.Contains("Math.max(diagram.clientWidth || 0, MIN_DIAGRAM_WIDTH)", js);
+        Assert.Contains("buildMermaidSource(events, width)", js);
+    }
+
+    /// <summary>
+    /// Fitting the container is not the same as being readable: squeezed into a phone-width column
+    /// a gantt overlaps its own task names and axis ticks. Below a floor the diagram keeps its
+    /// readable size and the container scrolls, so the width it is drawn at must also be pinned
+    /// onto the SVG — mermaid's own width="100%" + max-width would shrink it straight back.
+    /// </summary>
+    [Fact]
+    public void EvaluatorJs_NeverDrawsTheDiagramBelowALegibleWidth()
+    {
+        var ctx = new FakeContext();
+        Run(Communications, out _, ctx);
+        var js = ctx.InlineScripts[0];
+
+        Assert.Contains("MIN_DIAGRAM_WIDTH = 720", js);
+        Assert.Contains("svg.setAttribute(\"width\", width)", js);
+        Assert.Contains("svg.style.maxWidth = \"none\"", js);
     }
 
     [Fact]

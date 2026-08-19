@@ -750,6 +750,9 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             return mermaidPromise;
           }
           var renderSeq = 0;
+          // Narrowest width at which a gantt's task labels and axis ticks stay readable. Below
+          // this the diagram scrolls rather than shrinking.
+          var MIN_DIAGRAM_WIDTH = 720;
 
           function compute(block) {
             var spec = block.__ndTimelineSpec;
@@ -813,15 +816,28 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
 
             var gen = (block.__ndTimelineGen = (block.__ndTimelineGen || 0) + 1);
             var diagram = block.querySelector(".nd-timeline__diagram");
-            // clientWidth is 0 for a block that is not laid out yet (or hidden); 900 is a sane
-            // stand-in that still renders, and the resize handler corrects it once it is visible.
-            var src = buildMermaidSource(events, diagram.clientWidth || 900);
+            // Draw at the container's width, but never below the point where the labels stop being
+            // legible: a gantt squeezed into a phone-width column overlaps its own task names and
+            // axis ticks. Below the floor the diagram keeps its readable size and the container
+            // scrolls (see the CSS for .nd-timeline__diagram) instead of scaling the text away.
+            // clientWidth is 0 for a block that is not laid out yet (or hidden); the floor covers
+            // that case too, and the resize handler corrects it once it is visible.
+            var width = Math.max(diagram.clientWidth || 0, MIN_DIAGRAM_WIDTH);
+            var src = buildMermaidSource(events, width);
             loadMermaid().then(function (mermaid) {
               if (block.__ndTimelineGen !== gen) return; // superseded by a newer edit
               var id = "nd-timeline-" + renderSeq++;
               return mermaid.render(id, src).then(function (result) {
                 if (block.__ndTimelineGen !== gen) return;
                 diagram.innerHTML = result.svg;
+                // Mermaid emits width="100%" with a max-width, which would shrink the diagram back
+                // into a narrow container and undo the floor above. Pin it to the width it was
+                // actually drawn at and let the container scroll.
+                var svg = diagram.querySelector("svg");
+                if (svg) {
+                  svg.setAttribute("width", width);
+                  svg.style.maxWidth = "none";
+                }
               });
             }).catch(function () {
               if (block.__ndTimelineGen === gen) diagram.textContent = "Could not render diagram.";

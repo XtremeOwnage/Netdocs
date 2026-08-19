@@ -177,6 +177,12 @@ calendar day; `weekdays` steps only Monday–Friday. An `expr` that references a
 one declared later in the same block, is dropped with a build warning rather than failing the
 whole page.
 
+!!! note "Offsets are capped at 100000 steps"
+    That is roughly 274 years, so no real schedule reaches it. The evaluator stops stepping there,
+    and an offset beyond it would silently resolve to whatever date the evaluator had reached — so
+    it is reported as a build warning and the output is dropped, rather than published as a date
+    that looks right and isn't.
+
 ### Duration and end dates
 
 Every input and output has a `duration` (whole days, default `0`), stepped the same way an

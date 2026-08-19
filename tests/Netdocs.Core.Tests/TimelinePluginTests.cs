@@ -711,4 +711,70 @@ public class TimelinePluginTests
         Assert.DoesNotContain("<b>", result);
         Assert.Contains("Kickoff &lt;b&gt;&amp;&lt;/b&gt;", result);
     }
+
+    /// <summary>
+    /// The offset regex bounds the value to digits but not to a magnitude. An offset too large
+    /// for an int must be reported and skipped like any other malformed field — it previously
+    /// threw OverflowException, so one typo in one page failed the entire build.
+    /// </summary>
+    [Fact]
+    public void OutputWithOutOfRangeOffset_IsSkippedWithoutThrowing()
+    {
+        var md = """
+            ```timeline
+            inputs:
+              - name: start
+                default: 01/01/2027
+            outputs:
+              - name: later
+                expr: start + 99999999999999
+            ```
+            """;
+
+        var result = Run(md);
+        var spec = ExtractSpec(result);
+
+        Assert.Single(spec.GetProperty("inputs").EnumerateArray());
+        Assert.Empty(spec.GetProperty("outputs").EnumerateArray());
+    }
+
+    [Fact]
+    public void OutputWithLargeButValidOffset_IsKept()
+    {
+        var md = """
+            ```timeline
+            inputs:
+              - name: start
+                default: 01/01/2027
+            outputs:
+              - name: later
+                expr: start + 3650
+            ```
+            """;
+
+        var spec = ExtractSpec(Run(md));
+        var output = spec.GetProperty("outputs").EnumerateArray().Single();
+
+        Assert.Equal(3650, output.GetProperty("count").GetInt32());
+    }
+
+    /// <summary>
+    /// The info word is compared case-insensitively, so the cheap pre-scan must be too — an
+    /// uppercase fence used to fall through and render as a plain code block.
+    /// </summary>
+    [Theory]
+    [InlineData("TIMELINE")]
+    [InlineData("Timeline")]
+    public void FenceInfoWordIsCaseInsensitive(string infoWord)
+    {
+        var md = $"""
+            ```{infoWord}
+            inputs:
+              - name: start
+                default: 01/01/2027
+            ```
+            """;
+
+        Assert.Contains("nd-timeline", Run(md));
+    }
 }

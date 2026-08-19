@@ -29,15 +29,6 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
     // After snippets (10) so an included snippet can carry a calc block; before table-reader (20).
     public int Order => 15;
 
-    // Matches the opening line of a fenced code block: optional indent, a run of 3+ backticks or
-    // tildes, then the info word. Trailing attributes (e.g. ```json title="x", ```python {.foo})
-    // are allowed after the info token so fence tracking stays in sync with such blocks. `calc`
-    // blocks are rendered; every other fence is copied through verbatim so a ```calc shown *inside*
-    // a larger ```` example fence is left untouched.
-    private static readonly Regex FenceOpen = new(
-        @"^(?<indent>[ \t]{0,3})(?<fence>`{3,}|~{3,})[ \t]*(?<info>[^`\s]*)[^\r\n]*$",
-        RegexOptions.Compiled);
-
     // Characters allowed in an output expression. Deliberately excludes ';', quotes, brackets
     // and backslashes so a stray expression can't inject arbitrary JS into the generated function.
     private static readonly Regex UnsafeExprChars = new(@"[^0-9a-zA-Z_.\+\-\*/%()<>=!?:,&|\s]", RegexOptions.Compiled);
@@ -51,57 +42,8 @@ public sealed class CalculatorPlugin : IPlugin, IMarkdownPreprocessor
         ctx.AddInlineScript(EvaluatorJs);
     }
 
-    public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
-    {
-        if (markdown.IndexOf("calc", StringComparison.Ordinal) < 0)
-            return Task.FromResult(markdown);
-
-        var lines = markdown.Split('\n');
-        var sb = new StringBuilder(markdown.Length);
-        var changed = false;
-
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var open = FenceOpen.Match(lines[i].TrimEnd('\r'));
-            if (!open.Success)
-            {
-                sb.Append(lines[i]);
-                if (i < lines.Length - 1) sb.Append('\n');
-                continue;
-            }
-
-            var fence = open.Groups["fence"].Value;
-            var marker = fence[0];
-            // Closing fence: same character, at least as long, nothing but the marker on the line.
-            int end = i + 1;
-            for (; end < lines.Length; end++)
-            {
-                var t = lines[end].Trim().TrimEnd('\r');
-                if (t.Length >= fence.Length && t.All(c => c == marker)) break;
-            }
-
-            if (open.Groups["info"].Value.Equals("calc", StringComparison.OrdinalIgnoreCase))
-            {
-                // Our block: render body (lines between the fences) to a standalone HTML island.
-                var body = end > i + 1 ? string.Join("\n", lines, i + 1, end - i - 1) : "";
-                sb.Append('\n').Append(RenderBlock(body, page)).Append('\n');
-                changed = true;
-            }
-            else
-            {
-                // Some other fence (e.g. a ```` markdown example that itself contains ```calc):
-                // copy it through unchanged, including its closing line.
-                for (var k = i; k <= end && k < lines.Length; k++)
-                {
-                    sb.Append(lines[k]);
-                    if (k < lines.Length - 1) sb.Append('\n');
-                }
-            }
-            i = end; // resume after the closing fence line
-        }
-
-        return Task.FromResult(changed ? sb.ToString() : markdown);
-    }
+    public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct) =>
+        Task.FromResult(FencedBlocks.Rewrite(markdown, "calc", body => RenderBlock(body, page)));
 
     private string RenderBlock(string body, Page page)
     {

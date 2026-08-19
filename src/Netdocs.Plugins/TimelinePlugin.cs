@@ -37,13 +37,6 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
     public string Name => "timeline";
     public int Order => 15;
 
-    // Same shape as CalculatorPlugin.FenceOpen: matches the opening line of a fenced code
-    // block (```timeline, ~~~timeline, with optional attributes after the info word) so a
-    // ```timeline shown *inside* a larger example fence is left untouched.
-    private static readonly Regex FenceOpen = new(
-        @"^(?<indent>[ \t]{0,3})(?<fence>`{3,}|~{3,})[ \t]*(?<info>[^`\s]*)[^\r\n]*$",
-        RegexOptions.Compiled);
-
     private static readonly Regex ValidName = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
 
     // "<ref>" or "<ref> +/- N" - the offset unit is driven by the output's own `type`.
@@ -60,53 +53,8 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
         ctx.AddInlineScript(BinderJs);
     }
 
-    public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct)
-    {
-        if (markdown.IndexOf("timeline", StringComparison.Ordinal) < 0)
-            return Task.FromResult(markdown);
-
-        var lines = markdown.Split('\n');
-        var sb = new StringBuilder(markdown.Length);
-        var changed = false;
-
-        for (var i = 0; i < lines.Length; i++)
-        {
-            var open = FenceOpen.Match(lines[i].TrimEnd('\r'));
-            if (!open.Success)
-            {
-                sb.Append(lines[i]);
-                if (i < lines.Length - 1) sb.Append('\n');
-                continue;
-            }
-
-            var fence = open.Groups["fence"].Value;
-            var marker = fence[0];
-            int end = i + 1;
-            for (; end < lines.Length; end++)
-            {
-                var t = lines[end].Trim().TrimEnd('\r');
-                if (t.Length >= fence.Length && t.All(c => c == marker)) break;
-            }
-
-            if (open.Groups["info"].Value.Equals("timeline", StringComparison.OrdinalIgnoreCase))
-            {
-                var body = end > i + 1 ? string.Join("\n", lines, i + 1, end - i - 1) : "";
-                sb.Append('\n').Append(RenderBlock(body, page)).Append('\n');
-                changed = true;
-            }
-            else
-            {
-                for (var k = i; k <= end && k < lines.Length; k++)
-                {
-                    sb.Append(lines[k]);
-                    if (k < lines.Length - 1) sb.Append('\n');
-                }
-            }
-            i = end;
-        }
-
-        return Task.FromResult(changed ? sb.ToString() : markdown);
-    }
+    public Task<string> ProcessAsync(Page page, string markdown, SiteContext site, CancellationToken ct) =>
+        Task.FromResult(FencedBlocks.Rewrite(markdown, "timeline", body => RenderBlock(body, page)));
 
     private string RenderBlock(string body, Page page)
     {
@@ -200,7 +148,17 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             }
 
             var direction = exprMatch.Groups["op"].Value == "-" ? -1 : 1;
-            var count = exprMatch.Groups["n"].Success ? int.Parse(exprMatch.Groups["n"].Value) : 0;
+            // The regex bounds the offset to digits but not to a magnitude, so a typo like
+            // `start + 99999999999999` would otherwise throw OverflowException and fail the whole
+            // build -- every other malformed field here degrades to a warning, so this does too.
+            var offset = exprMatch.Groups["n"];
+            var count = 0;
+            if (offset.Success && !int.TryParse(offset.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out count))
+            {
+                _log?.LogWarning("timeline: output '{Name}' has an out-of-range offset '{Offset}' in {Page}; skipping",
+                    output.Name, offset.Value, page.RelativePath);
+                continue;
+            }
             var weekdaysOnly = output.Type.Equals("weekdays", StringComparison.OrdinalIgnoreCase);
 
             declaredNames.Add(output.Name);
@@ -695,7 +653,7 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
               html += "<li>" + escapeHtml(formatDisplayDate(iso, spec.displayDateFormat));
               if (spec.editExclusions) {
                 html += " <button type=\"button\" class=\"nd-timeline__exclusion-remove\" data-exclusion=\""
-                  + iso + "\" aria-label=\"Remove excluded date " + escapeHtml(iso) + "\">&times;</button>";
+                  + escapeHtml(iso) + "\" aria-label=\"Remove excluded date " + escapeHtml(iso) + "\">&times;</button>";
               }
               html += "</li>";
             });

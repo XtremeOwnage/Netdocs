@@ -237,4 +237,17 @@ public class CalculatorPluginTests
         Assert.DoesNotContain("nd-calc", result);
         Assert.Contains("```python", result);
     }
+
+    /// <summary>
+    /// The fence info word is compared case-insensitively, so the cheap pre-scan must be too —
+    /// an uppercase fence used to fall through and render as a plain code block.
+    /// </summary>
+    [Theory]
+    [InlineData("CALC")]
+    [InlineData("Calc")]
+    public void FenceInfoWordIsCaseInsensitive(string infoWord)
+    {
+        var md = $"```{infoWord}\ninputs:\n  - name: a\n    default: 1\n```";
+        Assert.Contains("nd-calc", Run(md));
+    }
 }

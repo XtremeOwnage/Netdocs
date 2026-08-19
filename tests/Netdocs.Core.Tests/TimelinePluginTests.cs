@@ -231,6 +231,40 @@ public class TimelinePluginTests
         Assert.Contains("block.querySelectorAll(\"input[data-timeline-var]\").forEach(function (input) {", js);
     }
 
+    /// <summary>
+    /// Mermaid's gantt renderer takes its width from the parent of the element it renders into, and
+    /// mermaid.render() with no container renders into a throwaway element on &lt;body&gt; — so the
+    /// diagram sized itself to the whole window and our max-width then scaled it down into the
+    /// content column, shrinking further the wider the window got. `useWidth` pins it to the real
+    /// container instead.
+    ///
+    /// <para>Source-level assertions: the behaviour itself lives in the client evaluator, which no
+    /// test here executes. It was verified in a browser at a 1800px window with a 900px column,
+    /// before and after.</para>
+    /// </summary>
+    [Fact]
+    public void EvaluatorJs_SizesTheDiagramToItsContainerNotTheWindow()
+    {
+        var ctx = new FakeContext();
+        Run(Communications, out _, ctx);
+        var js = ctx.InlineScripts[0];
+
+        Assert.Contains("'useWidth': \" + width + \"", js);
+        Assert.Contains("buildMermaidSource(events, diagram.clientWidth || 900)", js);
+    }
+
+    [Fact]
+    public void EvaluatorJs_RedrawsOnResize()
+    {
+        var ctx = new FakeContext();
+        Run(Communications, out _, ctx);
+        var js = ctx.InlineScripts[0];
+
+        // Rendered at the container's width rather than scaled to it, so a resize must redraw.
+        Assert.Contains("addEventListener(\"resize\"", js);
+        Assert.Contains("__ndTimelineResizeBound", js);
+    }
+
     [Fact]
     public void EvaluatorJs_RendersAnAlwaysVisibleDatesTable()
     {
@@ -260,7 +294,10 @@ public class TimelinePluginTests
 
         Assert.Contains("var summaryEvents = events.slice().sort(function (a, b) {", js);
         Assert.Contains("renderDatesTable(block.querySelector(\".nd-timeline__dates\"), summaryEvents, spec.displayDateFormat);", js);
-        Assert.Contains("var src = buildMermaidSource(events);", js);
+        // The diagram still receives the original, unsorted `events` (the width argument is
+        // about sizing, not ordering); only the summary table gets a sorted copy.
+        Assert.Contains("buildMermaidSource(events,", js);
+        Assert.DoesNotContain("buildMermaidSource(summaryEvents", js);
     }
 
     [Fact]

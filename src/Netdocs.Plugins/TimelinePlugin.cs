@@ -554,9 +554,16 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             return String(s).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
               .replace(/`/g, "'").replace(/"/g, "'").replace(/:/g, "-").replace(/,/g, ";");
           }
-          function buildMermaidSource(events) {
+          // `width` is the pixel width the diagram will actually be displayed at. Mermaid's gantt
+          // renderer otherwise takes its width from the parent of the element it renders into, and
+          // mermaid.render() with no container renders into a throwaway element on <body> -- so the
+          // diagram sizes itself to the whole window, and our `max-width: 100%` then scales that
+          // down into the content column. The wider the window, the smaller the result: readable on
+          // a narrow screen, unreadably tiny on a wide one. `useWidth` pins it to the real
+          // container so nothing has to be scaled at all.
+          function buildMermaidSource(events, width) {
             var lines = [];
-            lines.push("%%{init: {'gantt': {'fontSize': 16, 'sectionFontSize': 14}}}%%");
+            lines.push("%%{init: {'gantt': {'fontSize': 16, 'sectionFontSize': 14, 'useWidth': " + width + "}}}%%");
             lines.push("gantt");
             lines.push("    dateFormat YYYY-MM-DD");
             lines.push("    axisFormat %b %d");
@@ -805,8 +812,10 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             }
 
             var gen = (block.__ndTimelineGen = (block.__ndTimelineGen || 0) + 1);
-            var src = buildMermaidSource(events);
             var diagram = block.querySelector(".nd-timeline__diagram");
+            // clientWidth is 0 for a block that is not laid out yet (or hidden); 900 is a sane
+            // stand-in that still renders, and the resize handler corrects it once it is visible.
+            var src = buildMermaidSource(events, diagram.clientWidth || 900);
             loadMermaid().then(function (mermaid) {
               if (block.__ndTimelineGen !== gen) return; // superseded by a newer edit
               var id = "nd-timeline-" + renderSeq++;
@@ -839,6 +848,23 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
           }
 
           function bindAll() { document.querySelectorAll(".nd-timeline").forEach(bind); }
+
+          // The diagram is rendered at the container's width rather than scaled to it, so a resize
+          // has to redraw rather than just restretch. Debounced, and bound once for the page: a
+          // resize is a drag, not a single event, and every bound block redraws on each one.
+          var resizeTimer = null;
+          if (!window.__ndTimelineResizeBound) {
+            window.__ndTimelineResizeBound = true;
+            window.addEventListener("resize", function () {
+              if (resizeTimer) clearTimeout(resizeTimer);
+              resizeTimer = setTimeout(function () {
+                document.querySelectorAll(".nd-timeline").forEach(function (block) {
+                  if (block.__ndTimelineBound) compute(block);
+                });
+              }, 150);
+            });
+          }
+
           if (window.document$ && typeof window.document$.subscribe === "function") {
             window.document$.subscribe(bindAll);
           } else if (document.readyState !== "loading") {

@@ -34,6 +34,13 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
 
     private ILogger? _log;
 
+    /// <summary>
+    /// Largest offset (in steps) an <c>expr</c> may declare. Mirrors the evaluator's loop guard in
+    /// <see cref="BinderJs"/>: past this the client stops stepping and returns whatever date it had
+    /// reached, so accepting a larger offset here would publish a silently wrong date. ~274 years.
+    /// </summary>
+    private const int MaxOffsetDays = 100000;
+
     public string Name => "timeline";
     public int Order => 15;
 
@@ -148,15 +155,19 @@ public sealed class TimelinePlugin : IPlugin, IMarkdownPreprocessor
             }
 
             var direction = exprMatch.Groups["op"].Value == "-" ? -1 : 1;
-            // The regex bounds the offset to digits but not to a magnitude, so a typo like
-            // `start + 99999999999999` would otherwise throw OverflowException and fail the whole
-            // build -- every other malformed field here degrades to a warning, so this does too.
+            // The regex bounds the offset to digits but not to a magnitude. Anything that does
+            // not fit an int would throw OverflowException and fail the whole build, and anything
+            // past the evaluator's step budget (MaxOffsetDays) would be silently clamped to that
+            // budget client-side -- a wrong date reported as if it were right. Both are typos, so
+            // both are reported and skipped, like every other malformed field here.
             var offset = exprMatch.Groups["n"];
             var count = 0;
-            if (offset.Success && !int.TryParse(offset.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out count))
+            if (offset.Success
+                && (!int.TryParse(offset.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out count)
+                    || count > MaxOffsetDays))
             {
-                _log?.LogWarning("timeline: output '{Name}' has an out-of-range offset '{Offset}' in {Page}; skipping",
-                    output.Name, offset.Value, page.RelativePath);
+                _log?.LogWarning("timeline: output '{Name}' has an offset '{Offset}' beyond the supported {Max} days in {Page}; skipping",
+                    output.Name, offset.Value, MaxOffsetDays, page.RelativePath);
                 continue;
             }
             var weekdaysOnly = output.Type.Equals("weekdays", StringComparison.OrdinalIgnoreCase);

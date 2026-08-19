@@ -738,6 +738,30 @@ public class TimelinePluginTests
         Assert.Empty(spec.GetProperty("outputs").EnumerateArray());
     }
 
+    /// <summary>
+    /// The client evaluator stops stepping after 100000 iterations, so a larger offset would be
+    /// clamped there and rendered as if it were the real date. Rejecting it at build time is the
+    /// difference between a warning and a silently wrong timeline.
+    /// </summary>
+    [Theory]
+    [InlineData("100001")]
+    [InlineData("2000000000")]
+    public void OutputWithOffsetBeyondTheEvaluatorBudget_IsSkipped(string offset)
+    {
+        var md = $"""
+            ```timeline
+            inputs:
+              - name: start
+                default: 01/01/2027
+            outputs:
+              - name: later
+                expr: start + {offset}
+            ```
+            """;
+
+        Assert.Empty(ExtractSpec(Run(md)).GetProperty("outputs").EnumerateArray());
+    }
+
     [Fact]
     public void OutputWithLargeButValidOffset_IsKept()
     {

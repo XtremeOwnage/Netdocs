@@ -50,7 +50,13 @@ During the build (after pages and assets are written) Netdocs:
 2. Downloads each one **once** into `assets/external/`.
 3. Follows `url(...)` references inside downloaded CSS (e.g. web-font `.woff2`/`.ttf` files) and
    self-hosts those too, rewriting the stylesheet to the local copies.
-4. Rewrites every page to point at the local files using **page-relative** paths, so the site
+4. Follows the relative imports of any downloaded **ES module**, recursively, into a mirror of the
+   module's own directory layout under `assets/external/<hash>/`. A bundled ESM entry is usually a
+   stub that loads its real code from sibling chunks at runtime — Mermaid's entry alone imports 52
+   of them — so self-hosting only the entry would leave every one of those resolving to a file that
+   was never written. Mirroring the layout means the module's own specifiers resolve unchanged, and
+   no JavaScript has to be rewritten.
+5. Rewrites every page to point at the local files using **page-relative** paths, so the site
    works from a sub-folder *and* from `file://`.
 
 Only the matched asset attributes are rewritten, and only where they matched. Everything else that

@@ -157,6 +157,80 @@ public sealed class SelfHostAssetsTests : IDisposable
         Assert.DoesNotContain("https://cdn.example.com", File.ReadAllText(p2));
     }
 
+    /// <summary>
+    /// The regression behind the broken published docs: a bundled ESM entry is a stub that pulls
+    /// its chunks by relative specifier at runtime. Self-hosting only the entry left every one of
+    /// those resolving to a file that was never written, so the import rejected and every Mermaid
+    /// diagram on the site silently failed.
+    /// </summary>
+    [Fact]
+    public async Task SelfHostsAModulesRelativeImportsRecursively()
+    {
+        var site = NewSite();
+        var page = WritePage("ref",
+            "<script type=\"module\">await import(\"https://cdn.example.com/dist/app.mjs\");</script>");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        var external = Path.Combine(_root, "site", "assets", "external");
+        var entry = Directory.EnumerateFiles(external, "app.mjs", SearchOption.AllDirectories).Single();
+        var moduleRoot = Path.GetDirectoryName(entry)!;
+
+        // Mirrored layout: every specifier resolves relative to the entry, exactly as on the CDN.
+        Assert.True(File.Exists(Path.Combine(moduleRoot, "chunks", "one.mjs")));
+        Assert.True(File.Exists(Path.Combine(moduleRoot, "chunks", "two.mjs")));
+        Assert.True(File.Exists(Path.Combine(moduleRoot, "chunks", "nested", "deep.mjs")));
+
+        // The module itself is untouched — mirroring is what makes rewriting unnecessary.
+        Assert.Contains("./chunks/one.mjs", File.ReadAllText(entry));
+
+        var html = File.ReadAllText(page);
+        Assert.DoesNotContain("https://cdn.example.com/dist/app.mjs", html);
+        Assert.Contains("app.mjs", html);
+    }
+
+    [Fact]
+    public async Task ModuleGraphIsTrackedSoItSurvivesPruning()
+    {
+        var site = NewSite();
+        WritePage("ref", "<script type=\"module\">await import(\"https://cdn.example.com/dist/app.mjs\");</script>");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        var external = Path.Combine(_root, "site", "assets", "external");
+        foreach (var file in Directory.EnumerateFiles(external, "*.mjs", SearchOption.AllDirectories))
+            Assert.True(site.WrittenOutputs.ContainsKey(Path.GetFullPath(file)), file + " was not tracked");
+    }
+
+    [Fact]
+    public async Task ModuleCyclesAndEscapingSpecifiersDoNotBreakTheBuild()
+    {
+        var site = NewSite();
+        var page = WritePage("ref", "<script type=\"module\">await import(\"https://cdn.example.com/dist/cyclic.mjs\");</script>");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        // Self-import must not loop, and `../outside.mjs` has nowhere to live in the mirrored tree,
+        // so it is skipped rather than written outside the module root.
+        var external = Path.Combine(_root, "site", "assets", "external");
+        Assert.Single(Directory.EnumerateFiles(external, "cyclic.mjs", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(external, "outside.mjs", SearchOption.AllDirectories));
+        Assert.DoesNotContain("https://cdn.example.com/dist/cyclic.mjs", File.ReadAllText(page));
+    }
+
+    [Fact]
+    public async Task NonModuleScriptsKeepTheFlatLayout()
+    {
+        var site = NewSite();
+        WritePage("ref", "<script src=\"https://cdn.example.com/lib.js\"></script>");
+
+        await SelfHostAssets.RunAsync(site, NullLogger.Instance, Fetch, default);
+
+        var external = Path.Combine(_root, "site", "assets", "external");
+        Assert.Single(Directory.EnumerateFiles(external, "*.js", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.EnumerateDirectories(external));
+    }
+
     // Fake network: returns canned bytes/media types for the test URLs.
     private static Task<(byte[] Bytes, string? MediaType)?> Fetch(string url, CancellationToken ct)
     {
@@ -164,6 +238,17 @@ public sealed class SelfHostAssetsTests : IDisposable
         {
             "https://cdn.example.com/lib.js" => (Encoding.UTF8.GetBytes("console.log(1)"), "application/javascript"),
             "https://cdn.example.com/mermaid.mjs" => (Encoding.UTF8.GetBytes("export default {}"), "text/javascript"),
+            // A bundled ESM entry: a stub that pulls sibling chunks by relative specifier, the way
+            // mermaid.esm.min.mjs pulls its 52.
+            "https://cdn.example.com/dist/app.mjs" => (Encoding.UTF8.GetBytes(
+                "import{a}from\"./chunks/one.mjs\";export*from\"./chunks/two.mjs\";export default {}"), "text/javascript"),
+            "https://cdn.example.com/dist/chunks/one.mjs" => (Encoding.UTF8.GetBytes(
+                "import\"./nested/deep.mjs\";export const a=1"), "text/javascript"),
+            "https://cdn.example.com/dist/chunks/two.mjs" => (Encoding.UTF8.GetBytes("export const b=2"), "text/javascript"),
+            "https://cdn.example.com/dist/chunks/nested/deep.mjs" => (Encoding.UTF8.GetBytes("export const c=3"), "text/javascript"),
+            // Imports a sibling that loops back to the entry, and one that escapes the entry's directory.
+            "https://cdn.example.com/dist/cyclic.mjs" => (Encoding.UTF8.GetBytes(
+                "import\"./cyclic.mjs\";import\"../outside.mjs\";export default {}"), "text/javascript"),
             "https://fonts.example.com/font.css" =>
                 (Encoding.UTF8.GetBytes("@font-face{src:url(https://fonts.example.com/font.woff2) format('woff2')}"), "text/css"),
             "https://fonts.example.com/font.woff2" => ([1, 2, 3, 4], "font/woff2"),

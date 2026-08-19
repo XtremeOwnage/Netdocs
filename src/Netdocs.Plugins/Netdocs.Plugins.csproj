@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <!-- FencedBlocks is an implementation detail shared by the fence-replacing plugins, not part
+         of the plugin API surface. Exposed to the test project so it can be covered directly
+         rather than only through whichever plugin happens to call it. -->
+    <InternalsVisibleTo Include="Netdocs.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Netdocs.Abstractions\Netdocs.Abstractions.csproj" />
     <ProjectReference Include="..\Netdocs.Core\Netdocs.Core.csproj" />
   </ItemGroup>

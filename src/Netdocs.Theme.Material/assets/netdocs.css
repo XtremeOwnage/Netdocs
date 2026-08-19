@@ -500,6 +500,217 @@ body {
   color: var(--md-primary-fg-color);
 }
 
+/* ---------------------------------------------------------------------------
+   Timeline plugin (```timeline fences -> interactive date pickers driving a
+   client-rendered Mermaid gantt diagram). Input styling mirrors .nd-calc's -
+   same field/label conventions - so the two plugins read as one family.
+   --------------------------------------------------------------------------- */
+.nd-timeline {
+  display: block;
+  margin: 1.5em 0;
+  padding: 1em 1.2em;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .4rem;
+  background: var(--md-code-bg-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.nd-timeline--error {
+  border-color: #d32f2f;
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.nd-timeline__title {
+  font-weight: 700;
+  font-size: .9rem;
+  margin-bottom: .8em;
+}
+
+.nd-timeline__inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .8em 1.2em;
+}
+
+.nd-timeline__field {
+  display: flex;
+  flex-direction: column;
+  gap: .25em;
+}
+
+.nd-timeline__field label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-timeline__field input[type="date"] {
+  font: inherit;
+  font-size: .8rem;
+  padding: .35em .5em;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .25rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+/* `editable: false` input: plain text, not styled like a control (no border/background) - it
+   isn't one, and looking like one would misleadingly suggest it can be interacted with. Shares
+   .nd-timeline__field's layout; only the label/value elements themselves differ from the
+   editable case (span instead of label[for] / input). */
+.nd-timeline__field-label {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+.nd-timeline__static-value {
+  font-size: .8rem;
+  padding: .35em 0;
+  color: var(--md-default-fg-color);
+}
+
+.nd-timeline__diagram {
+  margin-top: 1em;
+  padding-top: 1em;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  overflow-x: auto;
+}
+
+.nd-timeline__diagram svg {
+  max-width: 100%;
+}
+
+/* Mermaid's gantt "default" theme hardcodes the axis tick labels, section title, and
+   diagram title to fill:#333 directly in its own generated <style> (not a CSS variable, unlike
+   most of its other text) - unreadable on a dark background. Rendering into plain light DOM
+   ourselves (see BinderJs) means our stylesheet can reach in and override it; !important because
+   these compete with an equal-origin <style> inside the SVG itself. */
+.nd-timeline__diagram svg .tick text,
+.nd-timeline__diagram svg .sectionTitle,
+.nd-timeline__diagram svg .titleText {
+  fill: var(--md-default-fg-color) !important;
+}
+
+/* Always-visible exact-date reference, populated client-side alongside the diagram - see
+   renderDatesTable() in TimelinePlugin's BinderJs. Empty (no children) until JS runs. */
+.nd-timeline__dates-table {
+  width: 100%;
+  margin-top: 1em;
+  border-collapse: collapse;
+  font-size: .8rem;
+}
+
+.nd-timeline__dates-table tr {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.nd-timeline__dates-table th,
+.nd-timeline__dates-table td {
+  padding: .4em .6em .4em 0;
+  text-align: left;
+  font-weight: 400;
+}
+
+.nd-timeline__dates-table th {
+  color: var(--md-default-fg-color--light);
+  white-space: nowrap;
+}
+
+.nd-timeline__dates-table td {
+  color: var(--md-default-fg-color);
+  white-space: nowrap;
+}
+
+/* Exclusion dates (holidays/blackouts) - read-only list, or an editable add/remove UI when
+   options.editExclusions is on. Populated client-side; see renderExclusions() in BinderJs. */
+.nd-timeline__exclusions:not(:empty) {
+  margin-top: .8em;
+  padding-top: .8em;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.nd-timeline__exclusions-title {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  margin-bottom: .4em;
+}
+
+.nd-timeline__exclusions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4em;
+  font-size: .8rem;
+}
+
+.nd-timeline__exclusions-list li {
+  display: flex;
+  align-items: center;
+  gap: .3em;
+  padding: .2em .5em;
+  border-radius: 1em;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.nd-timeline__exclusions-empty {
+  background: none !important;
+  color: var(--md-default-fg-color--light);
+  font-style: italic;
+}
+
+.nd-timeline__exclusion-remove {
+  border: none;
+  background: none;
+  padding: 0;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+}
+
+.nd-timeline__exclusion-remove:hover {
+  color: #d32f2f;
+}
+
+.nd-timeline__exclusions-add {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  margin-top: .6em;
+}
+
+.nd-timeline__exclusions-add input[type="date"] {
+  font: inherit;
+  font-size: .8rem;
+  padding: .3em .5em;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: .25rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.nd-timeline__exclusions-add button {
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 600;
+  padding: .3em .8em;
+  border: 1px solid var(--md-primary-fg-color);
+  border-radius: .25rem;
+  background: none;
+  color: var(--md-primary-fg-color);
+  cursor: pointer;
+}
+
+.nd-timeline__exclusions-add button:hover {
+  background: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}
+
 /* --------------------------------------------------------------------------
    CriticMarkup (KeysCriticExtension) — {++ins++} {--del--} {==mark==}
    {>>comment<<} {~~old~>new~~}. Mirrors Material for MkDocs' critic palette.

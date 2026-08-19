@@ -67,6 +67,7 @@ Preprocessors are sorted by their `Order` property (ascending). The built-ins us
 | Order | Preprocessor | Why |
 | --- | --- | --- |
 | 10 | `snippets` | Expand `--8<--` includes first so later steps see the full text. |
+| 15 | `calculator` / `timeline` | Fence-replacing plugins that render their own block; run after includes, before table-reader. |
 | 20 | `table-reader` / `abbreviations` | Operate on already-included content. |
 | 25 | `macros` | Runs after snippets/table-reader so their output can contain macros. |
 

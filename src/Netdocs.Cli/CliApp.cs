@@ -251,6 +251,7 @@ public static class CliApp
         .Register<Base64EmbedPlugin>("b64", "pymdownx.b64")
         .Register<ArithmatexPlugin>("arithmatex", "pymdownx.arithmatex")
         .Register<CalculatorPlugin>("calculator", "calc")
+        .Register<TimelinePlugin>("timeline")
         .Register<VersioningPlugin>("versioning")
         .Register<MacrosPlugin>("macros")
         .Register<ImportedDocsPlugin>("imported-docs");

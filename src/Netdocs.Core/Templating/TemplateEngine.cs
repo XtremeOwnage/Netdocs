@@ -32,6 +32,12 @@ public sealed class TemplateEngine
         {
             TemplateLoader = _loader,
             EnableRelaxedMemberAccess = true,
+            // Scriban defaults to 1000 iterations per loop, which is a sandbox guard against a
+            // runaway template from an untrusted author. Here the template is the theme's own and
+            // the loop is over the site's nav, so the limit is only ever hit by a site that is
+            // genuinely large -- and it aborts the whole build rather than degrading. A 1000-page
+            // site is well within what this generator targets.
+            LoopLimit = int.MaxValue,
         };
         var globals = new ScriptObject();
         foreach (var (key, value) in model)

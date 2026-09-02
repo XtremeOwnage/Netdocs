@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <!-- Deploy helpers (gzip staging, sync argument construction) are implementation details of
+         the deploy targets, not public API. Exposed to the test project so they can be covered
+         directly rather than only through a real `aws` invocation. -->
+    <InternalsVisibleTo Include="Netdocs.Core.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Netdocs.Abstractions\Netdocs.Abstractions.csproj" />
   </ItemGroup>
   <ItemGroup>

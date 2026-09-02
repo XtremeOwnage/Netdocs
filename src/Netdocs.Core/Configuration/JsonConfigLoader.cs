@@ -64,6 +64,7 @@ public static class JsonConfigLoader
         Branch = m.Get("branch").AsString() ?? "gh-pages",
         Remote = m.Get("remote").AsString() ?? "origin",
         Message = m.Get("message").AsString() ?? "Deploy docs",
+        Gzip = m.Get("gzip").AsBool(false),
         Push = m.Get("push").AsBool(true),
         Bucket = m.Get("bucket").AsString(),
         Prefix = m.Get("prefix").AsString(),

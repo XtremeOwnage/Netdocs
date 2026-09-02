@@ -174,6 +174,7 @@ A `deploy` block tells `netdocs deploy` where to publish the built site. See
 | `bucket` | string | — | `s3` | Target S3 bucket name. |
 | `prefix` | string | — | `s3` | Optional key prefix (sub-path) within the bucket. |
 | `region` | string | — | `s3` | AWS region (otherwise the AWS CLI default). |
+| `gzip` | bool | `false` | `s3` | Store text assets gzipped with `Content-Encoding: gzip`. S3 does not compress on the fly, so this is what keeps a large `search_index.json` from being downloaded in full — see [publishing](../setup/publishing.md#compressing-text-assets-gzip). |
 
 ## Optimization
 

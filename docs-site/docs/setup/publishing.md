@@ -211,7 +211,8 @@ resolved the standard AWS way (environment variables, `~/.aws/config`, or an ins
       "bucket": "my-docs-bucket",
       "prefix": "docs",
       "region": "us-east-1",
-      "clean": true
+      "clean": true,
+      "gzip": true
     }
   }
 }
@@ -221,6 +222,67 @@ resolved the standard AWS way (environment variables, `~/.aws/config`, or an ins
 - `clean: true` passes `--delete` so objects no longer produced by the build are removed.
 - `region` is optional — omit it to use the AWS CLI's configured default.
 - Requires the AWS CLI (`aws`) on `PATH`.
+
+### Compressing text assets (`gzip`)
+
+S3 serves an object as exactly the bytes it stores. Unlike GitHub Pages, it will **not** compress
+on the fly, so a site's text assets go over the wire uncompressed — and the one that hurts is
+`search/search_index.json`, which every visitor downloads in full the moment they open search. On
+this documentation site that file is 529 KB raw and 99 KB gzipped: **5.4× more traffic** to fetch
+the same index from S3 than from Pages, and the gap grows with the size of the site.
+
+`"gzip": true` stores those assets compressed. The deploy runs two syncs: one for everything else,
+then one for `.json`, `.css`, `.js`, `.mjs`, `.html`, `.xml`, `.svg`, `.txt` and `.map` files,
+uploaded gzipped with `Content-Encoding: gzip`. The build output on disk is untouched — the
+compressed copies are staged in a temporary directory — so serving the site locally still works.
+
+!!! warning "A pre-compressed object is served compressed to everyone"
+    S3 returns the stored bytes and the `Content-Encoding: gzip` header regardless of whether the
+    client sent `Accept-Encoding: gzip`. Every browser handles that; a script pulling an object
+    straight out of the bucket may not, which is why this is off by default.
+
+!!! failure "If search does nothing on an S3-hosted site, check CORS first"
+    Every other asset on the page — CSS, JS, images — is loaded by a `<link>` or `<script>` tag,
+    which the browser will happily follow across origins. The search index is the one asset fetched
+    with **XHR**, and that *is* subject to CORS. So if your bucket sits behind anything that
+    redirects to a presigned S3 URL on another origin, the page loads perfectly and only search
+    breaks — silently, with no visible error except a `CORS error` in the network panel:
+
+    ```
+    search_index.json                          302  xhr / Redirect
+    search_index.json?AWSAccessKeyId=…&Expires=…     CORS error
+    ```
+
+    The giveaway is that the redirected response comes back from `Server: AmazonS3` with no
+    `Access-Control-Allow-Origin` header. Fix it on the bucket, not in the site:
+
+    ```json
+    {
+      "CORSRules": [
+        {
+          "AllowedOrigins": ["https://docs.example.com"],
+          "AllowedMethods": ["GET", "HEAD"],
+          "AllowedHeaders": ["*"],
+          "MaxAgeSeconds": 86400
+        }
+      ]
+    }
+    ```
+
+    ```bash
+    aws s3api put-bucket-cors --bucket my-docs-bucket --cors-configuration file://cors.json
+
+    # verify — this must echo your origin back
+    curl -sI -H "Origin: https://docs.example.com" <the redirected URL> | grep -i access-control
+    ```
+
+    Serving the object from the site's own origin instead (no cross-origin redirect) avoids the
+    issue entirely, since CORS never comes into play.
+
+!!! tip "Behind CloudFront"
+    CloudFront's own automatic compression only applies to objects up to a size limit, so a large
+    search index can silently fall back to being served uncompressed as a site grows. Storing the
+    asset already compressed sidesteps that entirely.
 
 ## Optimization
 

@@ -186,11 +186,52 @@ public sealed class Deployer(SiteConfig config, ILogger log)
             ? $"s3://{deploy.Bucket}/{prefix}"
             : $"s3://{deploy.Bucket}";
 
-        var args = new List<string> { "s3", "sync", source, destination };
-        if (deploy.Clean) args.Add("--delete");
-        if (!string.IsNullOrWhiteSpace(deploy.Region)) { args.Add("--region"); args.Add(deploy.Region); }
+        if (!deploy.Gzip)
+        {
+            var plainExit = await RunS3SyncAsync(S3SyncArgs(source, destination, deploy), source, destination, ct);
+            if (plainExit == 0) log.LogInformation("Deployed to '{Dest}'.", destination);
+            return plainExit;
+        }
 
-        var exit = await RunProcessAsync("aws", source, ct, [.. args]);
+        // Compressed upload: S3 hands back exactly the bytes it stores, so a text asset is only
+        // ever served gzipped if it was stored that way. Stage compressed copies rather than
+        // touching the build output, which still has to work when served locally.
+        var staging = Path.Combine(Path.GetTempPath(), "netdocs-gzip-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var staged = await StageCompressedAsync(source, staging, ct);
+            if (staged == 0)
+            {
+                var noneExit = await RunS3SyncAsync(S3SyncArgs(source, destination, deploy), source, destination, ct);
+                if (noneExit == 0) log.LogInformation("Deployed to '{Dest}'.", destination);
+                return noneExit;
+            }
+
+            // Pass 1: everything except the compressible types, straight from the build output.
+            var plain = await RunS3SyncAsync(
+                S3SyncArgs(source, destination, deploy, excludeCompressible: true), source, destination, ct);
+            if (plain != 0) return plain;
+
+            // Pass 2: only the compressible types, from the staged copies, tagged as gzip. The same
+            // filters apply to the destination listing, so `--delete` in either pass only considers
+            // the objects that pass owns.
+            var compressed = await RunS3SyncAsync(
+                S3SyncArgs(staging, destination, deploy, onlyCompressible: true), staging, destination, ct);
+            if (compressed != 0) return compressed;
+
+            log.LogInformation("Deployed to '{Dest}' ({Count} text asset(s) uploaded gzipped).", destination, staged);
+            return 0;
+        }
+        finally
+        {
+            try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
+            catch (IOException) { /* best effort */ }
+        }
+    }
+
+    private async Task<int> RunS3SyncAsync(IReadOnlyList<string> args, string workingDir, string destination, CancellationToken ct)
+    {
+        var exit = await RunProcessAsync("aws", workingDir, ct, [.. args]);
         if (exit == 127 || exit == -1)
         {
             log.LogError("S3 deploy requires the AWS CLI ('aws') on PATH. Install it or use a different deploy target.");
@@ -201,9 +242,68 @@ public sealed class Deployer(SiteConfig config, ILogger log)
             log.LogError("S3 deploy: 'aws s3 sync' to '{Dest}' failed (exit {Exit}).", destination, exit);
             return 1;
         }
-
-        log.LogInformation("Deployed to '{Dest}'.", destination);
         return 0;
+    }
+
+    /// <summary>File types worth storing compressed: text that a docs site serves and a browser
+    /// will happily decode. The search index is the one that actually hurts, but the rest are the
+    /// same kind of asset and cost nothing extra to include.</summary>
+    internal static readonly string[] CompressibleExtensions =
+        [".json", ".css", ".js", ".mjs", ".html", ".xml", ".svg", ".txt", ".map"];
+
+    internal static bool IsCompressible(string path) =>
+        CompressibleExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Builds one <c>aws s3 sync</c> invocation. With neither flag set this is the plain sync.
+    /// <paramref name="excludeCompressible"/> skips the text types (they go in the second pass);
+    /// <paramref name="onlyCompressible"/> uploads just those, tagged <c>Content-Encoding: gzip</c>.
+    /// </summary>
+    internal static List<string> S3SyncArgs(string source, string destination, DeployConfig deploy,
+        bool excludeCompressible = false, bool onlyCompressible = false)
+    {
+        var args = new List<string> { "s3", "sync", source, destination };
+        if (deploy.Clean) args.Add("--delete");
+        if (!string.IsNullOrWhiteSpace(deploy.Region)) { args.Add("--region"); args.Add(deploy.Region); }
+
+        if (excludeCompressible)
+            foreach (var ext in CompressibleExtensions) { args.Add("--exclude"); args.Add("*" + ext); }
+
+        if (onlyCompressible)
+        {
+            args.Add("--exclude"); args.Add("*");
+            foreach (var ext in CompressibleExtensions) { args.Add("--include"); args.Add("*" + ext); }
+            args.Add("--content-encoding"); args.Add("gzip");
+        }
+        return args;
+    }
+
+    /// <summary>
+    /// Mirrors every compressible file from <paramref name="source"/> into <paramref name="staging"/>,
+    /// gzipped, keeping the relative path and extension so the AWS CLI still infers the same
+    /// Content-Type. Returns how many files were staged.
+    /// <para>Every file of a compressible type is staged, including small ones that gzip slightly
+    /// larger: pass 1 excludes these types wholesale, so anything skipped here would never be
+    /// uploaded at all.</para>
+    /// </summary>
+    internal static async Task<int> StageCompressedAsync(string source, string staging, CancellationToken ct)
+    {
+        var staged = 0;
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            if (!IsCompressible(file)) continue;
+
+            var relative = Path.GetRelativePath(source, file);
+            var target = Path.Combine(staging, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+            await using var input = File.OpenRead(file);
+            await using var output = File.Create(target);
+            await using var gzip = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal);
+            await input.CopyToAsync(gzip, ct);
+            staged++;
+        }
+        return staged;
     }
 
     private async Task<int> RunGitAsync(string workingDir, CancellationToken ct, params string[] args)

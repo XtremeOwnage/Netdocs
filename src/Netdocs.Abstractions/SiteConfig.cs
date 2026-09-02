@@ -185,6 +185,18 @@ public sealed class DeployConfig
 
     /// <summary>Optional AWS region for the <c>s3</c> target (otherwise the AWS CLI default).</summary>
     public string? Region { get; set; }
+
+    /// <summary>
+    /// For the <c>s3</c> target: upload text assets gzipped, with <c>Content-Encoding: gzip</c>.
+    /// S3 serves objects exactly as stored — unlike GitHub Pages, it will not compress on the fly —
+    /// so a large search index is downloaded in full by every visitor who opens search.
+    /// <para>
+    /// Off by default because a pre-compressed object is served gzipped to <em>every</em> client,
+    /// including one that never sent <c>Accept-Encoding: gzip</c>. Browsers handle that; a bare
+    /// script reading an object directly may not.
+    /// </para>
+    /// </summary>
+    public bool Gzip { get; set; }
 }
 
 /// <summary>Output optimization toggles applied while writing rendered pages.</summary>

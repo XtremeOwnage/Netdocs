@@ -211,7 +211,8 @@ resolved the standard AWS way (environment variables, `~/.aws/config`, or an ins
       "bucket": "my-docs-bucket",
       "prefix": "docs",
       "region": "us-east-1",
-      "clean": true
+      "clean": true,
+      "gzip": true
     }
   }
 }
@@ -221,6 +222,29 @@ resolved the standard AWS way (environment variables, `~/.aws/config`, or an ins
 - `clean: true` passes `--delete` so objects no longer produced by the build are removed.
 - `region` is optional — omit it to use the AWS CLI's configured default.
 - Requires the AWS CLI (`aws`) on `PATH`.
+
+### Compressing text assets (`gzip`)
+
+S3 serves an object as exactly the bytes it stores. Unlike GitHub Pages, it will **not** compress
+on the fly, so a site's text assets go over the wire uncompressed — and the one that hurts is
+`search/search_index.json`, which every visitor downloads in full the moment they open search. On
+this documentation site that file is 529 KB raw and 99 KB gzipped: **5.4× more traffic** to fetch
+the same index from S3 than from Pages, and the gap grows with the size of the site.
+
+`"gzip": true` stores those assets compressed. The deploy runs two syncs: one for everything else,
+then one for `.json`, `.css`, `.js`, `.mjs`, `.html`, `.xml`, `.svg`, `.txt` and `.map` files,
+uploaded gzipped with `Content-Encoding: gzip`. The build output on disk is untouched — the
+compressed copies are staged in a temporary directory — so serving the site locally still works.
+
+!!! warning "A pre-compressed object is served compressed to everyone"
+    S3 returns the stored bytes and the `Content-Encoding: gzip` header regardless of whether the
+    client sent `Accept-Encoding: gzip`. Every browser handles that; a script pulling an object
+    straight out of the bucket may not, which is why this is off by default.
+
+!!! tip "Behind CloudFront"
+    CloudFront's own automatic compression only applies to objects up to a size limit, so a large
+    search index can silently fall back to being served uncompressed as a site grows. Storing the
+    asset already compressed sidesteps that entirely.
 
 ## Optimization
 

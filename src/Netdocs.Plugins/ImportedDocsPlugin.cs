@@ -242,8 +242,10 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
             if (string.IsNullOrWhiteSpace(content))
                 return null;
 
-            var relPath = Path.GetRelativePath(baseDir, filePath).Replace('\\', '/');
-            var url = ComputeUrl(relPath, source?.DestinationPath);
+            var relPath = CombineDestination(
+                Path.GetRelativePath(baseDir, filePath).Replace('\\', '/'),
+                source?.DestinationPath);
+            var url = ContentDiscovery.UrlFor(relPath, _slugify);
 
             var page = new Page
             {
@@ -311,20 +313,20 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         page.FrontMatter = meta;
     }
 
-    /// <summary>Maps a source-relative path onto a site URL, nesting the source's own directory
-    /// structure beneath <paramref name="destinationPath"/> so cross-links inside the imported
-    /// set keep resolving.</summary>
-    internal string ComputeUrl(string relativePath, string? destinationPath)
+    /// <summary>Nests a source-relative path beneath <paramref name="destinationPath"/>. Imported
+    /// pages carry this as their <see cref="Page.RelativePath"/> so navigation, <c>.pages</c>
+    /// lookups and URLs all agree on where the page lives.</summary>
+    private static string CombineDestination(string relativePath, string? destinationPath)
     {
         var path = relativePath.Replace('\\', '/').TrimStart('/');
 
-        if (!string.IsNullOrEmpty(destinationPath))
-        {
-            path = destinationPath.Replace('\\', '/').Trim('/') + "/" + path;
-        }
-
-        return ContentDiscovery.UrlFor(path, _slugify);
+        return string.IsNullOrEmpty(destinationPath)
+            ? path
+            : destinationPath.Replace('\\', '/').Trim('/') + "/" + path;
     }
+
+    internal string ComputeUrl(string relativePath, string? destinationPath) =>
+        ContentDiscovery.UrlFor(CombineDestination(relativePath, destinationPath), _slugify);
 
     private async Task<int> ImportS3SourceAsync(SiteContext site, ImportedDocsS3Source source, CancellationToken ct)
     {
@@ -431,12 +433,13 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
             using var reader = new StreamReader(response.ResponseStream);
             var content = await reader.ReadToEndAsync(ct);
 
-            var url = ComputeUrl(relPath, source.DestinationPath);
+            var sitePath = CombineDestination(relPath, source.DestinationPath);
+            var url = ContentDiscovery.UrlFor(sitePath, _slugify);
 
             var page = new Page
             {
                 SourcePath = $"s3://{source.Bucket}/{s3Key}",
-                RelativePath = relPath,
+                RelativePath = sitePath,
                 Url = url,
                 OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url)),
                 RawMarkdown = content,

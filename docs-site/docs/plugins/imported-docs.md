@@ -578,6 +578,11 @@ Behavior:
 - `index.md` and `README.md` collapse onto their containing directory.
 - When the site sets `slugify.urls`, imported segments are slugified too.
 
+Imported pages are also placed in the navigation tree at `destinationPath`, so they nest
+under the surrounding sections rather than at the site root. A `.pages` file in the matching
+directory of your own `docs/` tree — `docs/products/api/.pages` for the examples above —
+titles and orders the imported section, even though none of its pages live there.
+
 ## Build Pipeline Integration
 
 The Imported Docs plugin runs at **Stage 2** of the build pipeline — after initial content discovery but before navigation filters and rendering. This ensures:

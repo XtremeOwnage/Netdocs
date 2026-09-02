@@ -63,6 +63,77 @@ public class ImportedDocsPluginTests
     }
 
     [Fact]
+    public async Task OnImportAsync_PulledDocs_PlacesPagesUnderDestinationForNavigation()
+    {
+        var origin = Path.Combine(Path.GetTempPath(), "netdocs-origin-" + Guid.NewGuid().ToString("N"));
+        var projectRoot = Path.Combine(Path.GetTempPath(), "netdocs-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(origin, "docs", "integrations"));
+        Directory.CreateDirectory(projectRoot);
+        await File.WriteAllTextAsync(Path.Combine(origin, "docs", "index.md"), "# Landing");
+        await File.WriteAllTextAsync(Path.Combine(origin, "docs", "integrations", "citrix.md"), "# Citrix");
+
+        LibGit2Sharp.Repository.Init(origin);
+        using (var repo = new LibGit2Sharp.Repository(origin))
+        {
+            LibGit2Sharp.Commands.Stage(repo, "*");
+            var who = new LibGit2Sharp.Signature("t", "t@t", DateTimeOffset.UtcNow);
+            repo.Commit("init", who, who, new LibGit2Sharp.CommitOptions());
+        }
+
+        var config = new SiteConfig
+        {
+            ProjectRoot = projectRoot,
+            ImportedDocs = new ImportedDocsConfig
+            {
+                PullSources =
+                [
+                    new ImportedDocsPullSource
+                    {
+                        Repository = origin,
+                        SourcePath = "docs",
+                        DestinationPath = "aws/iam",
+                    },
+                ],
+            },
+        };
+        var site = new SiteContext
+        {
+            Config = config,
+            Options = new BuildOptions(),
+            LoggerFactory = NullLoggerFactory.Instance,
+        };
+
+        var plugin = new ImportedDocsPlugin();
+        plugin.Configure(new FakeContext { Config = config });
+
+        try
+        {
+            await plugin.OnImportAsync(site, default);
+
+            // RelativePath drives the nav tree and .pages lookup, so it has to agree with Url.
+            Assert.Equal(
+                ["aws/iam/index.md", "aws/iam/integrations/citrix.md"],
+                site.Pages.Select(p => p.RelativePath).Order());
+            Assert.Equal(
+                ["aws/iam/", "aws/iam/integrations/citrix/"],
+                site.Pages.Select(p => p.Url).Order());
+        }
+        finally
+        {
+            DeleteTree(origin);
+            DeleteTree(projectRoot);
+        }
+    }
+
+    private static void DeleteTree(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+        Directory.Delete(path, recursive: true);
+    }
+
+    [Fact]
     public async Task OnImportAsync_PushedDocs_ParsesFullFrontMatterAndSetsOutputPath()
     {
         var projectRoot = Path.Combine(Path.GetTempPath(), "netdocs-test-" + Guid.NewGuid().ToString("N"));

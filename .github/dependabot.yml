@@ -8,6 +8,17 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
+    ignore:
+      # ImageSharp 4.0 moved to the Six Labors Split License and its build targets fail outright
+      # without a registered key ("No Six Labors license found ... obtain a license from
+      # sixlabors.com/pricing"). Netdocs ships as a zero-config OSS binary, so it stays on the
+      # Apache-2.0 3.1.x line -- see the pin in Directory.Packages.props. Drawing's next major
+      # depends on ImageSharp 4.x, so it carries the same constraint.
+      # Without this, every ImageSharp release reopens a PR that cannot build.
+      - dependency-name: "SixLabors.ImageSharp"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "SixLabors.ImageSharp.Drawing"
+        update-types: ["version-update:semver-major"]
     groups:
       microsoft-extensions:
         patterns:

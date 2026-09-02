@@ -394,7 +394,10 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                 }
 
                 request.ContinuationToken = response.ContinuationToken;
-            } while (response.IsTruncated && !ct.IsCancellationRequested);
+                // AWS SDK v4 made IsTruncated nullable. Unset means the response did not claim
+                // there is more to fetch, so treat anything but an explicit true as the last page
+                // rather than paginating forever.
+            } while (response.IsTruncated == true && !ct.IsCancellationRequested);
 
             _logger.LogInformation("Imported {Count} pages from S3 bucket {Bucket}", count, source.Bucket);
             return count;

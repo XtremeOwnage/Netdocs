@@ -4,6 +4,7 @@ using Amazon.S3.Model;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
+using Netdocs.Core.Content;
 
 namespace Netdocs.Plugins;
 
@@ -18,6 +19,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
     private string? _pushedDocsDir;
     private IReadOnlyList<ImportedDocsPullSource> _pullSources = [];
     private IReadOnlyList<ImportedDocsS3Source> _s3Sources = [];
+    private SlugifyConfig? _slugify;
     private ILogger _logger = null!;
 
     public string Name => "imported-docs";
@@ -26,6 +28,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
     {
         _projectRoot = ctx.Config.ProjectRoot;
         _logger = ctx.Logger;
+        _slugify = ctx.Config.SlugifyUrls ? ctx.Config.Slugify : null;
 
         var config = ctx.Config.ImportedDocs;
         _pushedDocsDir = config.PushedDocsDir;
@@ -247,18 +250,16 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                 SourcePath = filePath,
                 RelativePath = relPath,
                 Url = url,
-                OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, url.TrimStart('/'), "index.html"),
+                OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url)),
                 RawMarkdown = content,
                 IsGenerated = false
             };
 
-            // Extract front-matter and apply overrides
-            ExtractFrontMatterAndApplyOverrides(page, source);
+            ApplyFrontMatter(page, source?.FrontMatterDefaults);
 
             if (source?.IncludeSourceMarker == true)
             {
-                page.Meta["import_source"] = source.Repository;
-                page.Meta["import_url"] = source.Repository;
+                AddSourceMarker(page, source.Repository);
             }
 
             return page;
@@ -270,77 +271,59 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         }
     }
 
-    private void ExtractFrontMatterAndApplyOverrides(Page page, ImportedDocsPullSource? source)
+    /// <summary>Parses the page's own front matter with the same reader used for discovered
+    /// pages, then fills any key the source did not set from the configured defaults.</summary>
+    private static void ApplyFrontMatter(Page page, IReadOnlyDictionary<string, object?>? defaults)
     {
-        var lines = page.RawMarkdown.Split('\n');
+        var (parsed, body) = FrontMatter.Split(page.RawMarkdown);
+        page.RawMarkdown = body;
+
         var meta = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in parsed)
+            meta[key] = value;
 
-        // Simple YAML front-matter parsing (---...---)
-        if (lines.Length > 0 && lines[0].Trim() == "---")
+        if (defaults is not null)
         {
-            var endIdx = Array.FindIndex(lines, 1, l => l.Trim() == "---");
-            if (endIdx > 1)
-            {
-                for (int i = 1; i < endIdx; i++)
-                {
-                    var line = lines[i];
-                    var colonIdx = line.IndexOf(':');
-                    if (colonIdx > 0)
-                    {
-                        var key = line[..colonIdx].Trim();
-                        var value = line[(colonIdx + 1)..].Trim();
-                        meta[key] = ParseYamlValue(value);
-                    }
-                }
-
-                // Remove front-matter from raw markdown
-                page.RawMarkdown = string.Join("\n", lines[(endIdx + 1)..]);
-            }
-        }
-
-        // Apply front-matter defaults from the import source config
-        if (source?.FrontMatterDefaults is not null)
-        {
-            foreach (var (key, value) in source.FrontMatterDefaults)
-            {
+            foreach (var (key, value) in defaults)
                 meta.TryAdd(key, value);
-            }
         }
 
         page.FrontMatter = meta;
 
-        // Populate title if present in front-matter
-        if (meta.TryGetValue("title", out var titleObj) && titleObj is string title)
-        {
+        if (meta.TryGetValue("title", out var t) && t is string title && title.Length > 0)
             page.Title = title;
-        }
         else if (string.IsNullOrEmpty(page.Title))
-        {
-            page.Title = Path.GetFileNameWithoutExtension(page.SourcePath);
-        }
+            page.Title = Path.GetFileNameWithoutExtension(page.RelativePath);
+
+        if (meta.TryGetValue("page_title", out var pt) && pt is string pageTitle && pageTitle.Length > 0)
+            page.PageTitle = pageTitle;
+        if (meta.TryGetValue("nav_title", out var nt) && nt is string navTitle && navTitle.Length > 0)
+            page.NavTitle = navTitle;
+        if (meta.TryGetValue("tag_title", out var gt) && gt is string tagTitle && tagTitle.Length > 0)
+            page.TagTitle = tagTitle;
     }
 
-    private object? ParseYamlValue(string value)
+    private static void AddSourceMarker(Page page, string source)
     {
-        value = value.Trim('"', '\'');
-        if (value.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
-        if (value.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
-        if (int.TryParse(value, out var intVal)) return intVal;
-        return value;
+        var meta = new Dictionary<string, object?>(page.FrontMatter, StringComparer.OrdinalIgnoreCase);
+        meta.TryAdd("import_source", source);
+        meta.TryAdd("import_url", page.Url);
+        page.FrontMatter = meta;
     }
 
-    private string ComputeUrl(string relativePath, string? destinationPath)
+    /// <summary>Maps a source-relative path onto a site URL, nesting the source's own directory
+    /// structure beneath <paramref name="destinationPath"/> so cross-links inside the imported
+    /// set keep resolving.</summary>
+    internal string ComputeUrl(string relativePath, string? destinationPath)
     {
-        // Remove .md extension, use forward slashes, add trailing slash
-        var path = relativePath[..^3]; // Remove ".md"
-        path = path.Replace('\\', '/');
+        var path = relativePath.Replace('\\', '/').TrimStart('/');
 
         if (!string.IsNullOrEmpty(destinationPath))
         {
-            path = destinationPath.TrimEnd('/') + "/" + Path.GetFileName(path);
+            path = destinationPath.Replace('\\', '/').Trim('/') + "/" + path;
         }
 
-        return "/" + path.Trim('/') + "/";
+        return ContentDiscovery.UrlFor(path, _slugify);
     }
 
     private async Task<int> ImportS3SourceAsync(SiteContext site, ImportedDocsS3Source source, CancellationToken ct)
@@ -384,7 +367,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                         continue;
                     }
 
-                    var page = await LoadPageFromS3Async(s3Client, source, obj.Key, relPath, ct);
+                    var page = await LoadPageFromS3Async(s3Client, source, site, obj.Key, relPath, ct);
                     if (page is not null)
                     {
                         site.Pages.Add(page);
@@ -435,6 +418,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
     private async Task<Page?> LoadPageFromS3Async(
         IAmazonS3 s3Client,
         ImportedDocsS3Source source,
+        SiteContext site,
         string s3Key,
         string relPath,
         CancellationToken ct)
@@ -447,44 +431,22 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
             using var reader = new StreamReader(response.ResponseStream);
             var content = await reader.ReadToEndAsync(ct);
 
+            var url = ComputeUrl(relPath, source.DestinationPath);
+
             var page = new Page
             {
                 SourcePath = $"s3://{source.Bucket}/{s3Key}",
                 RelativePath = relPath,
-                Url = ComputeUrl(relPath, source.DestinationPath),
-                Title = Path.GetFileNameWithoutExtension(relPath),
+                Url = url,
+                OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url)),
                 RawMarkdown = content,
             };
 
-            // Extract front-matter and apply overrides
-            ExtractFrontMatterAndApplyOverrides(page, null);
+            ApplyFrontMatter(page, source.FrontMatterDefaults);
 
-            // Add S3-specific front-matter defaults
-            var meta = new Dictionary<string, object?>(page.FrontMatter, StringComparer.OrdinalIgnoreCase);
-
-            // Apply front-matter defaults from source config
-            if (source.FrontMatterDefaults is not null)
-            {
-                foreach (var (key, value) in source.FrontMatterDefaults)
-                {
-                    meta.TryAdd(key, value);
-                }
-            }
-
-            // Add source marker if requested
             if (source.IncludeSourceMarker)
             {
-                var s3Url = $"https://{source.Bucket}.s3.amazonaws.com/{s3Key}";
-                meta.TryAdd("import_source", s3Url);
-                meta.TryAdd("import_url", ComputeUrl(relPath, source.DestinationPath));
-            }
-
-            page.FrontMatter = meta;
-
-            // Update title from front-matter if present
-            if (meta.TryGetValue("title", out var titleObj) && titleObj is string title)
-            {
-                page.Title = title;
+                AddSourceMarker(page, $"https://{source.Bucket}.s3.amazonaws.com/{s3Key}");
             }
 
             return page;

@@ -45,7 +45,48 @@ public static class JsonConfigLoader
             Deploy = ParseDeploy(root.Get("deploy").AsMap()),
             Optimize = ParseOptimize(root.Get("optimize").AsMap()),
             Validation = ParseValidation(root.Get("validation").AsMap()),
+            ImportedDocs = ParseImportedDocs(root.Get("importedDocs").AsMap()),
         };
+    }
+
+    private static ImportedDocsConfig ParseImportedDocs(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        PushedDocsDir = m.Get("pushedDocsDir").AsString(),
+        PullSources = [.. m.Get("pullSources").AsList().Select(x => ParsePullSource(x.AsMap()))],
+        S3Sources = [.. m.Get("s3Sources").AsList().Select(x => ParseS3Source(x.AsMap()))],
+    };
+
+    private static ImportedDocsPullSource ParsePullSource(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Repository = Required(m, "repository", "importedDocs.pullSources"),
+        Reference = m.Get("reference").AsString(),
+        SourcePath = m.Get("sourcePath").AsString() ?? "docs",
+        DestinationPath = m.Get("destinationPath").AsString(),
+        AuthTokenEnvVar = m.Get("authTokenEnvVar").AsString(),
+        ScheduleCron = m.Get("scheduleCron").AsString(),
+        IncludeSourceMarker = m.Get("includeSourceMarker").AsBool(false),
+        Exclude = StringList(m.Get("exclude")),
+        FrontMatterDefaults = m.Get("frontMatterDefaults").AsMap(),
+    };
+
+    private static ImportedDocsS3Source ParseS3Source(IReadOnlyDictionary<string, object?> m) => new()
+    {
+        Bucket = Required(m, "bucket", "importedDocs.s3Sources"),
+        Prefix = Required(m, "prefix", "importedDocs.s3Sources"),
+        Region = Required(m, "region", "importedDocs.s3Sources"),
+        DestinationPath = m.Get("destinationPath").AsString(),
+        CredentialsEnvVar = m.Get("credentialsEnvVar").AsString(),
+        IncludeSourceMarker = m.Get("includeSourceMarker").AsBool(false),
+        Exclude = StringList(m.Get("exclude")),
+        FrontMatterDefaults = m.Get("frontMatterDefaults").AsMap(),
+    };
+
+    private static string Required(IReadOnlyDictionary<string, object?> m, string key, string section)
+    {
+        var value = m.Get(key).AsString();
+        return string.IsNullOrWhiteSpace(value)
+            ? throw new InvalidOperationException($"Each entry in '{section}' requires a non-empty '{key}'.")
+            : value;
     }
 
     private static ValidationConfig ParseValidation(IReadOnlyDictionary<string, object?> m) => new()

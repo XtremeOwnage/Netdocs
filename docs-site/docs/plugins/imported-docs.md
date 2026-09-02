@@ -12,14 +12,15 @@ It implements `IImportHook.OnImportAsync`, which runs after content discovery an
 
 ### Minimal Configuration
 
-Enable the plugin in your `appsettings.json`:
+Enable the plugin in your `appsettings.json`, and configure it under `importedDocs` in the
+same `Netdocs` section:
 
 ```json
 {
-  "plugins": [
-    { "name": "imported-docs" }
-  ],
-  "siteConfig": {
+  "Netdocs": {
+    "plugins": [
+      { "name": "imported-docs" }
+    ],
     "importedDocs": {
       "pushedDocsDir": "imported"
     }
@@ -28,6 +29,9 @@ Enable the plugin in your `appsettings.json`:
 ```
 
 This enables push-based imports. External repos can push documentation to the `/imported` directory.
+
+`importedDocs` is read by the JSON config loader, so a site still running from `mkdocs.yml`
+needs to move to `appsettings.json` to use this plugin.
 
 ## Import hook behavior
 
@@ -44,7 +48,7 @@ This enables push-based imports. External repos can push documentation to the `/
 
 ```json
 {
-  "siteConfig": {
+  "Netdocs": {
     "importedDocs": {
       "pushedDocsDir": "imported",
       "pullSources": [
@@ -228,10 +232,10 @@ jobs:
 
 ```json
 {
-  "plugins": [
-    { "name": "imported-docs" }
-  ],
-  "siteConfig": {
+  "Netdocs": {
+    "plugins": [
+      { "name": "imported-docs" }
+    ],
     "importedDocs": {
       "pushedDocsDir": "imported",
       "pullSources": [
@@ -267,10 +271,10 @@ jobs:
 
 ```json
 {
-  "plugins": [
-    { "name": "imported-docs" }
-  ],
-  "siteConfig": {
+  "Netdocs": {
+    "plugins": [
+      { "name": "imported-docs" }
+    ],
     "importedDocs": {
       "s3Sources": [
         {
@@ -556,15 +560,23 @@ This metadata is available in your templates for displaying "View on GitHub" or 
 
 ## URL Mapping
 
-Imported files are mapped to URLs following Netdocs conventions:
+Imported files are mapped to URLs with the same rules discovered pages use, so an imported
+tree keeps its shape and its relative cross-links keep resolving.
 
-- File: `docs/guide.md` with `destinationPath: "products/api"`
-- URL: `/products/api/guide/`
+| Source file | `destinationPath` | URL |
+|---|---|---|
+| `guide.md` | `products/api` | `/products/api/guide/` |
+| `integrations/citrix.md` | `products/api` | `/products/api/integrations/citrix/` |
+| `index.md` | `products/api` | `/products/api/` |
+| `integrations/index.md` | `products/api` | `/products/api/integrations/` |
+| `guide.md` | _(omitted)_ | `/guide/` |
 
 Behavior:
-- `.md` extension is removed
-- Trailing slash always added
-- Destination is applied at directory level
+
+- The `.md` extension is removed and a trailing slash is added.
+- Directories below the source path are preserved beneath `destinationPath`.
+- `index.md` and `README.md` collapse onto their containing directory.
+- When the site sets `slugify.urls`, imported segments are slugified too.
 
 ## Build Pipeline Integration
 

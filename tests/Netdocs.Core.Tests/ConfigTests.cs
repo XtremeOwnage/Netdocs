@@ -6,6 +6,104 @@ namespace Netdocs.Core.Tests;
 public class ConfigTests
 {
     [Fact]
+    public void JsonConfigLoader_ParsesImportedDocsSources()
+    {
+        var json = """
+            {
+              "Netdocs": {
+                "siteName": "Test Site",
+                "importedDocs": {
+                  "pushedDocsDir": "imported",
+                  "pullSources": [
+                    {
+                      "repository": "https://github.com/owner/repo.git",
+                      "reference": "v2.0",
+                      "sourcePath": "documentation",
+                      "destinationPath": "products/cli",
+                      "authTokenEnvVar": "DOCS_PAT",
+                      "includeSourceMarker": true,
+                      "exclude": ["draft/**"],
+                      "frontMatterDefaults": { "nav_title": "CLI" }
+                    }
+                  ],
+                  "s3Sources": [
+                    {
+                      "bucket": "shared-docs",
+                      "prefix": "api-docs/",
+                      "region": "us-east-1",
+                      "destinationPath": "products/api"
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+        var path = Path.Combine(Path.GetTempPath(), $"appsettings_{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, json);
+        try
+        {
+            var config = JsonConfigLoader.Load(path);
+
+            Assert.Equal("imported", config.ImportedDocs.PushedDocsDir);
+
+            var pull = Assert.Single(config.ImportedDocs.PullSources);
+            Assert.Equal("https://github.com/owner/repo.git", pull.Repository);
+            Assert.Equal("v2.0", pull.Reference);
+            Assert.Equal("documentation", pull.SourcePath);
+            Assert.Equal("products/cli", pull.DestinationPath);
+            Assert.Equal("DOCS_PAT", pull.AuthTokenEnvVar);
+            Assert.True(pull.IncludeSourceMarker);
+            Assert.Equal(["draft/**"], pull.Exclude);
+            Assert.Equal("CLI", pull.FrontMatterDefaults["nav_title"]);
+
+            var s3 = Assert.Single(config.ImportedDocs.S3Sources);
+            Assert.Equal("shared-docs", s3.Bucket);
+            Assert.Equal("api-docs/", s3.Prefix);
+            Assert.Equal("us-east-1", s3.Region);
+            Assert.Equal("products/api", s3.DestinationPath);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void JsonConfigLoader_DefaultsImportedDocsToEmpty()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"appsettings_{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """{ "Netdocs": { "siteName": "Test Site" } }""");
+        try
+        {
+            var config = JsonConfigLoader.Load(path);
+
+            Assert.Null(config.ImportedDocs.PushedDocsDir);
+            Assert.Empty(config.ImportedDocs.PullSources);
+            Assert.Empty(config.ImportedDocs.S3Sources);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void JsonConfigLoader_RejectsS3SourceMissingRequiredKey()
+    {
+        var json = """
+            {
+              "Netdocs": {
+                "importedDocs": {
+                  "s3Sources": [ { "bucket": "shared-docs", "region": "us-east-1" } ]
+                }
+              }
+            }
+            """;
+        var path = Path.Combine(Path.GetTempPath(), $"appsettings_{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, json);
+        try
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => JsonConfigLoader.Load(path));
+            Assert.Contains("prefix", ex.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void YamlTree_ResolvesEnvTagWithDefault()
     {
         var tree = YamlTree.Parse("value: !ENV [DOES_NOT_EXIST_VAR, fallback]").AsMap();

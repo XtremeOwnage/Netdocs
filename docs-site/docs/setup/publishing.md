@@ -142,6 +142,10 @@ Inputs:
 The action runs on Linux, Windows, and macOS runners (x64, plus Apple Silicon). Pin to a
 major tag like `@v1` for stability, or a full version tag for reproducible builds.
 
+Any AWS credentials already configured on the runner are forwarded into the build, so a
+preceding `aws-actions/configure-aws-credentials` step is enough to authenticate plugins
+that read from S3 — [imported docs](../plugins/imported-docs.md) pull sources, for example.
+
 ## Built-in deploy targets
 
 Instead of wiring up a workflow, `netdocs` can publish the build itself. Add a `deploy`

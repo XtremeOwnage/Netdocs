@@ -114,6 +114,22 @@ runs:
 
         echo "Running: netdocs ${cmd[*]} (in ${run_dir})"
 
+        # Forward AWS credentials so plugins that reach S3 during the build (imported-docs
+        # pull sources, for one) can authenticate. A web-identity token lives in a file on
+        # the runner, so that file has to be mounted as well as named.
+        aws_args=()
+        for var in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN \
+                   AWS_REGION AWS_DEFAULT_REGION AWS_ROLE_ARN AWS_ROLE_SESSION_NAME; do
+          if [ -n "${!var:-}" ]; then
+            aws_args+=(-e "${var}")
+          fi
+        done
+        if [ -n "${AWS_WEB_IDENTITY_TOKEN_FILE:-}" ] && [ -f "${AWS_WEB_IDENTITY_TOKEN_FILE}" ]; then
+          token_path="$(cd "$(dirname "${AWS_WEB_IDENTITY_TOKEN_FILE}")" && pwd)/$(basename "${AWS_WEB_IDENTITY_TOKEN_FILE}")"
+          aws_args+=(-v "${token_path}:/tmp/aws-web-identity-token:ro")
+          aws_args+=(-e "AWS_WEB_IDENTITY_TOKEN_FILE=/tmp/aws-web-identity-token")
+        fi
+
         # Mount the checked-out workspace and run as the runner user so generated
         # files (e.g. ./site) are owned by the runner and readable by later steps.
         docker run --rm \
@@ -121,6 +137,7 @@ runs:
           -w "${run_dir}" \
           -u "$(id -u):$(id -g)" \
           -e HOME=/tmp \
+          "${aws_args[@]}" \
           "${ref}" "${cmd[@]}"
 
         echo "image=${ref}" >> "${GITHUB_OUTPUT}"

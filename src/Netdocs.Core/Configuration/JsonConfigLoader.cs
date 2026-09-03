@@ -67,6 +67,8 @@ public static class JsonConfigLoader
         IncludeSourceMarker = m.Get("includeSourceMarker").AsBool(false),
         Exclude = StringList(m.Get("exclude")),
         FrontMatterDefaults = m.Get("frontMatterDefaults").AsMap(),
+        RepoUrl = m.Get("repoUrl").AsString(),
+        EditUri = m.Get("editUri").AsString(),
     };
 
     private static ImportedDocsS3Source ParseS3Source(IReadOnlyDictionary<string, object?> m) => new()
@@ -79,6 +81,8 @@ public static class JsonConfigLoader
         IncludeSourceMarker = m.Get("includeSourceMarker").AsBool(false),
         Exclude = StringList(m.Get("exclude")),
         FrontMatterDefaults = m.Get("frontMatterDefaults").AsMap(),
+        RepoUrl = m.Get("repoUrl").AsString(),
+        EditUri = m.Get("editUri").AsString(),
     };
 
     private static string Required(IReadOnlyDictionary<string, object?> m, string key, string section)

@@ -58,6 +58,17 @@ public sealed class Page
     /// <summary>Arbitrary per-page state shared between plugins.</summary>
     public Dictionary<string, object?> Meta { get; } = [];
 
+    /// <summary>
+    /// Where this page's "edit"/"view source" links should point, when the page does not come from
+    /// this site's own repository. Null means the site-wide <c>repoUrl</c>/<c>editUri</c> apply, as
+    /// they do for ordinary content. A non-null value is authoritative — and either link inside it
+    /// may itself be null, which means "this page has no source to link to, show no button".
+    /// <para>Set by importers: an imported page's <see cref="RelativePath"/> is where it landed in
+    /// this site, not where it lives upstream, so the site-wide pattern would build a link into the
+    /// wrong repository at a path that does not exist there.</para>
+    /// </summary>
+    public SourceLinks? SourceLinks { get; set; }
+
     /// <summary>True when produced by an <see cref="IContentGenerator"/> rather than a source file.</summary>
     public bool IsGenerated { get; init; }
 
@@ -74,3 +85,10 @@ public sealed class TocEntry
     public required string Title { get; init; }
     public IReadOnlyList<TocEntry> Children { get; set; } = [];
 }
+
+/// <summary>
+/// Absolute "edit"/"view source" URLs for a page whose origin is not this site's repository.
+/// A null member means that link is unavailable and its button should not render — better than
+/// pointing somewhere plausible but wrong.
+/// </summary>
+public sealed record SourceLinks(string? Edit, string? View);

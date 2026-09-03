@@ -46,7 +46,16 @@ public static class PageRenderer
         // Per-page "edit"/"view source" links. Only meaningful for real source files
         // (not generated pages) when the repo URL + edit_uri are configured.
         string? editUrl = null, viewUrl = null;
-        if (!page.IsGenerated
+        if (page.SourceLinks is { } imported)
+        {
+            // The page came from somewhere other than this repository and its origin already
+            // decided where (if anywhere) these links point. Either may be null, meaning the
+            // upstream location is unknown and no button should render — the site-wide pattern
+            // below would otherwise link into this repo at a path that does not exist in it.
+            editUrl = imported.Edit;
+            viewUrl = imported.View;
+        }
+        else if (!page.IsGenerated
             && !string.IsNullOrEmpty(site.Config.RepoUrl)
             && !string.IsNullOrEmpty(site.Config.EditUri))
         {

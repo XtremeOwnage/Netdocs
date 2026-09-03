@@ -95,6 +95,8 @@ Each pull source is a repository to pull documentation from:
 | `includeSourceMarker` | bool | `false` | If `true`, adds `import_source` and `import_url` metadata to imported pages. Useful for displaying "view source" links. |
 | `exclude` | array | `[]` | Glob patterns for files to exclude (e.g., `["draft/**", "INTERNAL-*.md"]`). Supports `*` (segment) and `**` (any dirs). |
 | `frontMatterDefaults` | object | `{}` | Front-matter key-value pairs to apply as fallback for imported pages. Extracted values take precedence. |
+| `repoUrl` | string | _(derived)_ | Browsable URL of the source repo for edit/view links, e.g. `"https://github.com/org/handbook"`. Derived from `repository` when omitted. |
+| `editUri` | string | _(derived)_ | Path appended to `repoUrl` to reach an editable file, e.g. `"edit/main/docs"`. Derived from the checked-out branch and `sourcePath` when omitted. |
 
 ### S3 Source Configuration
 
@@ -125,6 +127,43 @@ Pull documentation directly from S3 buckets (no git clone overhead):
 | `includeSourceMarker` | bool | `false` | If `true`, adds `import_source` with S3 URL and `import_url` metadata. |
 | `exclude` | array | `[]` | Glob patterns for files to exclude. |
 | `frontMatterDefaults` | object | `{}` | Front-matter key-value pairs to apply as fallback. |
+| `repoUrl` | string | _(none)_ | Browsable URL of the repo backing this bucket, for edit/view links. Without it (and `editUri`) imported pages show no source buttons. |
+| `editUri` | string | _(none)_ | Path appended to `repoUrl` to reach an editable file, e.g. `"edit/main/docs"`. |
+
+## Edit and view source links
+
+An imported page lives in someone else's repository, but its path in *this* site is wherever
+`destinationPath` put it. The site-wide `repoUrl`/`editUri` would therefore aim the "edit this page"
+button at this repo, at a path that only exists upstream. Imported pages resolve their own links
+instead:
+
+1. **`repoUrl` + `editUri` on the source**, if you set them — always wins.
+2. **Derived from the clone** for pull sources: the repository URL gives the host (an
+   `git@host:org/repo.git` remote is rewritten to its `https://` form), and the branch actually
+   checked out plus `sourcePath` give the rest. A source that never pinned a `reference` still gets
+   correct links this way.
+3. **No buttons at all**, if neither applies — a repository pinned to a tag or commit (detached, so
+   there is no branch to build a URL around), a remote that is a local path, or an S3 source with
+   nothing configured. A missing button is better than one that 404s.
+
+S3 sources have nothing to derive from, so they need both options to show links.
+
+```json
+{
+  "repository": "git@github.com:org/handbook.git",
+  "sourcePath": "docs",
+  "destinationPath": "imported/handbook",
+  "repoUrl": "https://github.com/org/handbook",
+  "editUri": "edit/main/docs"
+}
+```
+
+!!! note "Page dates for imported content"
+    [git-revision-date](git-revision-date.md) reads *this* repository's history, which knows nothing
+    about imported files. It no longer falls back to their file timestamps either, since those are
+    just the moment the import cloned them — which would show every imported page as updated today,
+    on every build. Imported pages therefore carry no git-derived dates; set them through
+    `frontMatterDefaults` if you need them.
 
 ## Use Cases
 

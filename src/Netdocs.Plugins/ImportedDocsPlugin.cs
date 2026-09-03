@@ -176,6 +176,10 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
             return 0;
         }
 
+        // Resolve where this source's files can be edited upstream. The checked-out branch is
+        // read from the clone, so a source that never pinned a `reference` still gets real links.
+        var sourceLinks = SourceLinkBuilder.ForPullSource(source, HeadBranch(repo), _logger);
+
         var count = 0;
         var excludePatterns = source.Exclude?.ToList() ?? [];
         var mdFiles = Directory.EnumerateFiles(docsPath, "*.md", SearchOption.AllDirectories);
@@ -192,7 +196,7 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                 continue;
             }
 
-            var page = await LoadPageFromFileAsync(file, docsPath, source, site);
+            var page = await LoadPageFromFileAsync(file, docsPath, source, site, sourceLinks);
             if (page is not null)
             {
                 site.Pages.Add(page);
@@ -230,11 +234,28 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
         return Regex.IsMatch(path, regexPattern);
     }
 
+    /// <summary>The clone's checked-out branch, or null if it cannot be determined (detached
+    /// HEAD from a pinned tag or commit, say) — in which case there is no branch to build an
+    /// edit URL around.</summary>
+    private static string? HeadBranch(Repository repo)
+    {
+        try
+        {
+            var name = repo.Head?.FriendlyName;
+            return string.IsNullOrWhiteSpace(name) || name == "(no branch)" ? null : name;
+        }
+        catch (LibGit2SharpException)
+        {
+            return null;
+        }
+    }
+
     private async Task<Page?> LoadPageFromFileAsync(
         string filePath,
         string baseDir,
         ImportedDocsPullSource? source,
-        SiteContext site)
+        SiteContext site,
+        SourceLinkBuilder? links = null)
     {
         try
         {
@@ -254,7 +275,11 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                 Url = url,
                 OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url)),
                 RawMarkdown = content,
-                IsGenerated = false
+                IsGenerated = false,
+                // Where the file lives upstream, not where it landed here. Null when the origin
+                // is unknown, which renders no button rather than a link into the wrong repo.
+                SourceLinks = links?.For(Path.GetRelativePath(baseDir, filePath).Replace('\\', '/'))
+                    ?? new SourceLinks(null, null),
             };
 
             ApplyFrontMatter(page, source?.FrontMatterDefaults);
@@ -443,6 +468,9 @@ public sealed class ImportedDocsPlugin : IPlugin, IImportHook
                 Url = url,
                 OutputPath = Path.Combine(site.Config.AbsoluteSiteDir, ContentDiscovery.OutputFileFor(url)),
                 RawMarkdown = content,
+                // A bucket carries no repository information, so links exist only if configured.
+                SourceLinks = SourceLinkBuilder.ForS3Source(source)?.For(relPath)
+                    ?? new SourceLinks(null, null),
             };
 
             ApplyFrontMatter(page, source.FrontMatterDefaults);

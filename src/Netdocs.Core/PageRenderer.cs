@@ -68,6 +68,7 @@ public static class PageRenderer
             ["base_url"] = BaseUrl(page.Url),
             ["is_homepage"] = string.IsNullOrEmpty(page.Url),
             ["features"] = new HashSet<string>(site.Config.Theme.Features, StringComparer.OrdinalIgnoreCase),
+            ["hide"] = HiddenElements(page),
             ["highlight"] = site.Config.Theme.Highlight,
             ["extra"] = site.Config.Extra,
             ["stylesheets"] = ResolveHrefs(site.Config.ExtraCss, assets.Stylesheets),
@@ -107,6 +108,28 @@ public static class PageRenderer
 
     private static string? FrontMatterText(Page page, string key) =>
         page.FrontMatter.TryGetValue(key, out var v) && v is string s && s.Trim().Length > 0 ? s.Trim() : null;
+
+    /// <summary>Material's <c>hide:</c> front matter — the chrome a page opts out of
+    /// (<c>toc</c>, <c>nav</c>, <c>path</c>). Accepts a list or a single value.</summary>
+    internal static HashSet<string> HiddenElements(Page page)
+    {
+        var hidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!page.FrontMatter.TryGetValue("hide", out var value)) return hidden;
+
+        if (value is string single)
+        {
+            hidden.Add(single.Trim());
+        }
+        else if (value is IEnumerable<object?> items)
+        {
+            foreach (var item in items)
+            {
+                if (item?.ToString()?.Trim() is { Length: > 0 } name) hidden.Add(name);
+            }
+        }
+
+        return hidden;
+    }
 
     /// <summary>
     /// Social meta tags must carry absolute URLs to be usable by crawlers, so a site-relative path

@@ -111,6 +111,7 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
       {{~ end ~}}
       <main class="md-main" data-md-component="main">
         <div class="md-main__inner md-grid">
+          {{~ if !(hide | array.contains "nav") ~}}
           <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
@@ -124,7 +125,8 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
               </div>
             </div>
           </div>
-          {{~ if !toc_integrate ~}}
+          {{~ end ~}}
+          {{~ if !toc_integrate && !(hide | array.contains "toc") ~}}
           <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
             <div class="md-sidebar__scrollwrap">
               <div class="md-sidebar__inner">
@@ -134,7 +136,9 @@ toc_integrate = features | array.contains "toc.integrate" ~}}
           </div>
           {{~ end ~}}
           <div class="md-content" data-md-component="content">
+{{~ if !(hide | array.contains "path") ~}}
 {{ include "partials/breadcrumbs.html" }}
+{{~ end ~}}
             <article class="md-content__inner md-typeset">
 {{ include "partials/content-actions.html" }}
 {{~ if page.meta.is_post && page.meta.post_tags && (array.size page.meta.post_tags) > 0 ~}}

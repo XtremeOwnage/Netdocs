@@ -91,7 +91,31 @@ matching entry in your `nav` configuration — a config `nav` title always wins 
 | `icon` | Navigation icon for the page (any bundled icon name, e.g. `material/key`). |
 | `tags` | List of tags; collected by the [tags plugin](../plugins/tags.md). |
 | `template` | Render the page with a different theme template. |
-| `hide` | Awesome-pages style `hide: true` drops a folder/page from the nav. |
+| `hide` | List of theme chrome to drop from the page — `toc`, `nav`, `path`. See below. |
+
+## Hiding theme chrome
+
+`hide` takes a list naming the parts of the page furniture to leave out:
+
+```yaml
+---
+title: Support-Group ABAC Teams
+hide:
+  - toc
+---
+```
+
+| Value | Effect |
+|---|---|
+| `toc` | Drops the right-hand table-of-contents column, giving the content its full width. Useful for wide tables. |
+| `nav` | Drops the left-hand navigation sidebar. |
+| `path` | Drops the breadcrumb trail above the page title. |
+
+A single value may be given without the list (`hide: toc`). Names are matched
+case-insensitively, and unrecognised entries are ignored.
+
+Not to be confused with `hide: true` in a directory's `.pages` file, which drops
+that folder from the navigation entirely.
 
 !!! note "Directory-wide defaults"
     Repeating the same front matter on every page gets tedious. The

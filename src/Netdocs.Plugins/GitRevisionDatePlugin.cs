@@ -49,6 +49,10 @@ public sealed class GitRevisionDatePlugin : IPlugin, IBuildHook
             {
                 if (page.IsGenerated || !File.Exists(page.SourcePath)) continue;
                 var rel = Path.GetRelativePath(workDir, page.SourcePath).Replace('\\', '/');
+                // A page imported from elsewhere sits outside this repository, so it has no history
+                // here. Falling through to the filesystem would stamp it with the moment the import
+                // cloned it -- "last updated: today", every build. Better to leave it unset.
+                if (Outside(rel)) continue;
                 if (updated.TryGetValue(rel, out var u)) { page.Updated = u; matched++; }
                 else page.Updated ??= File.GetLastWriteTimeUtc(page.SourcePath);
                 if (_enableCreationDate && created.TryGetValue(rel, out var cr)) page.Created ??= cr;
@@ -87,11 +91,18 @@ public sealed class GitRevisionDatePlugin : IPlugin, IBuildHook
         return (created, updated);
     }
 
+    /// <summary>True when a repo-relative path escapes the repository (imported content staged in
+    /// a temp clone, for example), so this repository has nothing to say about its history.</summary>
+    private static bool Outside(string relativePath) =>
+        relativePath.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relativePath);
+
     private static void ApplyFilesystem(SiteContext site)
     {
         foreach (var page in site.Pages)
         {
             if (page.IsGenerated || !File.Exists(page.SourcePath)) continue;
+            if (page.SourceLinks is not null) continue; // imported: not this repo's history, and
+                                                        // its mtime is just when the import ran
             page.Updated ??= File.GetLastWriteTimeUtc(page.SourcePath);
             page.Created ??= File.GetCreationTimeUtc(page.SourcePath);
         }

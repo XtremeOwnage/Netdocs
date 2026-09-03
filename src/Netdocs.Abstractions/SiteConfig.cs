@@ -338,6 +338,20 @@ public sealed class ImportedDocsPullSource
     /// e.g., ["*.draft.md", "private/**"]
     /// </summary>
     public IReadOnlyList<string>? Exclude { get; init; }
+
+    /// <summary>
+    /// Web URL of the source repository for this page's "edit"/"view source" links, e.g.
+    /// "https://github.com/org/repo". Derived from <see cref="Repository"/> when omitted.
+    /// </summary>
+    public string? RepoUrl { get; init; }
+
+    /// <summary>
+    /// Path segment appended to <see cref="RepoUrl"/> to reach an editable file, e.g.
+    /// "edit/main/docs". Derived from the cloned branch and <see cref="SourcePath"/> when omitted.
+    /// <para>When neither this nor a derivation is available the page renders no edit/view button,
+    /// rather than one pointing at a file that does not exist.</para>
+    /// </summary>
+    public string? EditUri { get; init; }
 }
 
 /// <summary>Configuration for pulling docs from an S3 bucket.</summary>
@@ -383,6 +397,17 @@ public sealed class ImportedDocsS3Source
     /// Helps document origins of external content.
     /// </summary>
     public bool IncludeSourceMarker { get; init; }
+
+    /// <summary>
+    /// Web URL of the repository backing this bucket's content, for "edit"/"view source" links.
+    /// There is nothing to derive it from, so without both this and <see cref="EditUri"/> the
+    /// imported pages render no source buttons.
+    /// </summary>
+    public string? RepoUrl { get; init; }
+
+    /// <summary>Path segment appended to <see cref="RepoUrl"/> to reach an editable file,
+    /// e.g. "edit/main/docs".</summary>
+    public string? EditUri { get; init; }
 
     /// <summary>
     /// Optional glob patterns to exclude from import.

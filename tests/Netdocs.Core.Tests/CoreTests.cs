@@ -300,7 +300,15 @@ public class MarkdownTests
     {
         var html = Render("```mermaid\ngraph TD; A-->B;\n```\n");
         Assert.Contains("<pre class=\"mermaid\">", html);
-        Assert.Contains("A-->B", html);
+        Assert.Contains("A--&gt;B", html);
+    }
+
+    [Fact]
+    public void MermaidFence_EscapesLabelHtml()
+    {
+        var html = Render("```mermaid\nflowchart LR\n  A[\"one<br />two\"]\n```\n");
+        Assert.Contains("one&lt;br /&gt;two", html);
+        Assert.DoesNotContain("<br />", html);
     }
 
     [Fact]

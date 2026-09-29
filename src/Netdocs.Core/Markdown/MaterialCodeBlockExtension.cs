@@ -42,7 +42,8 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         {
             renderer.EnsureLine();
             renderer.WriteLine("<pre class=\"mermaid\">");
-            WriteRawLines(renderer, block);
+            // Escaped so label HTML such as <br /> survives textContent.
+            WriteEscapedLines(renderer, block);
             renderer.WriteLine("</pre>");
             return;
         }
@@ -68,13 +69,6 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         renderer.Write('>');
         WriteEscapedLines(renderer, block);
         renderer.WriteLine("</code></pre></div>");
-    }
-
-    private static void WriteRawLines(HtmlRenderer renderer, LeafBlock block)
-    {
-        var lines = block.Lines.Lines;
-        for (var i = 0; i < block.Lines.Count; i++)
-            renderer.WriteLine(lines[i].Slice.ToString());
     }
 
     private static void WriteEscapedLines(HtmlRenderer renderer, LeafBlock block)

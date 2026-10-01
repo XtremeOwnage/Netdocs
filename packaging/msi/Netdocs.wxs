@@ -1,0 +1,78 @@
+<!--
+  Windows Installer (MSI) package for the Netdocs CLI, built with WiX Toolset v6.
+
+  The package is dual-purpose (Scope="perUserOrMachine"): the setup UI lets the user choose
+  "Just for you" (no admin rights; installs under %LOCALAPPDATA% and adds it to the user PATH)
+  or "Everyone" (elevates; installs under Program Files and adds it to the system PATH).
+
+  Silent installs:
+    msiexec /i netdocs-<version>-win-x64.msi /qn              per-user (default)
+    msiexec /i netdocs-<version>-win-x64.msi /qn ALLUSERS=1   per-machine (run elevated)
+
+  Built by .github/workflows/packages.yml:
+    wix build -arch x64 -ext WixToolset.UI.wixext -d Version=1.2.3 -d SourceExe=... -d LicenseRtf=...
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Netdocs"
+           Manufacturer="Netdocs contributors"
+           Version="$(var.Version)"
+           UpgradeCode="AA0B9289-4400-4711-979C-E21C2526C6F3"
+           Scope="perUserOrMachine"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/XtremeOwnage/Netdocs" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/XtremeOwnage/Netdocs" />
+
+    <!-- WixUI_Advanced provides the "Just for you" / "Everyone" install scope choice. -->
+    <Property Id="ApplicationFolderName" Value="Netdocs" />
+    <Property Id="WixAppFolder" Value="WixPerUserFolder" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
+    <ui:WixUI Id="WixUI_Advanced" />
+
+    <!-- WixUI_Advanced defaults to the 32-bit Program Files and %LOCALAPPDATA%\Apps; point the
+         per-machine folder at 64-bit Program Files and the per-user folder at
+         %LOCALAPPDATA%\Programs (where install.ps1 also installs). -->
+    <CustomAction Id="NetdocsPerUserFolder" Property="WixPerUserFolder"
+                  Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]" Execute="immediate" />
+    <CustomAction Id="NetdocsPerMachineFolder" Property="WixPerMachineFolder"
+                  Value="[ProgramFiles64Folder][ApplicationFolderName]" Execute="immediate" />
+    <InstallUISequence>
+      <Custom Action="NetdocsPerUserFolder" Before="NetdocsPerMachineFolder" />
+      <Custom Action="NetdocsPerMachineFolder" Before="WixSetPerUserFolder" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="NetdocsPerUserFolder" Before="NetdocsPerMachineFolder" />
+      <Custom Action="NetdocsPerMachineFolder" Before="WixSetPerUserFolder" />
+    </InstallExecuteSequence>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="APPLICATIONFOLDER" Name="Netdocs" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Netdocs" Level="1">
+      <Component Directory="APPLICATIONFOLDER" Bitness="always64">
+        <File Id="NetdocsExe" Name="netdocs.exe" Source="$(var.SourceExe)" KeyPath="yes" />
+      </Component>
+
+      <!-- Per-user install: append the install folder to the user's PATH. -->
+      <Component Id="UserPath" Directory="APPLICATIONFOLDER" Bitness="always64"
+                 Condition="NOT (ALLUSERS = 1)">
+        <RegistryValue Root="HKCU" Key="Software\Netdocs" Name="UserPath" Type="integer" Value="1" KeyPath="yes" />
+        <Environment Id="UserPathEntry" Name="PATH" Value="[APPLICATIONFOLDER]"
+                     Action="set" Part="last" System="no" Permanent="no" />
+      </Component>
+
+      <!-- Per-machine install: append the install folder to the system PATH. -->
+      <Component Id="SystemPath" Directory="APPLICATIONFOLDER" Bitness="always64"
+                 Condition="ALLUSERS = 1">
+        <RegistryValue Root="HKLM" Key="Software\Netdocs" Name="SystemPath" Type="integer" Value="1" KeyPath="yes" />
+        <Environment Id="SystemPathEntry" Name="PATH" Value="[APPLICATIONFOLDER]"
+                     Action="set" Part="last" System="yes" Permanent="no" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

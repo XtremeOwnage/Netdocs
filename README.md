@@ -106,9 +106,12 @@ sudo yum install https://github.com/XtremeOwnage/Netdocs/releases/latest/downloa
 **Linux (portable, no package manager):** download the self-contained `netdocs` binary
 from the releases page, `chmod +x netdocs`, and put it on your `PATH`.
 
-**Windows:** download `netdocs.exe` from the
-[releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest) and run it
-directly (optionally add its folder to `PATH`).
+**Windows (`.msi`):** download `netdocs-<version>-win-x64.msi` from the
+[releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest) and run it. Choose
+**Just for you** (no admin rights, adds `netdocs` to your user `PATH`) or **Everyone**
+(installs to Program Files and adds it to the system `PATH`). For a silent install use
+`msiexec /i netdocs-<version>-win-x64.msi /qn`, adding `ALLUSERS=1` from an elevated prompt
+for a machine-wide install. Prefer a bare binary? Download `netdocs.exe` and run it directly.
 
 **Docker:**
 

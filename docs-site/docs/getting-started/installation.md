@@ -36,7 +36,24 @@ Grab the build for your platform from the
 
 === "Windows"
 
-    Install with the one-line PowerShell installer — it downloads the latest `netdocs.exe`
+    Download `netdocs-<version>-win-x64.msi` from the
+    [releases page](https://github.com/XtremeOwnage/Netdocs/releases/latest) and run it.
+    The installer asks whether to install **Just for you** (no admin rights; installs under
+    `%LOCALAPPDATA%` and adds `netdocs` to your user `PATH`) or for **Everyone** (installs
+    under Program Files and adds it to the system `PATH`). Open a new terminal afterwards and
+    run `netdocs --help`. Uninstall it from **Settings > Apps**.
+
+    For unattended installs:
+
+    ```powershell
+    # per-user (default)
+    msiexec /i netdocs-1.2.3-win-x64.msi /qn
+
+    # machine-wide (run from an elevated prompt)
+    msiexec /i netdocs-1.2.3-win-x64.msi /qn ALLUSERS=1
+    ```
+
+    Alternatively, install with the one-line PowerShell installer — it downloads the latest `netdocs.exe`
     to `%LOCALAPPDATA%\Programs\Netdocs` and adds it to your user `PATH`:
 
     ```powershell

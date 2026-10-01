@@ -11,6 +11,12 @@ on:
         description: Package version (without leading v)
         required: false
         default: "0.0.0"
+  # Build (but never publish) the packages when the packaging itself changes.
+  pull_request:
+    branches: [main]
+    paths:
+      - "packaging/**"
+      - ".github/workflows/packages.yml"
 
 permissions:
   contents: write
@@ -32,7 +38,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "value=${{ github.event.inputs.version || '0.0.0' }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish self-contained binaries (linux, windows, macos)
@@ -90,3 +96,117 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: out/*
+
+  msi:
+    # WiX needs Windows Installer, so the MSI is built on a Windows runner from the
+    # win-x64 binary the job above already published.
+    needs: packages
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      WIX_VERSION: "6.0.2"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download packages
+        uses: actions/download-artifact@v7
+        with:
+          name: netdocs-packages
+          path: out
+
+      - name: Resolve version
+        id: version
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { '${{ github.event.inputs.version || '0.0.0' }}' }
+          "value=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Install WiX Toolset
+        run: |
+          dotnet tool install --global wix --version $env:WIX_VERSION
+          wix extension add --global "WixToolset.UI.wixext/$env:WIX_VERSION"
+          wix --version
+
+      - name: Build MSI
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          # WixUI shows the license on its first page; render LICENSE as minimal RTF.
+          $text = Get-Content LICENSE -Raw
+          $sb = [System.Text.StringBuilder]::new('{\rtf1\ansi\deff0{\fonttbl{\f0 Segoe UI;}}\fs18 ')
+          foreach ($ch in $text.ToCharArray()) {
+            switch ($ch) {
+              '\' { [void]$sb.Append('\\') }
+              '{' { [void]$sb.Append('\{') }
+              '}' { [void]$sb.Append('\}') }
+              "`r" { }
+              "`n" { [void]$sb.Append("\par`n") }
+              default {
+                if ([int]$ch -gt 127) { [void]$sb.Append("\u$([int]$ch)?") } else { [void]$sb.Append($ch) }
+              }
+            }
+          }
+          [void]$sb.Append('}')
+          Set-Content -Path License.rtf -Value $sb.ToString() -Encoding ascii -NoNewline
+
+          $msi = "out/netdocs-$env:VERSION-win-x64.msi"
+          wix build packaging/msi/Netdocs.wxs -arch x64 -ext WixToolset.UI.wixext `
+            -d Version=$env:VERSION `
+            -d SourceExe="out/netdocs-$env:VERSION-win-x64.exe" `
+            -d LicenseRtf=License.rtf `
+            -o $msi
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Get-Item $msi
+
+      - name: Smoke-test per-user and per-machine installs
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          $msi = (Resolve-Path "out/netdocs-$env:VERSION-win-x64.msi").Path
+
+          function Invoke-Msi([string[]]$msiArgs) {
+            $p = Start-Process msiexec.exe -ArgumentList $msiArgs -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "msiexec $($msiArgs -join ' ') exited with $($p.ExitCode)" }
+          }
+          function Get-NetdocsPathEntry([string]$scope) {
+            [Environment]::GetEnvironmentVariable('Path', $scope) -split ';' |
+              Where-Object { $_ -and (Test-Path (Join-Path $_ 'netdocs.exe')) }
+          }
+
+          foreach ($case in @(
+              @{ Name = 'per-user';    Scope = 'User';    Extra = @() },
+              @{ Name = 'per-machine'; Scope = 'Machine'; Extra = @('ALLUSERS=1') })) {
+            Write-Host "==> $($case.Name) install"
+            Invoke-Msi (@('/i', "`"$msi`"", '/qn', '/l*v', "`"$($case.Name)-install.log`"") + $case.Extra)
+
+            $dir = Get-NetdocsPathEntry $case.Scope
+            if (-not $dir) { throw "netdocs was not added to the $($case.Scope) PATH" }
+            Write-Host "Installed to $dir (on $($case.Scope) PATH)"
+            & (Join-Path $dir 'netdocs.exe') --version
+            if ($LASTEXITCODE) { throw "netdocs --version failed with $LASTEXITCODE" }
+
+            Write-Host "==> $($case.Name) uninstall"
+            Invoke-Msi (@('/x', "`"$msi`"", '/qn', '/l*v', "`"$($case.Name)-uninstall.log`"") + $case.Extra)
+            if (Get-NetdocsPathEntry $case.Scope) { throw "PATH entry was not removed on uninstall" }
+            if (Test-Path (Join-Path $dir 'netdocs.exe')) { throw "netdocs.exe was not removed on uninstall" }
+          }
+
+      - name: Upload install logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: msi-logs
+          path: "*.log"
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v7
+        with:
+          name: netdocs-msi
+          path: out/*.msi
+
+      - name: Attach to release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: out/*.msi

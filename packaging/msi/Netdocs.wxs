@@ -33,6 +33,22 @@
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtf)" />
     <ui:WixUI Id="WixUI_Advanced" />
 
+    <!-- WixUI_Advanced defaults to the 32-bit Program Files and %LOCALAPPDATA%\Apps; point the
+         per-machine folder at 64-bit Program Files and the per-user folder at
+         %LOCALAPPDATA%\Programs (where install.ps1 also installs). -->
+    <CustomAction Id="NetdocsPerUserFolder" Property="WixPerUserFolder"
+                  Value="[LocalAppDataFolder]Programs\[ApplicationFolderName]" Execute="immediate" />
+    <CustomAction Id="NetdocsPerMachineFolder" Property="WixPerMachineFolder"
+                  Value="[ProgramFiles64Folder][ApplicationFolderName]" Execute="immediate" />
+    <InstallUISequence>
+      <Custom Action="NetdocsPerUserFolder" Before="NetdocsPerMachineFolder" />
+      <Custom Action="NetdocsPerMachineFolder" Before="WixSetPerUserFolder" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="NetdocsPerUserFolder" Before="NetdocsPerMachineFolder" />
+      <Custom Action="NetdocsPerMachineFolder" Before="WixSetPerUserFolder" />
+    </InstallExecuteSequence>
+
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="APPLICATIONFOLDER" Name="Netdocs" />
     </StandardDirectory>

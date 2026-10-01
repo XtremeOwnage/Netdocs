@@ -185,13 +185,14 @@ jobs:
           }
 
           foreach ($case in @(
-              @{ Name = 'per-user';    Scope = 'User';    Extra = @() },
-              @{ Name = 'per-machine'; Scope = 'Machine'; Extra = @('ALLUSERS=1') })) {
+              @{ Name = 'per-user';    Scope = 'User';    Extra = @();             ExpectedRoot = "$env:LOCALAPPDATA\Programs\" },
+              @{ Name = 'per-machine'; Scope = 'Machine'; Extra = @('ALLUSERS=1'); ExpectedRoot = "$env:ProgramW6432\" })) {
             Write-Host "==> $($case.Name) install"
             Invoke-Msi (@('/i', "`"$msi`"", '/qn', '/l*v', "`"$($case.Name)-install.log`"") + $case.Extra)
 
             $dir = Get-NetdocsPathEntry $case.Scope
             if (-not $dir) { throw "netdocs was not added to the $($case.Scope) PATH" }
+            if (-not $dir.StartsWith($case.ExpectedRoot, 'OrdinalIgnoreCase')) { throw "Installed to $dir, expected under $($case.ExpectedRoot)" }
             Write-Host "Installed to $dir (on $($case.Scope) PATH)"
             & (Join-Path $dir 'netdocs.exe') --version
             if ($LASTEXITCODE) { throw "netdocs --version failed with $LASTEXITCODE" }

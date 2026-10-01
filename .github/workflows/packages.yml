@@ -122,10 +122,18 @@ jobs:
           $v = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME -replace '^v', '' } else { '${{ github.event.inputs.version || '0.0.0' }}' }
           "value=$v" >> $env:GITHUB_OUTPUT
 
+      # global.json pins the SDK, so `dotnet tool` needs that SDK installed here too.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
       - name: Install WiX Toolset
         run: |
           dotnet tool install --global wix --version $env:WIX_VERSION
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           wix extension add --global "WixToolset.UI.wixext/$env:WIX_VERSION"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           wix --version
 
       - name: Build MSI

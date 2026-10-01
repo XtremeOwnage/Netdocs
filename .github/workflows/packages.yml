@@ -107,6 +107,8 @@ jobs:
         shell: pwsh
     env:
       WIX_VERSION: "6.0.2"
+      # Let the wix tool run on whichever newer .NET runtime the runner has.
+      DOTNET_ROLL_FORWARD: Major
     steps:
       - uses: actions/checkout@v7
 

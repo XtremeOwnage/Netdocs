@@ -4,7 +4,7 @@ title: CLI reference
 
 # CLI reference
 
-The `netdocs` executable exposes these commands: `build`, `profile`, `serve`, `watch`, `new`, and `import`.
+The `netdocs` executable exposes these commands: `build`, `profile`, `serve`, `watch`, `new`, `import`, and `export`.
 
 ```text
 netdocs - static site generator
@@ -16,6 +16,7 @@ Usage:
   netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
   netdocs new [path]           Scaffold an annotated appsettings.json
   netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
+  netdocs export <file.md>     Render one page to PDF/PNG/WebP (see 'netdocs export --help')
 ```
 
 ## Commands
@@ -28,6 +29,7 @@ Usage:
 | `netdocs watch` | Long-running publish daemon: polls a git remote and rebuilds when the tracked branch advances. |
 | `netdocs new` | Scaffold a fully-annotated `appsettings.json` (all common options + doc links). |
 | `netdocs import` | Convert an existing `mkdocs.yml` into a Netdocs `appsettings.json`. |
+| `netdocs export` | Render a single markdown file as a standalone page to PDF, PNG and/or WebP. |
 | `netdocs --help` | Print usage. |
 
 ### `netdocs new`
@@ -204,6 +206,51 @@ values are omitted. It refuses to overwrite an existing output file unless you p
     `appsettings.json`, remove any plugins Netdocs does not implement, and run
     `netdocs build` to validate. See the [plugins reference](../plugins/index.md) for the
     built-in set.
+
+## Exporting a single page
+
+`netdocs export` renders one markdown file on its own, with no navigation, search, header,
+table of contents or footer, and writes it as a PDF, a PNG or a WebP image (or several at once).
+It uses the same markdown extensions and Material styling as a site build.
+
+```pwsh
+# sample.md -> sample.pdf, sample.png and sample.webp next to it, in the dark scheme
+netdocs export sample.md -format pdf,png,webp -theme dark
+
+# A high-DPI image of a page in the site, written to a chosen folder
+netdocs export docs/setup/install.md --format png --scale 2 -o exports/
+
+# An A4 PDF with an explicit file name
+netdocs export notes.md -o notes-a4.pdf --paper a4
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--format <list>` | `pdf` | Comma-separated output formats: `pdf`, `png`, `webp`. |
+| `--theme <name>` | site palette | `light` or `dark`. Without it the site's first palette is used (light when there is no config). |
+| `-o, --output <path>` | next to the file | A folder (existing, or ending in `/`) or a file name; each format gets its own extension. |
+| `--width <px>` | `1000` | Page width in CSS pixels for the layout and images. |
+| `--scale <n>` | `1` | Pixel ratio for PNG/WebP, e.g. `2` for high-DPI images. |
+| `--paper <size>` | `letter` | PDF paper size: `letter`, `legal`, `tabloid`, `a3`, `a4`, `a5`. |
+| `--browser <path>` | auto-detect | The browser used to render (see below). |
+| `-f, --config <path>` | `./appsettings.json` | Site config to take markdown extensions, plugins and palette from. Optional. |
+
+Options can be written with one dash or two (`-theme dark` and `--theme dark` are the same).
+
+**Configuration is optional.** When an `appsettings.json` is found, the export runs that site's
+markdown preprocessors (snippets, macros, abbreviations…), Markdig extensions, `extra_css` and
+`extra_javascript`, and uses the palette whose scheme matches `--theme`, so a dark export keeps
+the site's dark colors. A file inside `docs_dir` resolves images and links from the docs root,
+like a site build; any other file resolves them from its own folder. Site-wide features (blog,
+tags, search index, social cards) do not apply to a single page.
+
+**Rendering uses a local Chrome, Chromium, Edge or Brave** in headless mode, found in the usual
+install locations or on `PATH`. Point Netdocs at a specific browser with `--browser <path>` or the
+`NETDOCS_BROWSER` environment variable. The PDF keeps the on-screen look (including the dark
+scheme) with the page background running to the paper edge. Images capture the full page height;
+a page taller than 16,383 pixels is scaled down to fit, since that is the largest image Chrome and
+WebP can encode. Mermaid diagrams, MathJax and code highlighting load from their CDNs as on the
+site, so they need network access during the export.
 
 ## Environment variables
 

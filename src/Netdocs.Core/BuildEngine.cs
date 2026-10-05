@@ -47,7 +47,7 @@ public sealed class BuildEngine(
         // Discover external plugins shipped as ./plugins/*.dll before resolving the effective set.
         ExternalPluginLoader.Load(registry, provider, config.ProjectRoot, loggerFactory.CreateLogger("ExternalPlugins"));
 
-        var effectivePlugins = BuildEffectivePluginList();
+        var effectivePlugins = BuildEffectivePluginList(config);
         var host = PluginHost.Build(config, options, effectivePlugins, registry, provider, services, loggerFactory);
         _log.LogDebug("Loaded {Count} plugins: {Plugins}", host.Plugins.Count, string.Join(", ", host.Plugins.Select(p => p.Name)));
 
@@ -172,7 +172,7 @@ public sealed class BuildEngine(
             _log.LogInformation("Converted {Count} image(s) to webp", webpManifest.Count);
 
         // 10. Template render (parallel) + emit.
-        var templateEngine = CreateTemplateEngine();
+        var templateEngine = CreateTemplateEngine(config, _log);
         site.State["asset_versioner"] = new AssetVersioner(ThemePaths.AssetsDir, config.AbsoluteDocsDir);
 
         var rendered = new ConcurrentBag<(string Path, string Html)>();
@@ -300,7 +300,7 @@ public sealed class BuildEngine(
     }
 
     /// <summary>Merges config plugins with plugins backed by markdown_extensions (e.g. snippets).</summary>
-    private List<Abstractions.PluginConfig> BuildEffectivePluginList()
+    internal static List<Abstractions.PluginConfig> BuildEffectivePluginList(SiteConfig config)
     {
         var list = new List<Abstractions.PluginConfig>();
         if (config.MarkdownExtensions.TryGetValue("pymdownx.snippets", out var snippetOptions))
@@ -309,7 +309,9 @@ public sealed class BuildEngine(
         return list;
     }
 
-    private TemplateEngine CreateTemplateEngine()
+    /// <summary>Theme template search path: a Scriban <c>custom_dir</c> (when configured) ahead of
+    /// the bundled theme.</summary>
+    internal static TemplateEngine CreateTemplateEngine(SiteConfig config, ILogger log)
     {
         var dirs = new List<string>();
         if (!string.IsNullOrEmpty(config.Theme.CustomDir))
@@ -322,7 +324,7 @@ public sealed class BuildEngine(
                 if (LooksLikeScribanOverrides(customDir))
                     dirs.Add(customDir);
                 else
-                    _log.LogWarning("Ignoring custom_dir '{Dir}' - it contains Jinja2 templates. Port overrides to Scriban to enable them.", config.Theme.CustomDir);
+                    log.LogWarning("Ignoring custom_dir '{Dir}' - it contains Jinja2 templates. Port overrides to Scriban to enable them.", config.Theme.CustomDir);
             }
         }
         dirs.Add(ThemePaths.TemplatesDir);

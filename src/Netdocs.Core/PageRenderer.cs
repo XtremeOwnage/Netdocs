@@ -7,7 +7,10 @@ namespace Netdocs.Core;
 /// <summary>Builds the per-page template model and renders the final HTML document.</summary>
 public static class PageRenderer
 {
-    public static string Render(TemplateEngine engine, SiteContext site, Page page, PluginAssets assets)
+    /// <param name="overrides">Model entries applied last, replacing the computed values (used by
+    /// <c>netdocs export</c> to point asset URLs at the theme on disk and force a palette).</param>
+    public static string Render(TemplateEngine engine, SiteContext site, Page page, PluginAssets assets,
+        IReadOnlyDictionary<string, object?>? overrides = null)
     {
         var template = page.Meta.TryGetValue("template", out var t) && t is string tpl && tpl.Length > 0
             ? tpl
@@ -112,6 +115,10 @@ public static class PageRenderer
         model["current_version"] = site.State.GetValueOrDefault("current_version");
         model["version_label"] = site.State.GetValueOrDefault("version_label") as string ?? "Version";
 
+        if (overrides is not null)
+            foreach (var (key, value) in overrides)
+                model[key] = value;
+
         return engine.Render(template, model);
     }
 
@@ -156,7 +163,7 @@ public static class PageRenderer
         return siteUrl.Length > 0 ? $"{siteUrl}/{relative}" : "/" + relative;
     }
 
-    private static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();
+    internal static string Sanitize(string value) => value.Replace(' ', '-').ToLowerInvariant();
 
     /// <summary>Projects the configured palettes into a template-friendly list. Only palettes that
     /// declare a <c>toggle</c> render a switcher button (mirroring Material's palette component,

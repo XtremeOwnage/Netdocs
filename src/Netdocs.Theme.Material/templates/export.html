@@ -1,0 +1,96 @@
+{{~ # ---------------------------------------------------------------------------
+   # export.html — Standalone single-page layout used by `netdocs export`. It renders only
+   # the page content with the Material stylesheets and palette: no header, navigation,
+   # search, table of contents, breadcrumbs or footer.
+   #
+   # Theme assets are referenced through `base_url`, which the exporter points at the
+   # on-disk theme directory. `export_base_href` is the folder relative content links
+   # (images, extra_css) resolve against, and `export_stylesheets` / `export_scripts` are
+   # already-resolved absolute URLs for the site's extra CSS/JS and plugin assets.
+   #
+   # Override: drop a file at `<custom_dir>/export.html` to restyle exported pages.
+   # --------------------------------------------------------------------------- ~}}
+<!doctype html>
+<html lang="{{ config.theme.language }}" class="no-js" data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}">
+  <head>
+    <meta charset="utf-8">
+    <base href="{{ export_base_href }}">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{{ page.display_title }}</title>
+    {{ if page_description != "" }}<meta name="description" content="{{ page_description }}">{{ end }}
+    {{ if config.site_author }}<meta name="author" content="{{ config.site_author }}">{{ end }}
+    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/main.ec1eaa64.min.css">
+    <link rel="stylesheet" href="{{ base_url }}assets/vendor/material/stylesheets/palette.ab4e12ef.min.css">
+    <link rel="stylesheet" href="{{ base_url }}assets/netdocs.css">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family={{ string.replace font_text ' ' '+' }}:300,300i,400,400i,700,700i%7C{{ string.replace font_code ' ' '+' }}:400,400i,700,700i&display=fallback">
+    <style>:root{--md-text-font:"{{ font_text }}";--md-code-font:"{{ font_code }}"}</style>
+    {{~ for href in export_stylesheets ~}}
+    <link rel="stylesheet" href="{{ href }}">
+    {{~ end ~}}
+    <style>
+      /* Standalone export: the page is the whole document, so the scheme background fills
+         it (including the PDF page margins) and the content uses the full width. */
+      html, body { background-color: var(--md-default-bg-color); }
+      html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .nd-export .md-main__inner { margin-top: 0; }
+      .nd-export .md-content { max-width: none; }
+      .nd-export .md-content__inner { margin: 0 1.2rem; padding-top: 1.2rem; padding-bottom: 1.2rem; }
+      .nd-export .md-content__inner > :first-child { margin-top: 0; }
+      .nd-export .md-typeset .headerlink { display: none; }
+      /* PDF: the exporter prints with zero page margins so the scheme background reaches the
+         paper edge, and adds this class; the page margins are padding repeated on every page. */
+      @page { margin: 0; }
+      .nd-export--pdf .md-content__inner {
+        margin: 0 0.5in; padding: 0.45in 0;
+        -webkit-box-decoration-break: clone; box-decoration-break: clone;
+      }
+    </style>
+    <script>
+      __md_scope = new URL("{{ base_url }}", location)
+      __md_hash = v => [...v].reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0)
+      __md_get = (key, storage = localStorage, scope = __md_scope) => (
+        JSON.parse(storage.getItem(scope.pathname + "." + key))
+      )
+      __md_set = (key, value, storage = localStorage, scope = __md_scope) => {
+        try {
+          storage.setItem(scope.pathname + "." + key, JSON.stringify(value))
+        } catch (err) {
+          /* Uncritical, just swallow */
+        }
+      }
+    </script>
+  </head>
+  <body dir="ltr" class="nd-export" data-md-color-scheme="{{ palette_scheme }}" data-md-color-primary="{{ palette_primary }}" data-md-color-accent="{{ palette_accent }}">
+    <div class="md-container">
+      <main class="md-main">
+        <div class="md-main__inner md-grid">
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+{{ content }}
+            </article>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script id="__config" type="application/json">
+      {
+        "base": "{{ base_url }}",
+        "features": [],
+        "translations": {
+          "clipboard.copy": "Copy to clipboard",
+          "clipboard.copied": "Copied to clipboard"
+        }
+      }
+    </script>
+    <script src="{{ base_url }}assets/vendor/material/javascripts/bundle.d7400e89.min.js"></script>
+    {{~ for src in export_scripts ~}}
+    <script src="{{ src }}" defer></script>
+    {{~ end ~}}
+    {{~ for js in inline_scripts ~}}
+    <script>{{ js }}</script>
+    {{~ end ~}}
+    {{~ if (highlight | string.downcase) == "highlightjs" ~}}{{ include "partials/highlight.html" }}{{~ end ~}}
+    {{ include "partials/mermaid.html" }}
+  </body>
+</html>

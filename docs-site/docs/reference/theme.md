@@ -160,6 +160,7 @@ your `customDir` and it wins over the bundled version.
 | File | Purpose |
 |---|---|
 | `main.html` | Base page layout: `<html>`, includes `head`, `header`, nav, content, `footer`, `scripts`. Defines the `render_nav` / `render_toc` helpers. |
+| `export.html` | Standalone layout used by `netdocs export`: page content and theme styles only, no header, nav, search or footer. |
 | `partials/head.html` | Everything inside `<head>`: meta, Open Graph / Twitter cards, stylesheets, fonts, and the inline `__md_*` helper script. Override to add analytics or verification tags. |
 | `partials/header.html` | The single-row header: logo, top-level nav (left), social + palette toggle + search (right). |
 | `partials/social.html` | Social links at the right of the header (driven by `extra.social`). |

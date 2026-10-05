@@ -23,6 +23,8 @@ public static class CliApp
                 return await ImportAsync(args);
             case "new":
                 return await NewCommand.RunAsync(args);
+            case "export":
+                return await ExportAsync(args);
             case "--help" or "-h" or "help":
                 return PrintHelp();
             case "--version" or "-V" or "version":
@@ -226,6 +228,72 @@ public static class CliApp
         }
     }
 
+    private static async Task<int> ExportAsync(string[] args)
+    {
+        // netdocs export <file.md> [--format pdf,png,webp] [--theme light|dark] [-o <path>] ...
+        if (args.Skip(1).Any(a => a is "--help" or "-h" or "-help"))
+        {
+            Console.WriteLine(Netdocs.Core.Export.ExportOptions.Usage);
+            return 0;
+        }
+
+        var options = Netdocs.Core.Export.ExportOptions.Parse(args.Skip(1).ToList(), out var error);
+        if (options is null)
+        {
+            Console.Error.WriteLine(error);
+            Console.Error.WriteLine("Run 'netdocs export --help' for usage.");
+            return 1;
+        }
+
+        // A site config is optional: when one is given (or sits in the working directory) the
+        // export uses its markdown extensions, plugins and palette; otherwise built-in defaults.
+        string? configPath = null;
+        if (options.ConfigPath is not null)
+        {
+            configPath = ResolveConfigPath(options.ConfigPath);
+            if (configPath is null)
+            {
+                Console.Error.WriteLine($"Config file not found: {options.ConfigPath}");
+                return 1;
+            }
+        }
+        else
+        {
+            configPath = ResolveConfigPath(null);
+        }
+
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; });
+            builder.SetMinimumLevel(options.Verbose ? LogLevel.Trace : LogLevel.Information);
+        });
+        var log = loggerFactory.CreateLogger("netdocs");
+
+        try
+        {
+            SiteConfig config;
+            if (configPath is not null)
+            {
+                log.LogDebug("Using config file {ConfigPath}", configPath);
+                config = JsonConfigLoader.Load(configPath);
+            }
+            else
+            {
+                config = new SiteConfig { ProjectRoot = Path.GetDirectoryName(options.SourcePath)!, DocsDir = "." };
+            }
+
+            var buildOptions = new BuildOptions();
+            await Netdocs.Core.Export.SingleFileExporter.ExportAsync(config, buildOptions, BuildRegistry(), options, loggerFactory);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            log.LogError("Export failed: {Message}", ex.Message);
+            log.LogDebug(ex, "Export failure details");
+            return 1;
+        }
+    }
+
     private static string? FlagValue(string[] args, string flag)
     {
         var idx = Array.IndexOf(args, flag);
@@ -300,6 +368,7 @@ public static class CliApp
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
               netdocs new [path]           Scaffold an annotated appsettings.json
               netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
+              netdocs export <file.md>     Render one page to PDF/PNG/WebP (see 'netdocs export --help')
               netdocs --version            Print the Netdocs version and exit
 
             New / import options:

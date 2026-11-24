@@ -5,15 +5,12 @@ description: Edit pages, navigation, media, plugins and templates in the browser
 
 # Local CMS
 
-`netdocs serve` comes with a content management system that runs in your browser. You can write and
-rearrange pages visually, upload and tidy up images, edit the navigation, turn plugins on and off,
-change the theme and its templates, and commit your work to git. You never have to open
-`appsettings.json` or a Markdown file unless you want to.
+`netdocs serve` includes a browser-based CMS. It can edit pages visually, manage images, edit the
+navigation, configure plugins, the theme and templates, and commit to git.
 
-Everything the CMS does is written straight back to your project as ordinary files: Markdown pages
-under `docs/`, settings in `appsettings.json`, and template overrides in your theme folder. There is
-no database and nothing to deploy. Once you stop `netdocs serve`, the CMS is gone and your site
-builds exactly as before.
+Changes are saved to the project's own files: Markdown pages under `docs/`, settings in
+`appsettings.json`, and template overrides in the theme folder. There is no database. The CMS only
+runs while `netdocs serve` does, and it has no effect on `netdocs build`.
 
 ^^^
 ![The CMS dashboard: page, draft, tag and media counts, recently changed pages and suggestions](../assets/cms/dashboard.webp)

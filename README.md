@@ -8,35 +8,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-xtremeownage.github.io%2FNetdocs-blue)](https://xtremeownage.github.io/Netdocs/)
 
-A fast, flexible static site generator in **.NET 11** with a **built-in visual editor**. It is a
+A fast, flexible static site generator in **.NET 11** with a built-in visual editor. It is a
 reimplementation of the [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
 experience with a first-class C# plugin system. Site configuration lives in **`appsettings.json`**,
 and the Markdown in `docs/` builds with little to no change.
 
 > 📖 **Full documentation:** <https://xtremeownage.github.io/Netdocs/>
 
-## ✏️ A visual editor for your static site
+## Visual editor
 
-Run `netdocs serve` and open <http://localhost:8000/__cms/>. You get a full CMS for your site, in the
-browser, with **no database and nothing to deploy**. Every change is written straight back to your
-Markdown, `appsettings.json` and template files, so the site stays plain files in git and builds
-exactly as before.
+`netdocs serve` also hosts a local CMS at <http://localhost:8000/__cms/>. It edits the same files you
+would edit by hand (Markdown pages, `appsettings.json`, template overrides). There is no database.
 
 ![Editing a page in the Netdocs visual editor, with the callout panel open](docs-site/docs/assets/cms/callout-types.webp)
 
-- **Edit pages as your readers see them.** Type into the rendered page with your theme's own styles.
-  Callouts, tabs, card grids, images, links, tables, code and Mermaid diagrams each get a live form.
-  Content inside callouts and tabs is edited like the page itself.
-- **Minimal diffs.** Saving rewrites only the blocks you changed. Everything else in the file stays
-  byte-for-byte the same, so your git history stays clean.
-- **Manage the whole site:** pages (rename and move with link rewriting), navigation, tags and
-  categories, media (upload, WebP conversion, unused files), theme, template overrides with a live
-  preview, plugins with option forms, and settings.
-- **Commit from the browser:** stage, diff, commit, switch branches, pull and push.
-- **Safe by default:** it only answers on localhost, needs a per-run token, and is never part of
-  `netdocs build` output. Pass `--no-cms` to turn it off.
+- Pages are edited on the rendered page. Callouts, tabs, card grids, images, links, tables, code
+  blocks and Mermaid diagrams have their own forms.
+- Saving rewrites only the blocks that changed; the rest of the file is left as is.
+- Other screens cover pages, navigation, tags and categories, media, theme, template overrides,
+  plugins, settings and git.
+- It only listens on localhost and is not included in `netdocs build` output. Turn it off with
+  `--no-cms`.
 
-See the [Local CMS docs](https://xtremeownage.github.io/Netdocs/cms/) for a tour with screenshots.
+See the [Local CMS docs](https://xtremeownage.github.io/Netdocs/cms/) for details and screenshots.
 
 > [!IMPORTANT]
 > **Netdocs is an AI-generated derivative work** inspired by, and partially reusing

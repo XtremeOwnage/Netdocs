@@ -128,8 +128,13 @@ public sealed class CmsServer
             var request = ctx.HttpContext.Request;
             if (!IsLocalHost(request.Host.Host))
                 return Results.Problem("The CMS only answers on localhost.", statusCode: 403);
-            if (!request.Headers.TryGetValue(TokenHeader, out var token) || !CryptographicOperations.FixedTimeEquals(
-                    System.Text.Encoding.UTF8.GetBytes(token.ToString()), System.Text.Encoding.UTF8.GetBytes(Token)))
+            // <img src> and <a href> cannot send headers, so read-only file fetches may carry the
+            // token in the query string instead.
+            var token = request.Headers.TryGetValue(TokenHeader, out var header) ? header.ToString()
+                : HttpMethods.IsGet(request.Method) && request.Path.StartsWithSegments(BasePath + "/api/media/file") ? request.Query["t"].ToString()
+                : "";
+            if (token.Length == 0 || !CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(token), System.Text.Encoding.UTF8.GetBytes(Token)))
                 return Results.Problem("Missing or wrong CMS token. Reload the page.", statusCode: 403);
             try
             {
@@ -139,9 +144,10 @@ public sealed class CmsServer
             {
                 return Results.Json(new { error = ex.Message }, statusCode: ex.StatusCode);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _log.LogWarning(ex, "CMS request failed");
+                // Always answer with JSON, so the browser shows the reason instead of a network error.
+                _log.LogWarning(ex, "CMS request {Path} failed", request.Path);
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
         });
@@ -255,6 +261,9 @@ public sealed class CmsServer
         api.MapPost("/git/pull", (CancellationToken ct) => _git.PullAsync(ct));
         api.MapPost("/git/push", (CancellationToken ct) => _git.PushAsync(ct));
         api.MapPost("/git/fetch", (CancellationToken ct) => _git.FetchAsync(ct));
+
+        // Icons (for the icon picker)
+        api.MapGet("/icons", (string? q, int? limit) => IconCatalog.Search(q ?? "", Math.Clamp(limit ?? 120, 1, 500)));
 
         // Theme, templates and settings
         api.MapGet("/templates", () => _templates.List());

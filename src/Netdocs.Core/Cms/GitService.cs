@@ -162,7 +162,7 @@ public sealed class GitService(CmsWorkspace workspace)
 
     public async Task<IReadOnlyList<GitCommit>> LogAsync(int count, CancellationToken ct)
     {
-        var result = await RunAsync(["log", $"-{Math.Clamp(count, 1, 500)}", "--pretty=format:%h%x1f%an%x1f%ad%x1f%s", "--date=iso-strict"], ct);
+        var result = await RunAsync(["log", $"-{Math.Clamp(count, 1, 500)}", "--no-show-signature", "--no-color", "--pretty=format:%h%x1f%an%x1f%ad%x1f%s", "--date=iso-strict"], ct);
         if (!result.Ok) return [];
         return [.. result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Split('\u001f'))

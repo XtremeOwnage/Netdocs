@@ -8,6 +8,7 @@ import {
   admonitionTypes, formatAdmonition, formatFence, formatTabs, htmlToMarkdown, insertTemplates,
   needsSourceEditing, parseAdmonition, parseFence, parseTabs, richKinds,
 } from '../shared/markdown';
+import { imageMarkdown, openIconPicker, openImagePicker, openLinkPicker, pageTemplates, parseImageMarkdown } from '../shared/pickers';
 
 interface EditorBlock {
   /** Index of the original block in the file, or null for a new block. */
@@ -38,6 +39,19 @@ interface State {
 let state: State | null = null;
 let bar: HTMLElement;
 let status: HTMLElement;
+/** The page is shown inside the admin app's page editor: always in edit mode, docked toolbar. */
+const embedded = new URLSearchParams(location.search).has('cms-embed');
+/** The block the user last worked in; toolbar inserts go after it. */
+let activeIndex: number | null = null;
+
+/** Tells the admin app (when the page is embedded in it) whether there are unsaved changes. */
+function notifyParent(event: 'status' | 'saved' = 'status') {
+  if (!state && event === 'status') return;
+  if (!embedded || window.parent === window) return;
+  try {
+    window.parent.postMessage({ source: 'netdocs-cms', event, path: state?.page.path ?? cms.path, dirty: isDirty() }, location.origin);
+  } catch { /* parent gone */ }
+}
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, ...children: (Node | string)[]) => {
   const node = document.createElement(tag);
@@ -66,7 +80,22 @@ function findArticle(): HTMLElement | null {
 // --- Toolbar ----------------------------------------------------------------------------------
 
 function mountToolbar() {
-  bar = el('div', { class: 'ndcms-bar', role: 'toolbar', 'aria-label': 'Netdocs CMS' });
+  bar = el('div', { class: `ndcms-bar${embedded ? ' ndcms-bar--embedded' : ''}`, role: 'toolbar', 'aria-label': 'Netdocs CMS' });
+  if (embedded) document.documentElement.classList.add('ndcms-embedded');
+  (window as unknown as { __netdocsCmsDirty: () => boolean }).__netdocsCmsDirty = () => isDirty();
+  (window as unknown as { __netdocsCmsSave: () => Promise<void> }).__netdocsCmsSave = () => save();
+  if (embedded) {
+    // Links to other pages open that page in the admin editor instead of inside this frame.
+    document.addEventListener('click', (e) => {
+      const a = (e.target as HTMLElement).closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || e.defaultPrevented || a.closest('.ndcms-block, .ndcms-panel, .ndcms-bar, .ndp-overlay')) return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      e.preventDefault();
+      if (isDirty() && !confirm('Leave this page and lose your unsaved changes?')) return;
+      window.parent.postMessage({ source: 'netdocs-cms', event: 'navigate', url: url.pathname, dirty: false }, location.origin);
+    }, true);
+  }
   status = el('span', { class: 'ndcms-status' });
   renderToolbar();
   document.body.append(bar);
@@ -82,7 +111,7 @@ function mountToolbar() {
     }
   });
   window.addEventListener('beforeunload', (e) => {
-    if (isDirty()) { e.preventDefault(); e.returnValue = ''; }
+    if (isDirty() && !embedded) { e.preventDefault(); e.returnValue = ''; }
   });
 
   // While editing, the dev server's live reload waits until the editor is closed.
@@ -93,7 +122,7 @@ function mountToolbar() {
   };
 
   const params = new URLSearchParams(location.search);
-  if (cms.path && (sessionStorage.getItem('ndcms-edit') === cms.path || params.has('cms-edit'))) {
+  if (cms.path && (embedded || sessionStorage.getItem('ndcms-edit') === cms.path || params.has('cms-edit'))) {
     sessionStorage.removeItem('ndcms-edit');
     if (params.has('cms-edit')) {
       params.delete('cms-edit');
@@ -113,13 +142,20 @@ function renderToolbar() {
     bar.append(link);
     return;
   }
+  const quick = el('div', { class: 'ndcms-bar__insert', role: 'group', 'aria-label': 'Insert' },
+    el('span', { class: 'ndcms-bar__label' }, 'Insert'),
+    ...quickInserts.map((q) => button(q.icon, `Insert ${q.label.toLowerCase()} after the selected block`, () => void insertTemplate(insertPosition(), q.id), 'ndcms-btn--tool')),
+    moreMenu(),
+  );
   bar.append(
-    el('span', { class: 'ndcms-path', title: state.page.path }, state.page.path),
+    ...(embedded ? [] : [el('span', { class: 'ndcms-path', title: state.page.path }, state.page.path)]),
+    quick,
+    el('span', { class: 'ndcms-bar__spacer' }),
     status,
-    button('⚙ Page settings', 'Title, tags, metadata', () => openSettings()),
+    button('⚙ Page settings', 'Title, date, tags, icon, template', () => void openSettings()),
     button('↶ Discard', 'Throw away unsaved changes', () => void discard()),
     button('💾 Save', 'Save changes (Ctrl+S)', () => void save(), 'ndcms-btn--primary'),
-    button('✕', 'Leave edit mode', () => void exitEditMode()),
+    ...(embedded ? [] : [button('✕', 'Leave edit mode', () => void exitEditMode())]),
   );
   updateStatus();
 }
@@ -128,6 +164,65 @@ function updateStatus(message?: string, kind: 'info' | 'error' | 'ok' = 'info') 
   if (!status) return;
   status.className = `ndcms-status ndcms-status--${kind}`;
   status.textContent = message ?? (isDirty() ? 'Unsaved changes' : 'No changes');
+  notifyParent();
+}
+
+// Toolbar shortcuts: the most used blocks, one click each. "More" lists everything.
+const quickInserts = [
+  { id: 'p', icon: '¶', label: 'Text' },
+  { id: 'h2', icon: 'H2', label: 'Heading' },
+  { id: 'h3', icon: 'H3', label: 'Subheading' },
+  { id: 'ul', icon: '•≡', label: 'Bulleted list' },
+  { id: 'ol', icon: '1≡', label: 'Numbered list' },
+  { id: 'task', icon: '☑', label: 'Task list' },
+  { id: 'image', icon: '🖼', label: 'Image' },
+  { id: 'table', icon: '▦', label: 'Table' },
+  { id: 'note', icon: 'ⓘ', label: 'Callout box' },
+  { id: 'tabs', icon: '⊟', label: 'Tabs' },
+  { id: 'code', icon: '{ }', label: 'Code block' },
+  { id: 'quote', icon: '❝', label: 'Quote' },
+  { id: 'hr', icon: '―', label: 'Divider' },
+];
+
+function insertPosition(): number {
+  if (!state) return 0;
+  return activeIndex === null || activeIndex >= state.blocks.length ? state.blocks.length : activeIndex + 1;
+}
+
+function moreMenu(): HTMLElement {
+  const wrap = el('div', { class: 'ndcms-more' });
+  const menu = blockMenu(() => insertPosition(), () => wrap.classList.remove('ndcms-more--open'));
+  const toggle = button('More ▾', 'All block types', () => {
+    const open = wrap.classList.toggle('ndcms-more--open');
+    if (open) menu.querySelector<HTMLInputElement>('input')?.focus();
+  }, 'ndcms-btn--tool');
+  document.addEventListener('mousedown', (e) => { if (!wrap.contains(e.target as Node)) wrap.classList.remove('ndcms-more--open'); });
+  wrap.append(toggle, menu);
+  return wrap;
+}
+
+/** A searchable list of every block type; picking one inserts it at `position()`. */
+function blockMenu(position: () => number, onPick: () => void): HTMLElement {
+  const menu = el('div', { class: 'ndcms-insert__menu' });
+  const filter = el('input', { type: 'search', placeholder: 'Find a block type…', class: 'ndcms-input' }) as HTMLInputElement;
+  const list = el('div', { class: 'ndcms-insert__list' });
+  const draw = () => {
+    list.replaceChildren();
+    const term = filter.value.toLowerCase();
+    let group = '';
+    for (const t of insertTemplates.filter((x) => !term || x.label.toLowerCase().includes(term) || x.group.toLowerCase().includes(term))) {
+      if (t.group !== group) { group = t.group; list.append(el('div', { class: 'ndcms-insert__group' }, group)); }
+      list.append(button(t.label, t.label, () => { onPick(); void insertTemplate(position(), t.id); }, 'ndcms-insert__item'));
+    }
+  };
+  filter.addEventListener('input', draw);
+  filter.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); list.querySelector<HTMLButtonElement>('.ndcms-insert__item')?.click(); }
+    if (e.key === 'Escape') onPick();
+  });
+  draw();
+  menu.append(filter, list);
+  return menu;
 }
 
 function isDirty(): boolean {
@@ -171,12 +266,12 @@ async function enterEditMode() {
 }
 
 function toEditorBlock(b: RenderedBlock): EditorBlock {
-  const rich = richKinds.has(b.kind) && !needsSourceEditing(b.kind, b.source, b.html);
+  const rich = isRich(b.kind, b.source, b.html);
   return { original: b.index, kind: b.kind, source: b.source, html: b.html, changed: false, rich };
 }
 
 async function exitEditMode(force = false) {
-  if (!state) return;
+  if (!state || embedded) return;
   if (!force && isDirty() && !confirm('Leave edit mode and lose your unsaved changes?')) return;
   const reload = state.reloadPending || state.blocks.some((b) => b.changed);
   state.article.innerHTML = state.originalArticle;
@@ -207,7 +302,21 @@ function renderBlocks() {
     s.article.append(renderBlock(block, i));
     s.article.append(inserter(i + 1));
   });
-  if (s.blocks.length === 0) s.article.append(el('p', { class: 'ndcms-muted' }, 'This page is empty. Use + to add a block.'));
+  if (s.blocks.length === 0) {
+    s.article.replaceChildren(el('div', { class: 'ndcms-empty' },
+      el('p', {}, 'This page is empty. Start with:'),
+      el('div', { class: 'ndcms-empty__choices' }, ...quickInserts.slice(0, 10).map((q) => button(`<span>${q.icon}</span> ${q.label}`, `Add ${q.label.toLowerCase()}`, () => void insertTemplate(0, q.id), 'ndcms-empty__choice'))),
+    ));
+  } else {
+    const add = button('+ Add a block', 'Add a block at the end of the page', () => {
+      const open = end.classList.toggle('ndcms-insert--open');
+      if (open) end.querySelector<HTMLInputElement>('input')?.focus();
+    }, 'ndcms-add-end__btn');
+    const end = el('div', { class: 'ndcms-insert ndcms-add-end' }, add, blockMenu(() => s.blocks.length, () => end.classList.remove('ndcms-insert--open')));
+    s.article.lastElementChild?.remove();
+    s.article.append(end);
+  }
+  markActive();
   refreshThemeWidgets(s.article);
   updateStatus();
 }
@@ -232,6 +341,9 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
     button('🗑', 'Delete block', () => remove(index), 'ndcms-btn--danger'),
   );
 
+  wrapper.addEventListener('focusin', () => { activeIndex = index; markActive(); });
+  wrapper.addEventListener('mousedown', () => { activeIndex = index; markActive(); });
+
   if (block.rich) {
     content.contentEditable = 'true';
     content.spellcheck = true;
@@ -242,7 +354,13 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
     });
     // Links must not navigate while editing.
     content.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('a')) e.preventDefault();
+      const t = e.target as HTMLElement;
+      if (t.closest('a')) e.preventDefault();
+      // A block that is just an image opens the image picker.
+      if (t.tagName === 'IMG' && !t.classList.contains('twemoji') && state && parseImageMarkdown(block.source, state.page.path)) {
+        e.preventDefault();
+        openBlockEditor(index);
+      }
     });
   } else {
     wrapper.classList.add('ndcms-block--structured');
@@ -266,38 +384,64 @@ const label = (kind: string) => ({
 
 function inserter(position: number): HTMLElement {
   const wrap = el('div', { class: 'ndcms-insert' });
+  const menu = blockMenu(() => position, () => wrap.classList.remove('ndcms-insert--open'));
   const toggle = button('+', 'Add a block here', () => {
     const open = wrap.classList.toggle('ndcms-insert--open');
     if (open) menu.querySelector<HTMLInputElement>('input')?.focus();
   }, 'ndcms-insert__toggle');
-  const menu = el('div', { class: 'ndcms-insert__menu' });
-  const filter = el('input', { type: 'search', placeholder: 'Find a block type…', class: 'ndcms-input' }) as HTMLInputElement;
-  const list = el('div', { class: 'ndcms-insert__list' });
-  const draw = () => {
-    list.replaceChildren();
-    const term = filter.value.toLowerCase();
-    let group = '';
-    for (const t of insertTemplates.filter((x) => !term || x.label.toLowerCase().includes(term) || x.group.toLowerCase().includes(term))) {
-      if (t.group !== group) { group = t.group; list.append(el('div', { class: 'ndcms-insert__group' }, group)); }
-      list.append(button(t.label, t.label, () => void insert(position, t.markdown), 'ndcms-insert__item'));
-    }
-  };
-  filter.addEventListener('input', draw);
-  draw();
-  menu.append(filter, list);
-  wrap.append(toggle, menu);
+  wrap.append(el('span', { class: 'ndcms-insert__line' }), toggle, menu);
   return wrap;
 }
 
-async function insert(position: number, markdown: string) {
+function markActive() {
+  if (!state) return;
+  state.blocks.forEach((b, i) => b.el?.classList.toggle('ndcms-block--active', i === activeIndex));
+}
+
+/** Inserts one of the block templates. Images and tables open their editor first. */
+async function insertTemplate(position: number, id: string) {
+  if (!state) return;
+  const template = insertTemplates.find((t) => t.id === id);
+  if (!template) return;
+  if (id === 'image' || id === 'figure') {
+    const picked = await openImagePicker(state.page.path);
+    if (!picked) return;
+    await insert(position, imageMarkdown(picked), false);
+    return;
+  }
+  await insert(position, template.markdown);
+}
+
+async function insert(position: number, markdown: string, openEditor = true) {
   if (!state) return;
   syncRichBlocks();
   const block: EditorBlock = { original: null, kind: 'new', source: markdown, html: '', changed: true, rich: false };
-  await renderSource(block);
+  try {
+    await renderSource(block);
+  } catch (e) {
+    alertError(e);
+    return;
+  }
   state.blocks.splice(position, 0, block);
+  activeIndex = position;
   renderBlocks();
-  if (!block.rich) openBlockEditor(position);
-  else block.content?.focus();
+  block.el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (!block.rich) {
+    if (openEditor) openBlockEditor(position);
+    return;
+  }
+  // Select the placeholder text so typing replaces it.
+  const content = block.content;
+  if (!content) return;
+  content.focus();
+  const target = content.querySelector('li, h1, h2, h3, h4, h5, h6, p, blockquote') ?? content;
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  const box = target.querySelector('input[type="checkbox"]');
+  if (box) range.setStartAfter(box);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
 }
 
 function move(index: number, delta: number) {
@@ -348,7 +492,14 @@ async function renderSource(block: EditorBlock) {
   block.html = blocks.map((b) => b.html).join('\n');
   const kinds = blocks.map((b) => b.kind);
   block.kind = kinds.length === 1 ? kinds[0] : kinds.length === 0 ? 'empty' : 'mixed';
-  block.rich = kinds.length === 1 && richKinds.has(block.kind) && !needsSourceEditing(block.kind, block.source, block.html);
+  block.rich = kinds.length === 1 && isRich(block.kind, block.source, block.html);
+}
+
+/** Text-like blocks are edited in place; tables, images and the rest use a form. */
+function isRich(kind: string, source: string, html: string): boolean {
+  if (kind === 'table') return false;
+  if (parseImageMarkdown(source, state?.page.path ?? cms.path ?? '')) return false;
+  return richKinds.has(kind) && !needsSourceEditing(kind, source, html);
 }
 
 /** Lets Material's own scripts (tabs, code copy, tooltips, diagrams) pick up re-rendered content. */
@@ -363,18 +514,56 @@ function refreshThemeWidgets(root: HTMLElement) {
 
 let formatBar: HTMLElement | null = null;
 
-function showFormatBar(target: HTMLElement) {
+function showFormatBar(target: HTMLElement, host: Element | null = target.closest('.ndcms-block')) {
   formatBar?.remove();
-  const exec = (cmd: string, value?: string) => { document.execCommand(cmd, false, value); target.dispatchEvent(new Event('input')); };
+  const exec = (cmd: string, value?: string) => { target.focus(); document.execCommand(cmd, false, value); target.dispatchEvent(new Event('input')); };
+  // Pickers move focus away; remember the selection so the result lands where the cursor was.
+  const keepSelection = () => {
+    const sel = window.getSelection();
+    const range = sel && sel.rangeCount && target.contains(sel.getRangeAt(0).commonAncestorContainer) ? sel.getRangeAt(0).cloneRange() : null;
+    return () => {
+      target.focus();
+      if (range) { sel?.removeAllRanges(); sel?.addRange(range); }
+    };
+  };
   formatBar = el('div', { class: 'ndcms-format' },
     button('<b>B</b>', 'Bold (Ctrl+B)', () => exec('bold')),
     button('<i>I</i>', 'Italic (Ctrl+I)', () => exec('italic')),
     button('<s>S</s>', 'Strikethrough', () => exec('strikeThrough')),
     button('<code>{}</code>', 'Inline code', () => wrapSelection('code', target)),
     button('<mark>H</mark>', 'Highlight', () => wrapSelection('mark', target)),
-    button('🔗', 'Link', () => {
-      const url = prompt('Link to (a page like other.md, or a URL):');
-      if (url) exec('createLink', url);
+    button('🔗', 'Link to a page or URL', async () => {
+      const restore = keepSelection();
+      const url = await openLinkPicker(state?.page.path ?? cms.path ?? '');
+      restore();
+      if (!url) return;
+      const sel = window.getSelection();
+      if (sel && sel.isCollapsed) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.setAttribute('data-md-href', url);
+        a.textContent = url.replace(/\.md$/, '').split('/').pop() || url;
+        sel.getRangeAt(0).insertNode(a);
+        target.dispatchEvent(new Event('input'));
+      } else {
+        exec('createLink', url);
+        target.querySelectorAll<HTMLAnchorElement>('a').forEach((a) => { if (a.getAttribute('href') === url) a.setAttribute('data-md-href', url); });
+      }
+    }),
+    button('☺', 'Insert an icon', async () => {
+      const restore = keepSelection();
+      const name = await openIconPicker('', 'Insert an icon');
+      restore();
+      if (!name) return;
+      const icons = await api.icons(name.split('/').pop() ?? name, 40).catch(() => []);
+      const icon = icons.find((i) => i.name === name);
+      const code = ':' + name.replace(/\//g, '-') + ':';
+      const span = document.createElement('span');
+      span.className = 'twemoji';
+      span.title = code;
+      span.innerHTML = icon?.svg ?? code;
+      window.getSelection()?.getRangeAt(0).insertNode(span);
+      target.dispatchEvent(new Event('input'));
     }),
     button('•', 'Bulleted list', () => exec('insertUnorderedList')),
     button('1.', 'Numbered list', () => exec('insertOrderedList')),
@@ -383,7 +572,9 @@ function showFormatBar(target: HTMLElement) {
     button('¶', 'Paragraph', () => exec('formatBlock', 'p')),
     button('⌫', 'Clear formatting', () => exec('removeFormat')),
   );
-  target.closest('.ndcms-block')?.prepend(formatBar);
+  // Keep the cursor in the text while the bar's buttons are pressed.
+  formatBar.addEventListener('mousedown', (e) => e.preventDefault());
+  host?.prepend(formatBar);
   target.addEventListener('blur', () => {
     setTimeout(() => { if (!formatBar?.contains(document.activeElement)) { formatBar?.remove(); formatBar = null; } }, 150);
     syncRichBlocks();
@@ -473,6 +664,21 @@ function openBlockEditor(index: number, forceSource = false) {
     if (s === state) renderBlocks();
   };
 
+  const image = !forceSource ? parseImageMarkdown(block.source, s.page.path) : null;
+  if (image) {
+    void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked)); });
+    return;
+  }
+  const table = !forceSource && block.kind === 'table' ? parseTable(block.source) : null;
+  if (table) {
+    const editor = tableEditor(table);
+    openPanel('Table', editor.root, [
+      button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
+      button('Apply', 'Apply to the page', () => void apply(formatTable(editor.value())), 'ndcms-btn--primary'),
+    ]);
+    return;
+  }
+
   const admonition = !forceSource ? parseAdmonition(block.source) : null;
   const fence = !forceSource && !admonition ? parseFence(block.source) : null;
   const tabs = !forceSource && !admonition && !fence ? parseTabs(block.source) : null;
@@ -483,18 +689,18 @@ function openBlockEditor(index: number, forceSource = false) {
     const title = input(admonition.title ?? '', 'Leave empty for the default title');
     const noTitle = el('input', { type: 'checkbox' }) as HTMLInputElement;
     noTitle.checked = admonition.title === '';
-    const body = textarea(admonition.body, 12);
-    openPanel('Admonition', el('div', {},
+    const body = richArea(admonition.body, s.page.path);
+    openPanel('Callout box', el('div', {},
       field('Type', type),
       field('Style', style, '!!! always open · ??? collapsed · ???+ collapsible, open'),
       field('Title', title),
       el('label', { class: 'ndcms-check' }, noTitle, ' Hide the title bar'),
-      field('Content (markdown)', body),
+      field('Content', body.root),
     ), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
       button('Apply', 'Apply to the page', () => void apply(formatAdmonition({
         marker: style.value as '!!!', type: type.value, extra: admonition.extra,
-        title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value,
+        title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value(),
       })), 'ndcms-btn--primary'),
     ]);
     return;
@@ -517,18 +723,18 @@ function openBlockEditor(index: number, forceSource = false) {
 
   if (tabs) {
     const list = el('div', { class: 'ndcms-tabs-editor' });
-    const rows: { title: HTMLInputElement; body: HTMLTextAreaElement; selected: boolean }[] = [];
+    const rows: { title: HTMLInputElement; body: RichArea; selected: boolean }[] = [];
     const addRow = (t: { title: string; body: string; selected: boolean }) => {
-      const row = { title: input(t.title, 'Tab title'), body: textarea(t.body, 6), selected: t.selected };
+      const row = { title: input(t.title, 'Tab title'), body: richArea(t.body, s.page.path), selected: t.selected };
       rows.push(row);
-      const box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, 'Tab'), field('Title', row.title), field('Content (markdown)', row.body),
+      const box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, 'Tab'), field('Title', row.title), field('Content', row.body.root),
         button('Remove tab', 'Remove this tab', () => { rows.splice(rows.indexOf(row), 1); box.remove(); }, 'ndcms-btn--danger'));
       list.append(box);
     };
     tabs.forEach(addRow);
     openPanel('Content tabs', el('div', {}, list, button('+ Add tab', 'Add another tab', () => addRow({ title: 'New tab', body: 'Content.', selected: false }))), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-      button('Apply', 'Apply to the page', () => void apply(formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value, selected: r.selected })))), 'ndcms-btn--primary'),
+      button('Apply', 'Apply to the page', () => void apply(formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value(), selected: r.selected })))), 'ndcms-btn--primary'),
     ]);
     return;
   }
@@ -552,6 +758,154 @@ function openBlockEditor(index: number, forceSource = false) {
   ]);
 }
 
+// --- Rich text areas inside forms ----------------------------------------------------------------
+
+interface RichArea { root: HTMLElement; value: () => string }
+
+/**
+ * Edits a piece of markdown (an admonition or tab body) visually when it only holds text-like
+ * blocks, and as markdown otherwise. "Edit as markdown" switches over at any time.
+ */
+function richArea(markdown: string, pagePath: string): RichArea {
+  const root = el('div', { class: 'ndcms-rich' });
+  const source = textarea(markdown, 8);
+  const editable = el('div', { class: 'ndcms-rich__text md-typeset', contenteditable: 'true', spellcheck: 'true' });
+  let mode: 'rich' | 'source' | 'loading' = 'loading';
+  let renderedHtml = '';
+  let original = markdown;
+  const toggle = button('Edit as markdown', 'Switch between visual and markdown editing', () => {
+    if (mode === 'rich') { source.value = current(); showSource(); }
+    else if (mode === 'source') void tryRich(source.value);
+  }, 'ndcms-btn--link');
+  const current = () => {
+    if (mode !== 'rich') return source.value;
+    if (editable.innerHTML === renderedHtml) return original;
+    return htmlToMarkdown(editable.innerHTML);
+  };
+  const showSource = () => {
+    mode = 'source';
+    toggle.textContent = 'Edit visually';
+    root.replaceChildren(source, toggle);
+  };
+  const tryRich = async (md: string) => {
+    try {
+      const { blocks } = await api.renderBlocks(pagePath, md, state?.frontMatter ?? {});
+      const safe = blocks.every((b) => isRich(b.kind, b.source, b.html));
+      if (!safe) {
+        showSource();
+        root.append(el('small', { class: 'ndcms-muted' }, ' This content has blocks that are edited as markdown.'));
+        return;
+      }
+      editable.innerHTML = blocks.length ? blocks.map((b) => b.html).join('\n') : '<p><br></p>';
+      renderedHtml = editable.innerHTML;
+      original = md;
+      mode = 'rich';
+      toggle.textContent = 'Edit as markdown';
+      root.replaceChildren(editable, toggle);
+    } catch {
+      showSource();
+    }
+  };
+  editable.addEventListener('focus', () => showFormatBar(editable, root));
+  editable.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('a')) e.preventDefault(); });
+  root.append(el('span', { class: 'ndcms-muted' }, 'Loading…'));
+  void tryRich(markdown);
+  return { root, value: current };
+}
+
+// --- Tables -------------------------------------------------------------------------------------
+
+type Align = '' | 'left' | 'center' | 'right';
+interface Table { header: string[]; align: Align[]; rows: string[][] }
+
+function splitRow(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith('|')) t = t.slice(1);
+  if (t.endsWith('|') && !t.endsWith('\\|')) t = t.slice(0, -1);
+  const cells: string[] = [];
+  let cur = '';
+  let code = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (c === '\\' && t[i + 1] === '|') { cur += '\\|'; i++; continue; }
+    if (c === '`') code = !code;
+    if (c === '|' && !code) { cells.push(cur.trim()); cur = ''; continue; }
+    cur += c;
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+/** Parses a pipe table, or null when the source is anything else. */
+function parseTable(source: string): Table | null {
+  const lines = source.trim().split('\n');
+  if (lines.length < 2 || !/^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/.test(lines[1])) return null;
+  const header = splitRow(lines[0]);
+  const align = splitRow(lines[1]).map((c): Align => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : ''));
+  const width = header.length;
+  const fit = (r: string[]) => [...r, ...Array(Math.max(0, width - r.length)).fill('')].slice(0, width);
+  return { header, align: fit(align as string[]) as Align[], rows: lines.slice(2).filter((l) => l.trim()).map((l) => fit(splitRow(l))) };
+}
+
+function formatTable(t: Table): string {
+  const cols = t.header.length;
+  const esc = (c: string) => c.replace(/\n/g, ' ').trim();
+  const widths = Array.from({ length: cols }, (_, i) => Math.max(3, esc(t.header[i] ?? '').length, ...t.rows.map((r) => esc(r[i] ?? '').length)));
+  const line = (cells: string[]) => '| ' + cells.map((c, i) => esc(c).padEnd(widths[i])).join(' | ') + ' |';
+  const sep = '| ' + t.align.map((a, i) => {
+    const w = widths[i];
+    if (a === 'center') return ':' + '-'.repeat(w - 2) + ':';
+    if (a === 'right') return '-'.repeat(w - 1) + ':';
+    if (a === 'left') return ':' + '-'.repeat(w - 1);
+    return '-'.repeat(w);
+  }).join(' | ') + ' |';
+  return [line(t.header), sep, ...t.rows.map(line)].join('\n');
+}
+
+/** A grid of inputs with buttons to add and remove rows and columns. */
+function tableEditor(initial: Table) {
+  const t: Table = structuredClone(initial);
+  const root = el('div', { class: 'ndcms-table-editor' });
+  const draw = () => {
+    const grid = el('table', { class: 'ndcms-grid' });
+    const head = el('tr', {});
+    head.append(el('th', {}));
+    t.header.forEach((_, c) => {
+      const align = select(t.align[c] || 'default', ['default', 'left', 'center', 'right']);
+      align.addEventListener('change', () => { t.align[c] = (align.value === 'default' ? '' : align.value) as Align; });
+      head.append(el('th', {}, align, button('✕', 'Remove this column', () => {
+        if (t.header.length === 1) return;
+        t.header.splice(c, 1); t.align.splice(c, 1); t.rows.forEach((r) => r.splice(c, 1)); draw();
+      }, 'ndcms-btn--danger ndcms-btn--tiny')));
+    });
+    grid.append(head);
+    const cell = (value: string, onInput: (v: string) => void, headerCell = false) => {
+      const i = input(value, headerCell ? 'Heading' : '');
+      if (headerCell) i.classList.add('ndcms-input--strong');
+      i.addEventListener('input', () => onInput(i.value));
+      return el('td', {}, i);
+    };
+    const hr = el('tr', {}, el('td', { class: 'ndcms-muted' }, 'Header'));
+    t.header.forEach((h, c) => hr.append(cell(h, (v) => { t.header[c] = v; }, true)));
+    grid.append(hr);
+    t.rows.forEach((r, ri) => {
+      const tr = el('tr', {}, el('td', {}, button('✕', 'Remove this row', () => { t.rows.splice(ri, 1); draw(); }, 'ndcms-btn--danger ndcms-btn--tiny')));
+      r.forEach((v, c) => tr.append(cell(v, (nv) => { t.rows[ri][c] = nv; })));
+      grid.append(tr);
+    });
+    root.replaceChildren(
+      el('div', { class: 'ndcms-grid-wrap' }, grid),
+      el('div', { class: 'ndcms-row' },
+        button('+ Row', 'Add a row at the bottom', () => { t.rows.push(t.header.map(() => '')); draw(); }),
+        button('+ Column', 'Add a column on the right', () => { t.header.push('Column'); t.align.push(''); t.rows.forEach((r) => r.push('')); draw(); }),
+      ),
+      el('small', { class: 'ndcms-muted' }, 'Cells can use inline formatting such as **bold**, `code` and links.'),
+    );
+  };
+  draw();
+  return { root, value: () => t };
+}
+
 // Front matter keys with their own controls; anything else is shown as a custom attribute.
 const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide', 'nav_title', 'page_title', 'authors', 'status'];
 
@@ -562,9 +916,10 @@ async function openSettings() {
   const str = (k: string) => (typeof fm[k] === 'string' || typeof fm[k] === 'number' ? String(fm[k]) : '');
   const list = (k: string) => (Array.isArray(fm[k]) ? (fm[k] as Json[]).map(String) : typeof fm[k] === 'string' ? [fm[k] as string] : []);
 
-  const [tagTerms, categoryTerms] = await Promise.all([
+  const [tagTerms, categoryTerms, templates] = await Promise.all([
     api.taxonomy('tags').then((t) => t.terms.map((x) => x.name)).catch(() => [] as string[]),
     api.taxonomy('categories').then((t) => t.terms.map((x) => x.name)).catch(() => [] as string[]),
+    pageTemplates(),
   ]);
 
   const title = input(str('title'));
@@ -573,11 +928,12 @@ async function openSettings() {
   const tags = chipInput(list('tags'), tagTerms);
   const categories = chipInput(list('categories'), categoryTerms);
   const dateValue = typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date) ? String((fm.date as Record<string, Json>).created ?? '') : str('date');
-  const date = input(dateValue, 'YYYY-MM-DD');
+  const date = dateInput(dateValue);
   const draft = el('input', { type: 'checkbox' }) as HTMLInputElement;
   draft.checked = fm.draft === true;
-  const icon = input(str('icon'), 'material/file-document');
-  const template = input(str('template'), 'main.html');
+  const icon = iconInput(str('icon'));
+  const template = select(str('template'), ['', ...templates]);
+  template.querySelector('option[value=""]')!.textContent = 'Default (main.html)';
   const hide = list('hide');
   const hideBoxes = ['toc', 'nav', 'path', 'footer', 'tags'].map((h) => {
     const c = el('input', { type: 'checkbox', value: h }) as HTMLInputElement;
@@ -601,10 +957,10 @@ async function openSettings() {
     field('Description', description, 'Used for search results and social cards'),
     field('Tags', tags.root),
     field('Categories', categories.root, 'Blog post categories'),
-    field('Date', date),
+    field('Date', date.root),
     el('label', { class: 'ndcms-check' }, draft, ' Draft (hidden from the published blog)'),
-    field('Icon', icon),
-    field('Template', template),
+    field('Icon', icon.root, 'Shown next to the page in the navigation'),
+    field('Template', template, 'Page templates come from the theme and your overrides folder'),
     el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Hide'), el('div', { class: 'ndcms-checks' }, ...hideBoxes)),
     el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Custom attributes'), el('small', { class: 'ndcms-muted' }, 'Values may be text or JSON (lists, numbers, true/false).'), customRows,
       button('+ Add attribute', 'Add a front matter key', () => addCustom('', ''))),
@@ -622,10 +978,10 @@ async function openSettings() {
       set('description', description.value.trim() || undefined);
       set('tags', tags.values());
       set('categories', categories.values());
-      if (typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date)) set('date', { ...(fm.date as Record<string, Json>), created: date.value.trim() });
-      else set('date', date.value.trim() || undefined);
+      if (typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date)) set('date', { ...(fm.date as Record<string, Json>), created: date.value() });
+      else set('date', date.value() || undefined);
       set('draft', draft.checked ? true : undefined);
-      set('icon', icon.value.trim() || undefined);
+      set('icon', icon.value() || undefined);
       set('template', template.value.trim() || undefined);
       const hidden = hideBoxes.map((l) => l.querySelector('input') as HTMLInputElement).filter((c) => c.checked).map((c) => c.value);
       set('hide', hidden.length ? hidden : undefined);
@@ -646,6 +1002,50 @@ async function openSettings() {
       updateStatus();
     }, 'ndcms-btn--primary'),
   ]);
+}
+
+/** A date picker that keeps a time of day (2024-05-01 10:30) when the page has one. */
+function dateInput(value: string) {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::\d{2})?)?$/.exec(value.trim());
+  const root = el('div', { class: 'ndcms-row' });
+  const day = el('input', { class: 'ndcms-input', type: 'date' }) as HTMLInputElement;
+  const time = el('input', { class: 'ndcms-input', type: 'time', title: 'Time (optional)' }) as HTMLInputElement;
+  const other = value.trim() !== '' && !m;
+  if (m) { day.value = m[1]; time.value = m[2] ?? ''; }
+  const text = input(other ? value : '', 'YYYY-MM-DD');
+  const today = button('Today', 'Use today\'s date', () => {
+    const d = new Date();
+    day.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const clear = button('Clear', 'Remove the date', () => { day.value = ''; time.value = ''; text.value = ''; });
+  if (other) root.append(text, clear);
+  else root.append(day, time, today, clear);
+  return {
+    root,
+    value: () => (other ? text.value.trim() : day.value ? (time.value ? `${day.value} ${time.value}` : day.value) : ''),
+  };
+}
+
+/** An icon field: a preview, the name, and a button that opens the icon picker. */
+function iconInput(value: string) {
+  let current = value;
+  const preview = el('span', { class: 'ndcms-icon-preview' });
+  const name = el('span', { class: 'ndcms-icon-name' });
+  const draw = async () => {
+    name.textContent = current || 'No icon';
+    preview.innerHTML = '';
+    if (!current) return;
+    const icons = await api.icons(current.split('/').pop() ?? current, 40).catch(() => []);
+    preview.innerHTML = icons.find((i) => i.name === current)?.svg ?? '';
+  };
+  const pick = button('Choose…', 'Pick an icon', async () => {
+    const chosen = await openIconPicker(current);
+    if (chosen === null) return;
+    current = chosen;
+    void draw();
+  });
+  void draw();
+  return { root: el('div', { class: 'ndcms-row ndcms-icon-field' }, preview, name, pick), value: () => current };
 }
 
 /** A tag-style input with suggestions from the site's existing terms. */
@@ -698,6 +1098,7 @@ async function save() {
     s.reloadPending = true;
     renderBlocks();
     updateStatus('Saved ✓', 'ok');
+    notifyParent('saved');
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       updateStatus('Conflict', 'error');

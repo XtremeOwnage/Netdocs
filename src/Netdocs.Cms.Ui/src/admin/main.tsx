@@ -28,6 +28,18 @@ function App() {
   const route = useRoute();
   const site = useLoad(() => api.site());
   const [menu, setMenu] = useState(false);
+  // The sidebar can be narrowed to icons. The page editor starts narrowed, for room.
+  const editing = route.path === '/pages/edit';
+  const prefKey = editing ? 'ndcms-sidebar-editor' : 'ndcms-sidebar';
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('ndcms-sidebar-prefs') ?? '{}'); } catch { return {}; }
+  });
+  const collapsed = prefs[prefKey] ?? editing;
+  const toggleCollapsed = () => {
+    const next = { ...prefs, [prefKey]: !collapsed };
+    setPrefs(next);
+    try { localStorage.setItem('ndcms-sidebar-prefs', JSON.stringify(next)); } catch { /* private mode */ }
+  };
   useEffect(() => setMenu(false), [route.path]);
   useEffect(() => { if (site.data) document.title = `${site.data.siteName} · CMS`; }, [site.data]);
 
@@ -64,13 +76,14 @@ function App() {
   }
 
   return (
-    <div class={`shell${menu ? ' shell--menu' : ''}`}>
+    <div class={`shell${menu ? ' shell--menu' : ''}${collapsed ? ' shell--collapsed' : ''}`}>
       <aside class="sidebar">
         <div class="brand"><strong>{site.data.siteName}</strong><span class="muted small">Netdocs CMS</span></div>
         <nav>
-          {sections.map((s) => <a key={s.path} href={'#' + s.path} class={active(s.path) ? 'on' : ''}><span class="icon">{s.icon}</span>{s.label}</a>)}
+          {sections.map((s) => <a key={s.path} href={'#' + s.path} class={active(s.path) ? 'on' : ''} title={s.label}><span class="icon">{s.icon}</span><span class="label">{s.label}</span></a>)}
         </nav>
-        <a class="btn view-site" href="/" target="_blank" rel="noopener">View site ↗</a>
+        <a class="btn view-site" href="/" target="_blank" rel="noopener" title="View site">{collapsed ? '↗' : 'View site ↗'}</a>
+        <button class="btn btn--ghost collapse-toggle" onClick={toggleCollapsed} title={collapsed ? 'Show the menu labels' : 'Narrow the menu to icons'}>{collapsed ? '»' : '« Collapse'}</button>
       </aside>
       <button class="menu-toggle btn" onClick={() => setMenu(!menu)} aria-label="Menu">☰</button>
       <main class="content">{screen}</main>

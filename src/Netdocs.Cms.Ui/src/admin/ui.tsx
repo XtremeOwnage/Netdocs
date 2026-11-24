@@ -178,8 +178,3 @@ export function Diff(props: { text: string }) {
 export const confirmAction = (message: string) => window.confirm(message);
 
 /** Opens a page in the in-page visual editor. */
-export function openInPageEditor(path: string, url: string | null) {
-  if (url === null) return;
-  sessionStorage.setItem('ndcms-edit', path);
-  window.open('/' + url + '?cms-edit=1', '_blank');
-}

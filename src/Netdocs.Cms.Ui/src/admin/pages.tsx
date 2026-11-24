@@ -1,7 +1,8 @@
 // Pages list, page creation/move/delete, bulk tagging, and the full-page source editor.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, type FrontMatter, type Json, type PageDocument, type PageSummary } from '../shared/api';
-import { ChipInput, CodeEditor, Field, Loading, Modal, confirmAction, openInPageEditor, toast, toastError, useAction, useLoad } from './ui';
+import { ChipInput, CodeEditor, Field, Loading, Modal, confirmAction, toast, toastError, useAction, useLoad } from './ui';
+import { openIconPicker, pageTemplates } from '../shared/pickers';
 import { navigate } from './router';
 
 export function PagesScreen() {
@@ -67,8 +68,7 @@ export function PagesScreen() {
               <td>{p.tags.map((t) => <span class="tag" key={t}>{t}</span>)}</td>
               <td class="muted nowrap">{new Date(p.modified).toLocaleString()}</td>
               <td class="actions">
-                <button class="btn btn--small" disabled={p.url === null} title="Edit visually on the page" onClick={() => openInPageEditor(p.path, p.url)}>✎ Visual</button>
-                <a class="btn btn--small" href={`#/pages/edit?path=${encodeURIComponent(p.path)}`}>Source</a>
+                <a class="btn btn--small btn--primary" href={`#/pages/edit?path=${encodeURIComponent(p.path)}`}>✎ Edit</a>
                 {p.url !== null && <a class="btn btn--small" href={'/' + p.url} target="_blank" rel="noopener">View</a>}
                 <button class="btn btn--small" onClick={() => setDialog({ kind: 'move', page: p })}>Rename</button>
                 <button class="btn btn--small btn--danger" onClick={() => void remove(p)}>Delete</button>
@@ -145,17 +145,35 @@ function BulkTagDialog(props: { pages: string[]; suggestions: string[]; onClose:
 
 const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide'];
 
+type EditorMode = 'visual' | 'fields' | 'raw';
+
+const savedMode = (): EditorMode => {
+  try {
+    const m = localStorage.getItem('ndcms-editor-mode');
+    return m === 'fields' || m === 'raw' ? m : 'visual';
+  } catch { return 'visual'; }
+};
+
 export function PageEditorScreen(props: { path: string }) {
   const { data, error, reload, setData } = useLoad(() => api.page(props.path), [props.path]);
   const [body, setBody] = useState('');
   const [fm, setFm] = useState<FrontMatter>({});
-  const [mode, setMode] = useState<'fields' | 'raw'>('fields');
+  const [mode, setModeState] = useState<EditorMode>(savedMode);
   const [raw, setRaw] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<string[]>([]);
+  const [visualDirty, setVisualDirty] = useState(false);
+  const [frameKey, setFrameKey] = useState(0);
   const { busy, run } = useAction();
   const frame = useRef<HTMLIFrameElement>(null);
+  const visual = useRef<HTMLIFrameElement>(null);
+
+  const setMode = (m: EditorMode) => {
+    setModeState(m);
+    try { localStorage.setItem('ndcms-editor-mode', m); } catch { /* private mode */ }
+  };
 
   useEffect(() => {
     if (!data) return;
@@ -167,11 +185,52 @@ export function PageEditorScreen(props: { path: string }) {
   useEffect(() => {
     api.taxonomy('tags').then((t) => setTags(t.terms.map((x) => x.name))).catch(() => {});
     api.taxonomy('categories').then((t) => setCategories(t.terms.map((x) => x.name))).catch(() => {});
+    void pageTemplates().then(setTemplates);
   }, []);
+
+  // A page created a moment ago has no URL until the site rebuilds: check again until it does.
+  useEffect(() => {
+    if (!data || data.url !== null) return;
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries++;
+      try {
+        const fresh = await api.page(data.path);
+        if (fresh.url !== null) { clearInterval(timer); setData(fresh); }
+      } catch { /* keep waiting */ }
+      if (tries > 60) clearInterval(timer);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [data?.path, data?.url]);
+
+  // The embedded page editor reports unsaved changes and saves.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== location.origin || e.data?.source !== 'netdocs-cms') return;
+      if (e.data.event === 'navigate') {
+        const url = String(e.data.url ?? '').replace(/^\//, '');
+        void api.pageByUrl(url)
+          .then((r) => navigate(`/pages/edit?path=${encodeURIComponent(r.path)}`))
+          .catch(() => window.open('/' + url, '_blank'));
+        return;
+      }
+      setVisualDirty(!!e.data.dirty);
+      if (e.data.event === 'saved') void api.page(props.path).then((fresh) => setData(fresh)).catch(() => {});
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [props.path]);
+
+  // Leaving the screen with unsaved visual edits asks first.
+  useEffect(() => {
+    const onUnload = (e: BeforeUnloadEvent) => { if (visualDirty) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', onUnload);
+    return () => window.removeEventListener('beforeunload', onUnload);
+  }, [visualDirty]);
 
   // Live preview: the built page's own HTML, with its article replaced by the rendered draft.
   useEffect(() => {
-    if (!data) return;
+    if (!data || mode === 'visual') return;
     const handle = setTimeout(async () => {
       try {
         const source = mode === 'raw' ? splitRaw(raw) : { fm, body };
@@ -197,11 +256,29 @@ export function PageEditorScreen(props: { path: string }) {
 
   if (!data) return <Loading error={error} />;
 
-  const dirty = mode === 'raw' ? raw !== data.raw : body !== data.body || JSON.stringify(fm) !== JSON.stringify(data.frontMatter);
+  const sourceDirty = mode === 'raw' ? raw !== data.raw : mode === 'fields' && (body !== data.body || JSON.stringify(fm) !== JSON.stringify(data.frontMatter));
+  const dirty = mode === 'visual' ? visualDirty : sourceDirty;
 
   const save = async () => {
+    if (mode === 'visual') {
+      const w = visual.current?.contentWindow as unknown as { __netdocsCmsSave?: () => Promise<void> } | null;
+      await w?.__netdocsCmsSave?.();
+      return;
+    }
     const doc = await run(() => (mode === 'raw' ? api.saveRaw(data.path, data.hash, raw) : api.savePage(data.path, data.hash, fm, body)), 'Saved');
     if (doc) setData(doc);
+  };
+
+  const switchTo = async (next: EditorMode) => {
+    if (next === mode) return;
+    if (dirty && !confirmAction('Switch view and drop the unsaved edits?')) return;
+    // Pick up whatever the other view saved.
+    const fresh = await api.page(data.path).catch(() => data);
+    setData(fresh);
+    setBody(fresh.body); setFm(structuredClone(fresh.frontMatter)); setRaw(fresh.raw);
+    setVisualDirty(false);
+    if (next === 'visual') setFrameKey((k) => k + 1);
+    setMode(next);
   };
 
   const setKey = (key: string, value: Json | undefined) => {
@@ -214,63 +291,125 @@ export function PageEditorScreen(props: { path: string }) {
   const list = (k: string) => (Array.isArray(fm[k]) ? (fm[k] as Json[]).map(String) : typeof fm[k] === 'string' ? [fm[k] as string] : []);
 
   return (
-    <section class="editor-screen">
+    <section class={`editor-screen editor-screen--${mode}`}>
       <header class="screen-head">
-        <h1 class="mono">{data.path}</h1>
+        <h1 title={data.path}>{str('title') || data.path}{str('title') && <span class="muted small mono"> · {data.path}</span>}</h1>
         <div class="row">
-          {data.url !== null && <button class="btn" onClick={() => openInPageEditor(data.path, data.url)}>✎ Edit visually</button>}
+          {mode === 'visual' && <span class={`muted small${dirty ? ' warn' : ''}`}>{dirty ? 'Unsaved changes' : 'All changes saved'}</span>}
           <div class="segmented">
-            <button class={mode === 'fields' ? 'on' : ''} onClick={() => { if (mode === 'raw' && raw !== data.raw && !confirmAction('Switch view and drop the unsaved raw edits?')) return; setMode('fields'); setRaw(data.raw); }}>Fields + markdown</button>
-            <button class={mode === 'raw' ? 'on' : ''} onClick={() => { if (dirty && !confirmAction('Switch view and drop the unsaved edits?')) return; setMode('raw'); setBody(data.body); setFm(structuredClone(data.frontMatter)); }}>Whole file</button>
+            <button class={mode === 'visual' ? 'on' : ''} title="Edit the page as it looks on the site" onClick={() => void switchTo('visual')}>Visual</button>
+            <button class={mode === 'fields' ? 'on' : ''} title="Settings fields plus the markdown body" onClick={() => void switchTo('fields')}>Fields + markdown</button>
+            <button class={mode === 'raw' ? 'on' : ''} title="The whole file, front matter included" onClick={() => void switchTo('raw')}>Whole file</button>
           </div>
-          <button class="btn" disabled={!dirty} onClick={() => { setBody(data.body); setFm(structuredClone(data.frontMatter)); setRaw(data.raw); }}>Revert</button>
+          {mode !== 'visual' && <button class="btn" disabled={!dirty} onClick={() => { setBody(data.body); setFm(structuredClone(data.frontMatter)); setRaw(data.raw); }}>Revert</button>}
           <button class="btn btn--primary" disabled={busy || !dirty} onClick={() => void save()}>Save</button>
-          <button class="btn btn--ghost" title="Reload from disk" onClick={() => { if (!dirty || confirmAction('Reload and lose unsaved edits?')) reload(); }}>⟳</button>
+          {data.url !== null && <a class="btn btn--ghost" href={'/' + data.url} target="_blank" rel="noopener" title="Open the page in a new tab">↗</a>}
+          <button class="btn btn--ghost" title="Reload from disk" onClick={() => {
+            if (dirty && !confirmAction('Reload and lose unsaved edits?')) return;
+            setVisualDirty(false);
+            setFrameKey((k) => k + 1);
+            reload();
+          }}>⟳</button>
         </div>
       </header>
-      <div class="editor-grid">
-        <div class="editor-pane">
-          {mode === 'fields' && (
-            <details class="card" open>
-              <summary>Page settings</summary>
-              <div class="grid2">
-                <Field label="Title"><input class="input" value={str('title')} onInput={(e) => setKey('title', (e.target as HTMLInputElement).value)} /></Field>
-                <Field label="Date"><input class="input" value={str('date')} placeholder="YYYY-MM-DD" onInput={(e) => setKey('date', (e.target as HTMLInputElement).value)} disabled={typeof fm.date === 'object' && fm.date !== null} /></Field>
-              </div>
-              <Field label="Description"><textarea class="input" rows={2} value={str('description')} onInput={(e) => setKey('description', (e.target as HTMLTextAreaElement).value)} /></Field>
-              <div class="grid2">
-                <Field label="Tags"><ChipInput values={list('tags')} onChange={(v) => setKey('tags', v)} suggestions={tags} /></Field>
-                <Field label="Categories"><ChipInput values={list('categories')} onChange={(v) => setKey('categories', v)} suggestions={categories} /></Field>
-              </div>
-              <div class="grid2">
-                <Field label="Icon"><input class="input" value={str('icon')} placeholder="material/file-document" onInput={(e) => setKey('icon', (e.target as HTMLInputElement).value)} /></Field>
-                <Field label="Template"><input class="input" value={str('template')} placeholder="main.html" onInput={(e) => setKey('template', (e.target as HTMLInputElement).value)} /></Field>
-              </div>
-              <div class="row">
-                <label class="check"><input type="checkbox" checked={fm.draft === true} onChange={(e) => setKey('draft', (e.target as HTMLInputElement).checked ? true : undefined)} /> Draft</label>
-                {['toc', 'nav', 'path', 'footer'].map((h) => (
-                  <label class="check" key={h}><input type="checkbox" checked={list('hide').includes(h)} onChange={(e) => {
-                    const cur = list('hide').filter((x) => x !== h);
-                    setKey('hide', (e.target as HTMLInputElement).checked ? [...cur, h] : cur);
-                  }} /> Hide {h}</label>
-                ))}
-              </div>
-              <CustomAttributes fm={fm} onChange={setFm} />
-            </details>
-          )}
-          <div class="editor-code">
-            {mode === 'fields'
-              ? <CodeEditor value={body} onChange={setBody} onSave={() => void save()} />
-              : <CodeEditor value={raw} onChange={setRaw} onSave={() => void save()} />}
+      {mode === 'visual' ? (
+        <div class="visual-pane">
+          {data.url !== null
+            ? <iframe key={frameKey} ref={visual} title="Page editor" class="visual-frame" src={'/' + data.url + '?cms-embed=1'} />
+            : <div class="card"><Loading /> <p class="muted">Building the page so it can be edited. This takes a moment for a new page.</p></div>}
+        </div>
+      ) : (
+        <div class="editor-grid">
+          <div class="editor-pane">
+            {mode === 'fields' && (
+              <details class="card" open>
+                <summary>Page settings</summary>
+                <div class="grid2">
+                  <Field label="Title"><input class="input" value={str('title')} onInput={(e) => setKey('title', (e.target as HTMLInputElement).value)} /></Field>
+                  <Field label="Date"><DateField value={str('date')} disabled={typeof fm.date === 'object' && fm.date !== null} onChange={(v) => setKey('date', v)} /></Field>
+                </div>
+                <Field label="Description"><textarea class="input" rows={2} value={str('description')} onInput={(e) => setKey('description', (e.target as HTMLTextAreaElement).value)} /></Field>
+                <div class="grid2">
+                  <Field label="Tags"><ChipInput values={list('tags')} onChange={(v) => setKey('tags', v)} suggestions={tags} /></Field>
+                  <Field label="Categories"><ChipInput values={list('categories')} onChange={(v) => setKey('categories', v)} suggestions={categories} /></Field>
+                </div>
+                <div class="grid2">
+                  <Field label="Icon"><IconField value={str('icon')} onChange={(v) => setKey('icon', v)} /></Field>
+                  <Field label="Template">
+                    <select class="input" value={str('template')} onChange={(e) => setKey('template', (e.target as HTMLSelectElement).value)}>
+                      <option value="">Default (main.html)</option>
+                      {[...new Set([...templates, ...(str('template') ? [str('template')] : [])])].map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div class="row">
+                  <label class="check"><input type="checkbox" checked={fm.draft === true} onChange={(e) => setKey('draft', (e.target as HTMLInputElement).checked ? true : undefined)} /> Draft</label>
+                  {['toc', 'nav', 'path', 'footer'].map((h) => (
+                    <label class="check" key={h}><input type="checkbox" checked={list('hide').includes(h)} onChange={(e) => {
+                      const cur = list('hide').filter((x) => x !== h);
+                      setKey('hide', (e.target as HTMLInputElement).checked ? [...cur, h] : cur);
+                    }} /> Hide {h}</label>
+                  ))}
+                </div>
+                <CustomAttributes fm={fm} onChange={setFm} />
+              </details>
+            )}
+            <div class="editor-code">
+              {mode === 'fields'
+                ? <CodeEditor value={body} onChange={setBody} onSave={() => void save()} />
+                : <CodeEditor value={raw} onChange={setRaw} onSave={() => void save()} />}
+            </div>
+          </div>
+          <div class="preview-pane">
+            {data.url !== null
+              ? <iframe ref={frame} title="Preview" class="preview-frame" src={'/' + data.url + '?__cms=off'} onLoad={applyPreview} />
+              : <div class="preview-plain md-typeset" dangerouslySetInnerHTML={{ __html: previewHtml ?? '' }} />}
           </div>
         </div>
-        <div class="preview-pane">
-          {data.url !== null
-            ? <iframe ref={frame} title="Preview" class="preview-frame" src={'/' + data.url + '?__cms=off'} onLoad={applyPreview} />
-            : <div class="preview-plain md-typeset" dangerouslySetInnerHTML={{ __html: previewHtml ?? '' }} />}
-        </div>
-      </div>
+      )}
     </section>
+  );
+}
+
+/** Date picker with an optional time; values that are not a plain date stay editable as text. */
+function DateField(props: { value: string; disabled?: boolean; onChange: (v: string) => void }) {
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::\d{2})?)?$/.exec(props.value.trim());
+  if (props.value.trim() && !m) {
+    return <input class="input" value={props.value} disabled={props.disabled} onInput={(e) => props.onChange((e.target as HTMLInputElement).value)} />;
+  }
+  const day = m?.[1] ?? '';
+  const time = m?.[2] ?? '';
+  const join = (d: string, t: string) => (d ? (t ? `${d} ${t}` : d) : '');
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  return (
+    <div class="row date-field">
+      <input class="input" type="date" value={day} disabled={props.disabled} onInput={(e) => props.onChange(join((e.target as HTMLInputElement).value, time))} />
+      <input class="input" type="time" value={time} disabled={props.disabled || !day} title="Time (optional)" onInput={(e) => props.onChange(join(day, (e.target as HTMLInputElement).value))} />
+      <button class="btn btn--small" disabled={props.disabled} onClick={() => props.onChange(join(today(), time))}>Today</button>
+    </div>
+  );
+}
+
+/** Icon preview and name, with a button that opens the icon picker. */
+function IconField(props: { value: string; onChange: (v: string) => void }) {
+  const [svg, setSvg] = useState('');
+  useEffect(() => {
+    setSvg('');
+    if (!props.value) return;
+    api.icons(props.value.split('/').pop() ?? props.value, 40)
+      .then((icons) => setSvg(icons.find((i) => i.name === props.value)?.svg ?? ''))
+      .catch(() => {});
+  }, [props.value]);
+  return (
+    <div class="row icon-field">
+      <span class="icon-preview" dangerouslySetInnerHTML={{ __html: svg }} />
+      <span class="mono small icon-name">{props.value || 'No icon'}</span>
+      <button class="btn btn--small" onClick={async () => { const v = await openIconPicker(props.value); if (v !== null) props.onChange(v); }}>Choose…</button>
+      {props.value && <button class="btn btn--small btn--ghost" onClick={() => props.onChange('')}>Clear</button>}
+    </div>
   );
 }
 

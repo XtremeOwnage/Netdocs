@@ -54,6 +54,7 @@ export interface GitStatus { isRepository: boolean; branch: string | null; upstr
 export interface GitCommit { hash: string; author: string; date: string; subject: string }
 export interface GitResult { ok: boolean; output: string }
 
+export interface IconMatch { name: string; shortcode: string; svg: string }
 export interface TemplateInfo { name: string; overridden: boolean; inTheme: boolean }
 
 export interface SiteInfo {
@@ -92,7 +93,19 @@ async function request<T>(method: string, path: string, body?: unknown, raw = fa
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
-  const response = await fetch(cms.api + path, { method, headers, body: payload });
+  let response: Response;
+  try {
+    response = await fetch(cms.api + path, { method, headers, body: payload });
+  } catch {
+    // A dropped connection (for example while the server rebuilds): retry reads once.
+    if (method !== 'GET') throw new ApiError('Could not reach netdocs serve. Is it still running?', 0);
+    await new Promise((r) => setTimeout(r, 400));
+    try {
+      response = await fetch(cms.api + path, { method, headers });
+    } catch {
+      throw new ApiError('Could not reach netdocs serve. Is it still running?', 0);
+    }
+  }
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     try {
@@ -144,7 +157,8 @@ export const api = {
     request<{ changed: number }>('POST', '/taxonomy/assign', { field, pages, add, remove }),
 
   media: () => request<MediaItem[]>('GET', '/media'),
-  mediaUrl: (path: string) => `${cms.api}/media/file${q({ path })}`,
+  mediaUrl: (path: string) => `${cms.api}/media/file${q({ path, t: cms.token })}`,
+  icons: (query: string, limit = 120) => request<IconMatch[]>('GET', '/icons' + q({ q: query, limit })),
   upload: (folder: string, files: File[], overwrite: boolean) => {
     const form = new FormData();
     form.set('folder', folder);

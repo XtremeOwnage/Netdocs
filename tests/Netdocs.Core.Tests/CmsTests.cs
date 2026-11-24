@@ -435,3 +435,22 @@ public class CmsJsonFormattingTests
         Assert.Equal(config, JsonSpanEditor.Set(config, nav, "Netdocs", "nav"));
     }
 }
+
+public class CmsIconCatalogTests
+{
+    [Theory]
+    [InlineData("material-home", "material/home")]
+    [InlineData("octicons-arrow-right-24", "octicons/arrow-right-24")]
+    [InlineData("fontawesome-brands-github", "fontawesome/brands/github")]
+    public void ShortcodesBecomeFrontMatterNames(string shortcode, string name) =>
+        Assert.Equal(name, Netdocs.Core.Cms.IconCatalog.ToName(shortcode));
+
+    [Fact]
+    public void SearchPutsExactMaterialMatchFirst()
+    {
+        var hits = Netdocs.Core.Cms.IconCatalog.Search("home", 10);
+        Assert.NotEmpty(hits);
+        Assert.Equal("material/home", hits[0].Name);
+        Assert.StartsWith("<svg", hits[0].Svg);
+    }
+}

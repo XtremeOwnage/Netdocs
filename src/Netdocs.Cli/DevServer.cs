@@ -5,24 +5,30 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Netdocs.Abstractions;
+using Netdocs.Cli.Cms;
 using Netdocs.Core;
 using Netdocs.Core.Configuration;
 using Netdocs.Core.Plugins;
 
 namespace Netdocs.Cli;
 
-/// <summary>Kestrel static host with FileSystemWatcher-driven rebuilds and WebSocket live reload.</summary>
+/// <summary>Kestrel static host with FileSystemWatcher-driven rebuilds and WebSocket live reload.
+/// With <paramref name="cms"/> on (the default for <c>netdocs serve</c>), it also hosts the local
+/// CMS at <c>/__cms/</c> and adds the in-page editor to every served page.</summary>
 public sealed class DevServer(
     string configPath,
     SiteConfig config,
     BuildOptions options,
     PluginRegistry registry,
     ILoggerFactory loggerFactory,
-    int port)
+    int port,
+    bool cms = false)
 {
     private readonly List<WebSocket> _clients = [];
     private readonly Lock _clientsLock = new();
     private readonly ILogger _log = loggerFactory.CreateLogger("serve");
+    private readonly CmsServer? _cms = cms ? new CmsServer(configPath, config, options, registry, loggerFactory) : null;
+    private readonly SemaphoreSlim _buildLock = new(1, 1);
 
     public async Task RunAsync()
     {
@@ -40,9 +46,12 @@ public sealed class DevServer(
         app.UseWebSockets();
         app.Map("/__livereload", HandleWebSocket);
         app.Use(ServeContent);
+        _cms?.Map(app);
 
         using var watcher = CreateWatcher();
         _log.LogInformation("Serving {Site} at http://localhost:{Port} (Ctrl+C to stop)", config.SiteName, listenPort);
+        if (_cms is not null)
+            _log.LogInformation("CMS at http://localhost:{Port}{Path}/ (turn off with --no-cms)", listenPort, CmsServer.BasePath);
         await app.RunAsync();
     }
 
@@ -65,7 +74,11 @@ public sealed class DevServer(
     private async Task ServeContent(HttpContext context, RequestDelegate next)
     {
         var path = context.Request.Path.Value ?? "/";
-        if (path.StartsWith("/__livereload", StringComparison.Ordinal)) { await next(context); return; }
+        if (path.StartsWith("/__livereload", StringComparison.Ordinal) || path.StartsWith(CmsServer.BasePath, StringComparison.Ordinal))
+        {
+            await next(context);
+            return;
+        }
         var relative = path.TrimStart('/');
         if (relative.Length == 0 || relative.EndsWith('/')) relative += "index.html";
         context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
@@ -80,7 +93,7 @@ public sealed class DevServer(
             {
                 context.Response.StatusCode = 404;
                 context.Response.ContentType = "text/html";
-                await context.Response.WriteAsync(InjectReloadScript(await File.ReadAllTextAsync(notFound)));
+                await context.Response.WriteAsync(InjectScripts(await File.ReadAllTextAsync(notFound), null));
                 return;
             }
             await next(context);
@@ -90,7 +103,14 @@ public sealed class DevServer(
         if (file.EndsWith(".html", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.ContentType = "text/html";
-            await context.Response.WriteAsync(InjectReloadScript(await File.ReadAllTextAsync(file)));
+            // The CMS preview loads pages untouched, without the live-reload and editor scripts.
+            if (context.Request.Query.ContainsKey("__cms"))
+            {
+                await context.Response.WriteAsync(await File.ReadAllTextAsync(file));
+                return;
+            }
+            var source = _cms?.SourceForUrl(Path.GetDirectoryName(relative.Replace('/', Path.DirectorySeparatorChar))?.Replace('\\', '/') ?? "");
+            await context.Response.WriteAsync(InjectScripts(await File.ReadAllTextAsync(file), source));
         }
         else
         {
@@ -147,6 +167,8 @@ public sealed class DevServer(
         void OnChange(object _, FileSystemEventArgs e)
         {
             if (IsIgnored(e.FullPath)) return;
+            // The CMS checks a config edit by loading a scratch copy; that copy is not a change.
+            if (Path.GetFileName(e.FullPath).StartsWith(".appsettings.cms-", StringComparison.Ordinal)) return;
             debounce.Stop();
             debounce.Start();
         }
@@ -163,15 +185,21 @@ public sealed class DevServer(
 
     private async Task RebuildAsync()
     {
+        await _buildLock.WaitAsync();
         try
         {
             var freshConfig = JsonConfigLoader.Load(configPath);
             var engine = new BuildEngine(freshConfig, options, registry, loggerFactory);
-            await engine.BuildAsync();
+            var site = await engine.BuildAsync();
+            _cms?.OnBuilt(freshConfig, site);
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Rebuild failed");
+        }
+        finally
+        {
+            _buildLock.Release();
         }
     }
 
@@ -187,17 +215,20 @@ public sealed class DevServer(
         }
     }
 
-    private static string InjectReloadScript(string html)
+    private string InjectScripts(string html, string? sourcePath)
     {
+        // The in-page editor can hold back a reload while it has unsaved changes.
         const string script = """
             <script>
             (function(){var s=new WebSocket("ws://"+location.host+"/__livereload");
-            s.onmessage=function(e){if(e.data==="reload")location.reload();};
-            s.onclose=function(){setTimeout(function(){location.reload();},1000);};})();
+            function reload(){if(window.__netdocsCmsHoldReload&&window.__netdocsCmsHoldReload())return;location.reload();}
+            s.onmessage=function(e){if(e.data==="reload")reload();};
+            s.onclose=function(){setTimeout(reload,1000);};})();
             </script>
             """;
+        var injected = _cms is null ? script : script + _cms.InlineEditorTag(sourcePath);
         var idx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        return idx >= 0 ? html.Insert(idx, script) : html + script;
+        return idx >= 0 ? html.Insert(idx, injected) : html + injected;
     }
 
     private static string ContentType(string file) => Path.GetExtension(file).ToLowerInvariant() switch

@@ -66,3 +66,18 @@ updates:
       frontend:
         patterns:
           - "*"
+
+  # The local CMS admin app and in-page editor (src/Netdocs.Cms.Ui). A bump here needs
+  # `npm run build` so the committed bundle in src/Netdocs.Cli/Cms/wwwroot matches; the CI
+  # "CMS UI bundle" job fails until it does.
+  - package-ecosystem: "npm"
+    directory: "/src/Netdocs.Cms.Ui"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(cms)"
+    groups:
+      cms-ui:
+        patterns:
+          - "*"

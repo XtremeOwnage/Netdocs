@@ -1,7 +1,7 @@
 // What the Plugins screen knows about each built-in plugin: a one-line summary, its docs page,
 // and the options it reads (so they can be edited as a form instead of raw JSON).
 
-export type OptionType = 'bool' | 'int' | 'string' | 'select' | 'list' | 'color';
+export type OptionType = 'bool' | 'int' | 'string' | 'select' | 'list' | 'color' | 'map';
 
 export interface OptionSpec {
   key: string;
@@ -13,11 +13,15 @@ export interface OptionSpec {
   choices?: string[];
   /** Nested object the option lives in, such as social's cards_layout_options. */
   group?: string;
+  /** Column names for a 'map' option. */
+  columns?: [string, string];
+  placeholders?: [string, string];
 }
 
 export interface PluginInfo {
   name: string;
   label: string;
+  icon: string;
   summary: string;
   doc: string;
   options: OptionSpec[];
@@ -32,7 +36,7 @@ const layout = 'cards_layout_options';
 
 export const pluginCatalog: PluginInfo[] = [
   {
-    name: 'abbreviations', label: 'Abbreviations', doc: 'abbreviations', extra: 'abbreviations',
+    name: 'abbreviations', icon: '💬', label: 'Abbreviations', doc: 'abbreviations', extra: 'abbreviations',
     summary: 'Adds hover tooltips for abbreviations (HTML, CSS…) on every page from a shared list of definitions.',
     options: [
       { key: 'files', label: 'Definition files', type: 'list', hint: 'Files in the docs folder that hold the definitions. Default: _include/abbv.md' },
@@ -40,12 +44,12 @@ export const pluginCatalog: PluginInfo[] = [
     ],
   },
   {
-    name: 'arithmatex', label: 'Math (Arithmatex)', doc: 'arithmatex',
+    name: 'arithmatex', icon: '∑', label: 'Math (Arithmatex)', doc: 'arithmatex',
     summary: 'Typesets LaTeX math with MathJax.',
     options: [{ key: 'mathjax_url', label: 'MathJax URL', type: 'string', hint: 'Defaults to the MathJax 3 CDN. Point at a local copy for offline builds.' }],
   },
   {
-    name: 'b64', label: 'Embed images (b64)', doc: 'b64',
+    name: 'b64', icon: '🧬', label: 'Embed images (b64)', doc: 'b64',
     summary: 'Embeds local images into the page as data: URIs so a page is self-contained.',
     options: [
       { key: 'default', label: 'Embed on every page', type: 'bool', default: false, hint: 'Off: only pages that ask for it.' },
@@ -53,7 +57,7 @@ export const pluginCatalog: PluginInfo[] = [
     ],
   },
   {
-    name: 'blog', label: 'Blog', doc: 'blog', extra: 'blog',
+    name: 'blog', icon: '📰', label: 'Blog', doc: 'blog', extra: 'blog',
     summary: 'Turns posts under the blog folder into a blog with index, category, archive and author pages.',
     options: [
       { key: 'blog_dir', label: 'Blog folder', type: 'string', default: 'blog/', hint: 'Inside the docs folder. Posts go in its posts/ folder.' },
@@ -64,35 +68,42 @@ export const pluginCatalog: PluginInfo[] = [
     ],
   },
   {
-    name: 'calculator', label: 'Calculator', doc: 'calculator',
+    name: 'calculator', icon: '🧮', label: 'Calculator', doc: 'calculator',
     summary: 'Interactive calculators written in Markdown with ```calc blocks.', options: [],
   },
   {
-    name: 'file-filter', label: 'File filter', doc: 'file-filter', extra: 'file-filter',
+    name: 'file-filter', icon: '🧹', label: 'File filter', doc: 'file-filter', extra: 'file-filter',
     summary: 'Hides pages by front-matter labels or .mkdocsignore paths, for example to keep drafts out of production builds.',
     options: [],
   },
   {
-    name: 'git-revision-date-localized', label: 'Git revision dates', doc: 'git-revision-date',
+    name: 'git-revision-date-localized', icon: '🕒', label: 'Git revision dates', doc: 'git-revision-date',
     summary: "Sets each page's updated date (and optionally its created date) from git history.",
     options: [{ key: 'enable_creation_date', label: 'Also set the created date', type: 'bool', default: false, hint: 'From the first commit of the file.' }],
   },
-  { name: 'glightbox', label: 'Image lightbox', doc: 'glightbox', summary: 'Opens images in a zoomable lightbox when clicked.', options: [] },
+  { name: 'glightbox', icon: '🔍', label: 'Image lightbox', doc: 'glightbox', summary: 'Opens images in a zoomable lightbox when clicked.', options: [] },
   {
-    name: 'imported-docs', label: 'Imported docs', doc: 'imported-docs',
+    name: 'imported-docs', icon: '📥', label: 'Imported docs', doc: 'imported-docs',
     summary: 'Pulls documentation in from other git repositories or S3 buckets. Its sources are edited as JSON below.',
     options: [{ key: 'pushedDocsDir', label: 'Pushed docs folder', type: 'string', default: 'imported' }],
   },
-  { name: 'link-notes', label: 'Link notes', doc: 'link-notes', summary: 'Attaches a note (such as an affiliate disclosure) to links that match rules. Rules are edited as JSON below.', options: [] },
-  { name: 'macros', label: 'Macros', doc: 'macros', summary: 'Variables and macros inside Markdown, in the style of mkdocs-macros.', options: [] },
+  { name: 'link-notes', icon: '🔗', label: 'Link notes', doc: 'link-notes', summary: 'Attaches a note (such as an affiliate disclosure) to links that match rules. Rules are edited as JSON below.', options: [] },
+  { name: 'macros', icon: '🧩', label: 'Macros', doc: 'macros', summary: 'Variables and macros inside Markdown, in the style of mkdocs-macros.', options: [] },
   {
-    name: 'meta', label: 'Folder defaults (meta)', doc: 'meta',
+    name: 'meta', icon: '🗂', label: 'Folder defaults (meta)', doc: 'meta',
     summary: 'Applies front-matter defaults to every page in a folder from a .meta.yml file.',
     options: [{ key: 'meta_file', label: 'File name', type: 'string', default: '.meta.yml' }],
   },
-  { name: 'redirects', label: 'Redirects', doc: 'redirects', summary: 'Makes small redirect pages from old URLs to new ones. Maps are edited as JSON below.', options: [] },
   {
-    name: 'rss', label: 'RSS feed', doc: 'rss',
+    name: 'redirects', icon: '↪', label: 'Redirects', doc: 'redirects',
+    summary: 'Makes small redirect pages that send old or short addresses to new ones. Pages can also list their old addresses under "Old addresses" in page settings.',
+    options: [
+      { key: 'redirect_maps', label: 'Redirects', type: 'map', columns: ['From (old path)', 'To (page or URL)'], placeholders: ['discord', 'https://discord.gg/example'], hint: 'Each "from" path becomes a page that forwards to "to". Paths have no leading slash.' },
+      { key: 'redirect_files', label: 'Redirect files', type: 'list', hint: 'JSON files of { "from": "to" } pairs for large lists, relative to the project root.' },
+    ],
+  },
+  {
+    name: 'rss', icon: '📡', label: 'RSS feed', doc: 'rss',
     summary: 'Publishes an RSS (and optionally Atom) feed of the blog posts. Needs the blog plugin.',
     options: [
       { key: 'length', label: 'Posts in the feed', type: 'int', default: 20 },
@@ -109,16 +120,16 @@ export const pluginCatalog: PluginInfo[] = [
     ],
   },
   {
-    name: 'search', label: 'Search', doc: 'search',
+    name: 'search', icon: '🔎', label: 'Search', doc: 'search',
     summary: 'Builds the search index for the search box.',
     options: [
       { key: 'lang', label: 'Language', type: 'string', default: 'en' },
       { key: 'separator', label: 'Word separator (regex)', type: 'string', default: '[\\s\\-]+' },
     ],
   },
-  { name: 'snippets', label: 'Snippets', doc: 'snippets', summary: 'Includes other files into Markdown with --8<--.', options: [{ key: 'base_path', label: 'Search folders', type: 'list' }, { key: 'auto_append', label: 'Append to every page', type: 'list' }] },
+  { name: 'snippets', icon: '✂', label: 'Snippets', doc: 'snippets', summary: 'Includes other files into Markdown with --8<--.', options: [{ key: 'base_path', label: 'Search folders', type: 'list' }, { key: 'auto_append', label: 'Append to every page', type: 'list' }] },
   {
-    name: 'social', label: 'Social cards', doc: 'social', extra: 'social',
+    name: 'social', icon: '🖼', label: 'Social cards', doc: 'social', extra: 'social',
     summary: 'Draws an Open Graph image for every page, shown when a link is shared on social sites and chat apps.',
     options: [
       { key: 'cards', label: 'Make cards', type: 'bool', default: true, hint: 'Off stops making cards and removes the og:image tags.' },
@@ -148,9 +159,9 @@ export const pluginCatalog: PluginInfo[] = [
       { key: 'description_length', label: 'Cut description at (characters)', type: 'int', default: 180, group: layout },
     ],
   },
-  { name: 'table-reader', label: 'Table reader', doc: 'table-reader', summary: 'Turns {{ read_csv(...) }} into Markdown tables.', options: [] },
+  { name: 'table-reader', icon: '📊', label: 'Table reader', doc: 'table-reader', summary: 'Turns {{ read_csv(...) }} into Markdown tables.', options: [] },
   {
-    name: 'tags', label: 'Tags', doc: 'tags',
+    name: 'tags', icon: '🏷', label: 'Tags', doc: 'tags',
     summary: 'Collects page tags into a tag index and a tags.json export.',
     options: [
       { key: 'export', label: 'Write tags.json', type: 'bool', default: true },
@@ -161,10 +172,10 @@ export const pluginCatalog: PluginInfo[] = [
       { key: 'shadow_tags', label: 'Shadow tags', type: 'list' },
     ],
   },
-  { name: 'timeline', label: 'Timeline', doc: 'timeline', summary: 'Interactive project timelines written in Markdown.', options: [] },
-  { name: 'typeset', label: 'Smart typography', doc: 'typeset', summary: 'Curly quotes, dashes and ellipses in prose.', options: [] },
+  { name: 'timeline', icon: '📅', label: 'Timeline', doc: 'timeline', summary: 'Interactive project timelines written in Markdown.', options: [] },
+  { name: 'typeset', icon: '❝', label: 'Smart typography', doc: 'typeset', summary: 'Curly quotes, dashes and ellipses in prose.', options: [] },
   {
-    name: 'versioning', label: 'Versions', doc: 'versioning',
+    name: 'versioning', icon: '🔢', label: 'Versions', doc: 'versioning',
     summary: 'Adds a version selector to the header. The version list is edited as JSON below.',
     options: [
       { key: 'provider', label: 'Versions from', type: 'select', choices: ['static', 'git-tags'], default: 'static' },

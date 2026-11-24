@@ -299,3 +299,12 @@ ul.plain li { padding: 3px 0; }
 .nowrap { flex-wrap: nowrap; }
 .abbr-table td { vertical-align: top; }
 .avatar-thumb { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex: none; }
+.plugin-icon { display: inline-block; width: 1.4em; text-align: center; margin-right: 2px; }
+.plugin-list__open { flex: none; align-self: center; font-size: 12px; color: var(--accent); text-decoration: none; padding: 2px 8px; border: 1px solid var(--line); border-radius: 12px; white-space: nowrap; }
+.plugin-list li:hover .plugin-list__open, .plugin-list li.on .plugin-list__open { border-color: var(--accent); background: var(--accent-soft); }
+.plugin-list li { cursor: default; }
+.plugin-list li:hover { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
+.plugin-map { grid-column: 1 / -1; }
+.icon-preview { display: inline-flex; width: 22px; height: 22px; flex: none; align-items: center; justify-content: center; color: var(--fg); }
+.icon-preview svg { width: 20px; height: 20px; fill: currentColor; }
+.icon-preview--none { color: var(--muted); font-size: 12px; border: 1px dashed var(--line); border-radius: 4px; }

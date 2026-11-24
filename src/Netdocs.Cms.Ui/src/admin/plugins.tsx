@@ -11,7 +11,7 @@ type Obj = Record<string, Json>;
 const isObj = (v: Json | undefined): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
 const canonical = (name: string) => pluginAliases[name] ?? name;
 const infoFor = (name: string): PluginInfo =>
-  pluginCatalog.find((p) => p.name === canonical(name)) ?? { name, label: name, summary: 'A plugin this screen has no form for. Edit its options as JSON.', doc: '', options: [] };
+  pluginCatalog.find((p) => p.name === canonical(name)) ?? { name, icon: '🔌', label: name, summary: 'A plugin this screen has no form for. Edit its options as JSON.', doc: '', options: [] };
 
 export function PluginsScreen(props: { name: string | null }) {
   const { data, error, setData } = useLoad(() => api.plugins());
@@ -50,7 +50,8 @@ export function PluginsScreen(props: { name: string | null }) {
                   <input type="checkbox" checked={on} disabled={busy} onChange={(e) => toggle(info, entry, (e.target as HTMLInputElement).checked)} />
                   <span />
                 </label>
-                <a href={'#/plugins?name=' + encodeURIComponent(info.name)} class="plugin-list__main">
+                <a href={'#/plugins?name=' + encodeURIComponent(info.name)} class="plugin-list__main" title={`Open the ${info.label} settings`}>
+                  <span class="plugin-icon" aria-hidden="true">{info.icon}</span>
                   <strong>{info.label}</strong>
                   {info.label !== info.name && <code class="muted"> {entry?.name ?? info.name}</code>}
                   {entry && !entry.enabled && <span class="badge">off</span>}
@@ -58,6 +59,7 @@ export function PluginsScreen(props: { name: string | null }) {
                   {entry && !entry.known && <span class="badge badge--warn" title="Netdocs has no plugin by this name">unknown</span>}
                   <small class="muted">{info.summary}</small>
                 </a>
+                <a href={'#/plugins?name=' + encodeURIComponent(info.name)} class="plugin-list__open" title={`Open the ${info.label} settings`}>Settings ›</a>
               </li>
             );
           })}
@@ -79,13 +81,13 @@ function PluginEditor(props: { info: PluginInfo; entry: PluginEntry | undefined;
   const { info, entry } = props;
   const original = entry?.options ?? {};
   const [options, setOptions] = useState<Obj>(structuredClone(original));
-  const [enabled, setEnabled] = useState(entry?.enabled ?? true);
+  const [enabled, setEnabled] = useState(entry?.enabled ?? false);
   const known = useMemo(() => new Set(info.options.map((o) => o.group ?? o.key)), [info]);
   const rest = () => Object.fromEntries(Object.entries(options).filter(([k]) => !known.has(k)));
   const [json, setJson] = useState(() => JSON.stringify(rest(), null, 2));
   const [jsonError, setJsonError] = useState<string | null>(null);
   const { busy, run } = useAction();
-  const dirty = JSON.stringify(options) !== JSON.stringify(original) || enabled !== (entry?.enabled ?? true) || !entry;
+  const dirty = JSON.stringify(options) !== JSON.stringify(original) || enabled !== (entry?.enabled ?? false);
 
   // Extra options the form does not cover, edited as JSON and merged back in.
   const applyJson = (text: string) => {
@@ -131,7 +133,7 @@ function PluginEditor(props: { info: PluginInfo; entry: PluginEntry | undefined;
     <div class="plugin-editor">
       <div class="card">
         <header class="screen-head">
-          <h2>{info.label}</h2>
+          <h2><span class="plugin-icon" aria-hidden="true">{info.icon}</span> {info.label}</h2>
           <div class="row">
             {info.doc && <a class="btn" href={pluginDocUrl(info)} target="_blank" rel="noreferrer" title="Open this plugin's documentation">Docs ↗</a>}
             <button class="btn" title="Close" onClick={() => navigate('/plugins')}>✕</button>
@@ -140,7 +142,7 @@ function PluginEditor(props: { info: PluginInfo; entry: PluginEntry | undefined;
         <p>{info.summary}</p>
         <label class="check">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled((e.target as HTMLInputElement).checked)} />
-          <span><strong>Enabled</strong> {!entry && <span class="muted">(saving adds it to appsettings.json)</span>}</span>
+          <span><strong>Enabled</strong> <span class="muted">{!entry ? '· not in appsettings.json yet; turning it on and saving adds it' : entry.enabled ? '' : '· listed in appsettings.json but turned off'}</span></span>
         </label>
 
         {groups.map((group) => (
@@ -162,7 +164,7 @@ function PluginEditor(props: { info: PluginInfo; entry: PluginEntry | undefined;
 
         <div class="row plugin-actions">
           <button class="btn btn--primary" disabled={busy || !dirty || !!jsonError} onClick={save}>Save</button>
-          <button class="btn" disabled={busy || !dirty} onClick={() => { setOptions(structuredClone(original)); setEnabled(entry?.enabled ?? true); setJson(JSON.stringify(Object.fromEntries(Object.entries(original).filter(([k]) => !known.has(k))), null, 2)); setJsonError(null); }}>Revert</button>
+          <button class="btn" disabled={busy || !dirty} onClick={() => { setOptions(structuredClone(original)); setEnabled(entry?.enabled ?? false); setJson(JSON.stringify(Object.fromEntries(Object.entries(original).filter(([k]) => !known.has(k))), null, 2)); setJsonError(null); }}>Revert</button>
           <span class="spacer" />
           {entry && <button class="btn btn--danger" disabled={busy} onClick={remove} title="Delete this plugin's entry from appsettings.json">Remove from config</button>}
         </div>
@@ -210,6 +212,8 @@ function OptionField(props: { spec: OptionSpec; value: Json | undefined; onChang
           <ChipInput values={Array.isArray(value) ? value.map(String) : typeof value === 'string' ? [value] : []} onChange={(v) => props.onChange(v)} />
         </Field>
       );
+    case 'map':
+      return <div class="plugin-map"><MapEditor spec={spec} value={value} onChange={props.onChange} /></div>;
     case 'color': {
       const text = typeof value === 'string' ? value : '';
       return (
@@ -229,6 +233,65 @@ function OptionField(props: { spec: OptionSpec; value: Json | undefined; onChang
         </Field>
       );
   }
+}
+
+/** Edits an object of string pairs, such as redirect_maps, as a two-column table. */
+function MapEditor(props: { spec: OptionSpec; value: Json | undefined; onChange: (v: Json | undefined) => void }) {
+  const toRows = (v: Json | undefined) => (isObj(v) ? Object.entries(v).map(([k, x]) => [k, typeof x === 'string' ? x : JSON.stringify(x)] as [string, string]) : []);
+  const [rows, setRows] = useState<[string, string][]>(() => toRows(props.value));
+  const [search, setSearch] = useState('');
+  const [cols, holders] = [props.spec.columns ?? ['Key', 'Value'], props.spec.placeholders ?? ['', '']];
+  const commit = (next: [string, string][]) => {
+    setRows(next);
+    const obj: Obj = {};
+    for (const [k, v] of next) if (k.trim()) obj[k.trim()] = v.trim();
+    props.onChange(Object.keys(obj).length ? obj : undefined);
+  };
+  const keys = rows.map(([k]) => k.trim()).filter(Boolean);
+  const dupes = new Set(keys.filter((k, i) => keys.indexOf(k) !== i));
+  const shown = rows.map((r, i) => [r, i] as const).filter(([[k, v]]) => !search || (k + ' ' + v).toLowerCase().includes(search.toLowerCase()));
+  return (
+    <div class="field">
+      <span class="field__label row">{props.spec.label} <span class="badge">{keys.length}</span><span class="spacer" />
+        {rows.length > 8 && <input class="input input--auto" type="search" placeholder="Search…" value={search} onInput={(e) => setSearch((e.target as HTMLInputElement).value)} />}
+      </span>
+      {props.spec.hint && <small class="muted">{props.spec.hint}</small>}
+      <table class="table">
+        <thead><tr><th>{cols[0]}</th><th>{cols[1]}</th><th /></tr></thead>
+        <tbody>
+          {shown.map(([[k, v], i]) => (
+            <tr key={i}>
+              <td><input class="input mono" value={k} placeholder={holders[0]} onInput={(e) => commit(rows.map((r, j) => (j === i ? [(e.target as HTMLInputElement).value, r[1]] : r)))} />
+                {dupes.has(k.trim()) && <small class="error">Listed twice; the last one wins</small>}</td>
+              <td><input class="input mono" value={v} placeholder={holders[1]} onInput={(e) => commit(rows.map((r, j) => (j === i ? [r[0], (e.target as HTMLInputElement).value] : r)))} /></td>
+              <td class="actions"><button class="btn btn--small btn--danger" onClick={() => commit(rows.filter((_, j) => j !== i))}>Delete</button></td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={3} class="muted">None yet.</td></tr>}
+        </tbody>
+      </table>
+      <div class="row plugin-actions"><button class="btn" onClick={() => { setSearch(''); setRows([...rows, ['', '']]); }}>+ Add</button></div>
+    </div>
+  );
+}
+
+/** Shows an icon by its theme name (fontawesome/brands/github, material/home…). */
+const iconCache = new Map<string, Promise<string>>();
+function IconPreview(props: { name: string }) {
+  const [svg, setSvg] = useState('');
+  useEffect(() => {
+    const name = props.name.trim();
+    if (!name) { setSvg(''); return; }
+    let cancelled = false;
+    if (!iconCache.has(name)) {
+      iconCache.set(name, api.icons(name.split('/').pop() ?? name, 200)
+        .then((list) => list.find((i) => i.name === name || i.name.replace(/\//g, '-') === name.replace(/\//g, '-'))?.svg ?? '')
+        .catch(() => ''));
+    }
+    const t = setTimeout(() => void iconCache.get(name)!.then((s) => { if (!cancelled) setSvg(s); }), 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [props.name]);
+  return <span class={'icon-preview' + (svg ? '' : ' icon-preview--none')} title={svg ? props.name : 'Icon not found'} dangerouslySetInnerHTML={{ __html: svg || '?' }} />;
 }
 
 // ---- abbreviations ---------------------------------------------------------------------------
@@ -451,6 +514,7 @@ function SocialLinksEditor() {
             <tr key={i}>
               <td>
                 <span class="row nowrap">
+                  <IconPreview name={String(l.icon ?? '')} />
                   <input class="input mono" value={String(l.icon ?? '')} placeholder="fontawesome/brands/github" onInput={(e) => update(i, { icon: (e.target as HTMLInputElement).value })} />
                   <button class="btn btn--small" title="Choose an icon" onClick={async () => { const icon = await openIconPicker(String(l.icon ?? '')); if (icon) update(i, { icon }); }}>…</button>
                 </span>

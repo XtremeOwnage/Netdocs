@@ -146,7 +146,7 @@ export const api = {
   deletePage: (path: string) => request<void>('POST', '/page/delete', { path }),
   references: (path: string) => request<string[]>('GET', '/page/references' + q({ path })),
   blocks: (path: string) => request<{ page: PageDocument; blocks: RenderedBlock[] }>('GET', '/page/blocks' + q({ path })),
-  saveBlocks: (path: string, hash: string, blocks: { keep?: number; source?: string }[], frontMatter: FrontMatter | null) =>
+  saveBlocks: (path: string, hash: string | null, blocks: { keep?: number; source?: string }[], frontMatter: FrontMatter | null) =>
     request<{ page: PageDocument; blocks: RenderedBlock[] }>('POST', '/page/blocks/save', { path, hash, blocks, frontMatter }),
   render: (path: string, body: string, frontMatter: FrontMatter) =>
     request<{ html: string }>('POST', '/render', { path, body, frontMatter, blocks: false }),

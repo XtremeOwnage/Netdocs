@@ -404,10 +404,12 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
     });
   } else {
     wrapper.classList.add('ndcms-block--structured');
-    content.addEventListener('click', (e) => {
+    // On the wrapper, not just the content: selecting a block can shift it a little under the
+    // pointer, so the click may land on the block's padding.
+    wrapper.addEventListener('click', (e) => {
       // Let tabs, collapsibles and copy buttons work; anything else opens the editor.
       const t = e.target as HTMLElement;
-      if (t.closest('label, summary, button, input, .tabbed-labels')) return;
+      if (t.closest('label, summary, button, input, .tabbed-labels, .ndcms-block__tools')) return;
       e.preventDefault();
       openBlockEditor(index);
     });
@@ -551,7 +553,11 @@ function syncRichBlocks() {
 /** Renders a block's markdown through the site pipeline. */
 async function renderSource(block: EditorBlock) {
   if (!state) return;
-  const { blocks } = await api.renderBlocks(state.page.path, block.source, state.frontMatter);
+  // Footnote markers need their definitions to render; send the page's along and drop their output.
+  const refs = [...block.source.matchAll(/\[\^([^\]]+)\](?!:)/g)].map((m) => m[1]);
+  const defs = refs.length ? state.blocks.filter((b) => b !== block && refs.some((r) => b.source.includes(`[^${r}]:`))).map((b) => b.source) : [];
+  const rendered = (await api.renderBlocks(state.page.path, [block.source, ...defs].join('\n\n'), state.frontMatter)).blocks;
+  const blocks = defs.length ? rendered.filter((b) => b.kind !== 'footnotes') : rendered;
   block.html = blocks.map((b) => b.html).join('\n');
   const kinds = blocks.map((b) => b.kind);
   block.kind = kinds.length === 1 ? kinds[0] : kinds.length === 0 ? 'empty' : 'mixed';
@@ -562,6 +568,8 @@ async function renderSource(block: EditorBlock) {
 function isRich(kind: string, source: string, html: string): boolean {
   if (kind === 'table') return false;
   if (parseImageMarkdown(source, state?.page.path ?? cms.path ?? '')) return false;
+  // A block that is one link gets the link form.
+  if (parseLinkBlock(source)) return false;
   return richKinds.has(kind) && !needsSourceEditing(kind, source, html);
 }
 
@@ -630,8 +638,7 @@ function showFormatBar(target: HTMLElement, host: Element | null = target.closes
     }),
     button('•', 'Bulleted list', () => exec('insertUnorderedList')),
     button('1.', 'Numbered list', () => exec('insertOrderedList')),
-    button('H2', 'Heading 2', () => exec('formatBlock', 'h2')),
-    button('H3', 'Heading 3', () => exec('formatBlock', 'h3')),
+    ...[2, 3, 4, 5, 6].map((n) => button('H' + n, `Heading ${n}`, () => exec('formatBlock', 'h' + n), 'ndcms-format__h')),
     button('¶', 'Paragraph', () => exec('formatBlock', 'p')),
     button('⌫', 'Clear formatting', () => exec('removeFormat')),
   );
@@ -645,11 +652,27 @@ function showFormatBar(target: HTMLElement, host: Element | null = target.closes
   }, { once: true });
 }
 
+/** Wraps the selection in `tag`, or removes `tag` when the selection is already inside one
+ * (so Highlight and Code toggle off the way Bold does). */
 function wrapSelection(tag: string, target: HTMLElement) {
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+  if (!sel || sel.rangeCount === 0) return;
   const range = sel.getRangeAt(0);
   if (!target.contains(range.commonAncestorContainer)) return;
+  const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+  const around = start?.closest(tag);
+  const inside = [...target.querySelectorAll(tag)].filter((n) => range.intersectsNode(n));
+  if ((around && target.contains(around)) || inside.length) {
+    for (const n of new Set([...(around && target.contains(around) ? [around] : []), ...inside])) {
+      const parent = n.parentNode!;
+      while (n.firstChild) parent.insertBefore(n.firstChild, n);
+      parent.removeChild(n);
+      parent.normalize();
+    }
+    target.dispatchEvent(new Event('input'));
+    return;
+  }
+  if (sel.isCollapsed) return;
   const node = document.createElement(tag);
   node.appendChild(range.extractContents());
   range.insertNode(node);
@@ -660,18 +683,37 @@ function wrapSelection(tag: string, target: HTMLElement) {
 
 let panel: HTMLElement | null = null;
 
+let panelFlush: (() => void) | null = null;
+
 function closePanel() {
+  const flush = panelFlush;
+  panelFlush = null;
+  flush?.();
   panel?.remove();
   panel = null;
 }
 
-function openPanel(title: string, body: HTMLElement, actions: HTMLElement[]) {
+/**
+ * Opens the side panel. With `live`, every change in the panel is applied to the page after a
+ * short pause, so there is no Apply step: the panel's last state is applied when it closes.
+ */
+function openPanel(title: string, body: HTMLElement, actions: HTMLElement[], live?: () => void | Promise<void>) {
   closePanel();
+  let timer = 0;
+  const run = () => { clearTimeout(timer); timer = 0; void live?.(); };
+  const schedule = () => { if (!live) return; clearTimeout(timer); timer = window.setTimeout(run, 450); };
+  const done = button('Done', live ? 'Changes show on the page as you type. Close the panel.' : 'Close', closePanel, 'ndcms-btn--primary');
   panel = el('aside', { class: 'ndcms-panel', role: 'dialog', 'aria-label': title },
     el('header', { class: 'ndcms-panel__head' }, el('h2', {}, title), button('✕', 'Close (Esc)', closePanel)),
     el('div', { class: 'ndcms-panel__body' }, body),
-    el('footer', { class: 'ndcms-panel__foot' }, ...actions),
+    el('footer', { class: 'ndcms-panel__foot' }, ...(live ? [el('span', { class: 'ndcms-muted ndcms-live' }, '● Live'), ...actions, done] : actions)),
   );
+  if (live) {
+    for (const type of ['input', 'change']) body.addEventListener(type, schedule);
+    // Buttons such as "Add tab" or "Remove" change the form without an input event.
+    body.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) setTimeout(schedule); }, true);
+    panelFlush = () => { if (timer) run(); };
+  }
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });
   document.body.append(panel);
   panel.querySelector<HTMLElement>('input, textarea, select')?.focus();
@@ -713,23 +755,32 @@ function openBlockEditor(index: number, forceSource = false) {
   syncRichBlocks();
   const block = state.blocks[index];
   const s = state;
-  const apply = async (source: string) => {
-    if (source.trim() === block.source.trim()) { closePanel(); return; }
+  let seq = 0;
+  /** Puts new markdown into the block and redraws just that block. */
+  const apply = async (source: string, close = false) => {
+    if (close) closePanel();
+    if (source.trim() === block.source.trim()) return;
     block.source = source;
     block.changed = true;
+    const mine = ++seq;
     try {
       await renderSource(block);
     } catch (e) {
       alertError(e);
       return;
     }
-    closePanel();
-    if (s === state) renderBlocks();
+    if (mine !== seq || s !== state) return;
+    const i = s.blocks.indexOf(block);
+    if (i < 0) return;
+    const old = block.el;
+    const fresh = renderBlock(block, i);
+    if (old?.isConnected) { old.replaceWith(fresh); markActive(); refreshThemeWidgets(fresh); updateStatus(); } else renderBlocks();
   };
+  const live = (compute: () => string) => () => apply(compute());
 
   const image = !forceSource ? parseImageMarkdown(block.source, s.page.path) : null;
   if (image) {
-    void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked)); });
+    void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked), true); });
     return;
   }
   const table = !forceSource && block.kind === 'table' ? parseTable(block.source) : null;
@@ -737,8 +788,7 @@ function openBlockEditor(index: number, forceSource = false) {
     const editor = tableEditor(table);
     openPanel('Table', editor.root, [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-      button('Apply', 'Apply to the page', () => void apply(formatTable(editor.value())), 'ndcms-btn--primary'),
-    ]);
+    ], live(() => formatTable(editor.value())));
     return;
   }
 
@@ -761,11 +811,10 @@ function openBlockEditor(index: number, forceSource = false) {
       field('Content', body.root),
     ), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-      button('Apply', 'Apply to the page', () => void apply(formatAdmonition({
-        marker: style.value as '!!!', type: type.value, extra: admonition.extra,
-        title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value(),
-      })), 'ndcms-btn--primary'),
-    ]);
+    ], live(() => formatAdmonition({
+      marker: style.value as '!!!', type: type.value, extra: admonition.extra,
+      title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value(),
+    })));
     return;
   }
 
@@ -785,8 +834,7 @@ function openBlockEditor(index: number, forceSource = false) {
       field('Code', code),
     ), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-      button('Apply', 'Apply to the page', () => void apply(formatFence({ fence: fence.fence, lang: lang.value.trim(), options: options.value.trim(), code: code.value })), 'ndcms-btn--primary'),
-    ]);
+    ], live(() => formatFence({ fence: fence.fence, lang: lang.value.trim(), options: options.value.trim(), code: code.value })));
     return;
   }
 
@@ -803,28 +851,120 @@ function openBlockEditor(index: number, forceSource = false) {
     tabs.forEach(addRow);
     openPanel('Content tabs', el('div', {}, list, button('+ Add tab', 'Add another tab', () => addRow({ title: 'New tab', body: 'Content.', selected: false }))), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-      button('Apply', 'Apply to the page', () => void apply(formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value(), selected: r.selected })))), 'ndcms-btn--primary'),
-    ]);
+    ], live(() => formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value(), selected: r.selected })))));
+    return;
+  }
+
+  const link = !forceSource ? parseLinkBlock(block.source) : null;
+  if (link) {
+    openLinkEditor(index, link, (md) => apply(md));
     return;
   }
 
   const source = textarea(block.source, 18);
-  const preview = el('div', { class: 'ndcms-preview md-typeset' });
-  let timer = 0;
-  source.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = window.setTimeout(async () => {
-      try {
-        const { blocks } = await api.renderBlocks(s.page.path, source.value, s.frontMatter);
-        preview.innerHTML = blocks.map((b) => b.html).join('\n');
-        refreshThemeWidgets(preview);
-      } catch { /* keep the last preview */ }
-    }, 350);
+  openPanel(`${label(block.kind)} · markdown`, el('div', {},
+    field('Markdown', source, 'Any Netdocs markdown works here: admonitions, tabs, attr lists, icons, macros… Changes show on the page as you type.'),
+  ), [], live(() => source.value));
+}
+
+// --- Link blocks ---------------------------------------------------------------------------------
+
+interface LinkBlock { text: string; url: string; title: string; attrs: string; footnotes: string[] }
+
+/** A block that is one link: `[text](url "title"){attrs}[^note]`. The text may be an image. */
+function parseLinkBlock(source: string): LinkBlock | null {
+  const m = /^\[((?:!\[[^\]]*\]\([^)]*\)|[^\]])*)\]\(\s*<?([^\s)>]+)>?(?:\s+"([^"]*)")?\s*\)(\{[^}]*\})?((?:\[\^[^\]]+\])*)\s*$/.exec(source.trim());
+  if (!m) return null;
+  return {
+    text: m[1], url: m[2], title: m[3] ?? '',
+    attrs: m[4] ? m[4].slice(1, -1).trim() : '',
+    footnotes: [...(m[5] ?? '').matchAll(/\[\^([^\]]+)\]/g)].map((x) => x[1]),
+  };
+}
+
+function formatLinkBlock(l: LinkBlock): string {
+  const title = l.title.trim() ? ` "${l.title.trim().replace(/"/g, '&quot;')}"` : '';
+  const attrs = l.attrs.trim() ? `{${l.attrs.trim()}}` : '';
+  return `[${l.text}](${l.url.trim()}${title})${attrs}${l.footnotes.map((f) => `[^${f}]`).join('')}`;
+}
+
+/** Splits an attr list into `target=_blank` and the rest. */
+const attrParts = (attrs: string) => {
+  const parts = attrs.match(/(?:[^\s"']+(?:="[^"]*"|='[^']*')?)+/g) ?? [];
+  const target = parts.find((p) => /^target=/.test(p));
+  return { target: target ? target.replace(/^target=["']?|["']$/g, '') : '', rest: parts.filter((p) => p !== target).join(' ') };
+};
+
+function openLinkEditor(index: number, link: LinkBlock, apply: (md: string) => Promise<void>) {
+  if (!state) return;
+  const s = state;
+  const image = parseImageMarkdown(link.text, s.page.path);
+  let picked: { src: string; alt: string } | null = image ? { src: image.src, alt: image.alt } : null;
+  const kind = select(picked ? 'image' : 'text', ['text', 'image']);
+  kind.querySelector('option[value="text"]')!.textContent = 'Text';
+  kind.querySelector('option[value="image"]')!.textContent = 'Image';
+  const text = input(picked ? '' : link.text, 'What the reader clicks');
+  const imagePreview = el('div', { class: 'ndcms-link__image' });
+  const drawImage = () => {
+    imagePreview.replaceChildren();
+    if (picked) {
+      const img = el('img', { alt: picked.alt }) as HTMLImageElement;
+      img.src = picked.src.startsWith('http') ? picked.src : new URL(picked.src, location.href).href;
+      imagePreview.append(img, el('span', { class: 'ndcms-muted' }, picked.src));
+    }
+  };
+  drawImage();
+  const chooseImage = button('Choose image…', 'Pick the image to show as the link', async () => {
+    const p = await openImagePicker(s.page.path, image ?? {});
+    if (!p) return;
+    picked = { src: p.src, alt: p.alt };
+    drawImage();
+    imagePreview.dispatchEvent(new Event('change', { bubbles: true }));
   });
-  preview.innerHTML = block.html;
-  openPanel(`${label(block.kind)} · markdown`, el('div', {}, field('Markdown', source, 'Any Netdocs markdown works here: admonitions, tabs, attr lists, icons, macros…'), el('div', { class: 'ndcms-field__label' }, 'Preview'), preview), [
-    button('Apply', 'Apply to the page', () => void apply(source.value), 'ndcms-btn--primary'),
-  ]);
+  const textField = field('Link text', text);
+  const imageField = el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Image'), imagePreview, chooseImage);
+  const showKind = () => { textField.style.display = kind.value === 'text' ? '' : 'none'; imageField.style.display = kind.value === 'image' ? '' : 'none'; };
+  kind.addEventListener('change', showKind);
+  showKind();
+
+  const url = input(link.url, 'https://… or a page such as ../setup.md');
+  const browse = button('Browse…', 'Pick a page or paste a URL', async () => {
+    const chosen = await openLinkPicker(s.page.path, url.value);
+    if (chosen) { url.value = chosen; url.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  const title = input(link.title, 'Shown when hovering over the link');
+  const parts = attrParts(link.attrs);
+  const newTab = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  newTab.checked = parts.target === '_blank';
+  const otherAttrs = input(parts.rest, '.button rel=nofollow');
+  // Footnotes defined on this page, for suggestions.
+  const defined = [...new Set(s.blocks.flatMap((b) => [...b.source.matchAll(/^\[\^([^\]]+)\]:/gm)].map((m) => m[1])))];
+  const notes = chipInput(link.footnotes, defined);
+  const missing = el('small', { class: 'ndcms-muted' });
+  const checkNotes = () => {
+    const absent = notes.values().filter((n) => !defined.includes(n));
+    missing.textContent = absent.length ? `Not defined on this page: ${absent.join(', ')}. Add a footnote block with [^${absent[0]}]: text.` : (defined.length ? 'Defined on this page: ' + defined.join(', ') : '');
+  };
+  checkNotes();
+
+  const compute = () => {
+    checkNotes();
+    const attrs = [newTab.checked ? 'target=_blank' : '', otherAttrs.value.trim()].filter(Boolean).join(' ');
+    const linkText = kind.value === 'image' && picked ? `![${picked.alt}](${picked.src})` : text.value || url.value;
+    return formatLinkBlock({ text: linkText, url: url.value || '#', title: title.value, attrs, footnotes: notes.values() });
+  };
+  openPanel('Link', el('div', {},
+    field('Show as', kind),
+    textField, imageField,
+    field('Address', el('div', { class: 'ndcms-row' }, url, browse)),
+    field('Tooltip', title, 'Optional title attribute'),
+    el('label', { class: 'ndcms-check' }, newTab, ' Open in a new tab (target=_blank)'),
+    field('Other attributes', otherAttrs, 'Attribute list: classes (.button .button--primary), ids (#id) and key=value pairs'),
+    field('Footnotes', notes.root, 'Footnote markers after the link, such as an affiliate disclosure'),
+    missing,
+  ), [
+    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
+  ], () => apply(compute()));
 }
 
 // --- Rich text areas inside forms ----------------------------------------------------------------
@@ -976,7 +1116,37 @@ function tableEditor(initial: Table) {
 }
 
 // Front matter keys with their own controls; anything else is shown as a custom attribute.
-const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide', 'nav_title', 'page_title', 'authors', 'slug'];
+const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide', 'nav_title', 'page_title', 'authors', 'slug', 'image', 'rss_title', 'rss_description', 'tags_title', 'redirect_from'];
+
+/** The docs-relative path of a page-relative file reference, for thumbnails. */
+function docsPath(pagePath: string, ref: string): string {
+  const parts = pagePath.split('/').slice(0, -1);
+  for (const seg of ref.replace(/^\.\//, '').split('/')) {
+    if (seg === '..') parts.pop(); else if (seg && seg !== '.') parts.push(seg);
+  }
+  return parts.join('/');
+}
+
+function imageInput(value: string, pagePath: string) {
+  const text = input(value, 'Leave empty to use the first image in the post');
+  const thumb = el('img', { class: 'ndcms-thumb', alt: '' }) as HTMLImageElement;
+  const draw = () => {
+    const v = text.value.trim();
+    thumb.hidden = !v;
+    if (v) thumb.src = /^(https?:)?\/\//.test(v) ? v : api.mediaUrl(v.startsWith('/') ? v.slice(1) : docsPath(pagePath, v));
+  };
+  thumb.addEventListener('error', () => { thumb.hidden = true; });
+  text.addEventListener('input', draw);
+  const choose = button('Choose…', 'Pick an image from the media library', async () => {
+    const picked = await openImagePicker(pagePath, {});
+    if (!picked) return;
+    text.value = picked.src;
+    draw();
+    text.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  draw();
+  return { root: el('div', { class: 'ndcms-row ndcms-image-field' }, thumb, text, choose), value: () => text.value.trim() };
+}
 
 async function openSettings() {
   if (!state) return;
@@ -995,15 +1165,21 @@ async function openSettings() {
   const isPost = /(^|\/)posts\//.test(s.page.path) || 'authors' in fm || 'categories' in fm || dateMap !== null;
 
   const title = input(str('title'));
-  const navTitle = input(str('nav_title'), 'Shorter label for the navigation');
+  const navTitle = input(str('nav_title'), 'Empty: uses the title');
   const description = textarea(str('description'), 3, false);
   const tags = chipInput(list('tags'), tagTerms);
   const categories = chipInput(list('categories'), categoryTerms);
   const date = dateInput(dateMap ? String(dateMap.created ?? '') : str('date'));
   const updated = dateInput(dateMap ? String(dateMap.updated ?? '') : '');
   const authors = chipInput(list('authors'), authorList.map((a) => a.id));
-  const slug = input(str('slug'), 'Leave empty to build it from the title');
-  const pageTitle = input(str('page_title'), 'Leave empty to use the title');
+  const slug = input(str('slug'), 'Empty: built from the title');
+  const pageTitle = input(str('page_title'), 'Empty: uses the title');
+  const rssTitle = input(str('rss_title'), 'Empty: uses the title');
+  const rssDescription = textarea(str('rss_description'), 2, false);
+  rssDescription.placeholder = 'Empty: uses the post\'s first paragraph';
+  const tagsTitle = input(str('tags_title'), 'Empty: uses the title');
+  const postImage = imageInput(str('image'), s.page.path);
+  const redirectFrom = chipInput(list('redirect_from'), []);
   const draft = el('input', { type: 'checkbox' }) as HTMLInputElement;
   draft.checked = fm.draft === true;
   const icon = iconInput(str('icon'));
@@ -1040,6 +1216,7 @@ async function openSettings() {
       field('Title', title),
       field('Description', description, 'Used for search results and social cards'),
       field('Tags', tags.root),
+      field('Image', postImage.root, 'Shown when the page is shared (og:image) and in the RSS feed. Empty: the social card, or for posts the first image.'),
     ),
     section('Blog post', isPost,
       field('Published', date.root, 'The post date shown on the page and used to sort the blog'),
@@ -1047,11 +1224,15 @@ async function openSettings() {
       field('Authors', authors.root, authorHint),
       field('Categories', categories.root, 'The blog\'s category pages list the post under each one'),
       field('URL slug', slug, 'The last part of the post\'s address'),
+      field('Title in the RSS feed', rssTitle),
+      field('Summary in the RSS feed', rssDescription),
       el('label', { class: 'ndcms-check' }, draft, ' Draft (left out of the published blog)'),
     ),
     section('Navigation and layout', !isPost,
       field('Navigation title', navTitle, 'Shorter label for the navigation'),
       field('Browser tab title', pageTitle),
+      field('Title on the tags page', tagsTitle, 'How this page is listed on the tag index'),
+      field('Old addresses', redirectFrom.root, 'Paths that should forward here (redirect_from), such as old/page/. Needs the Redirects plugin.'),
       field('Icon', icon.root, 'Shown next to the page in the navigation'),
       field('Template', template, 'Page templates come from the theme and your overrides folder'),
       el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Hide parts of the page'), el('div', { class: 'ndcms-checks' }, ...hideBoxes)),
@@ -1060,8 +1241,7 @@ async function openSettings() {
       el('div', { class: 'ndcms-field' }, el('small', { class: 'ndcms-muted' }, 'Any other front matter key. Values may be text or JSON (lists, numbers, true/false).'), customRows,
         button('+ Add attribute', 'Add a front matter key', () => addCustom('', ''))),
     ),
-  ), [
-    button('Apply', 'Apply to the page (then Save)', () => {
+  ), [], () => {
       const next: FrontMatter = {};
       // Keep the file's key order: existing keys first, new keys after.
       const set = (k: string, v: Json | undefined) => {
@@ -1086,6 +1266,11 @@ async function openSettings() {
       set('authors', authors.values());
       set('slug', slug.value.trim() || undefined);
       set('page_title', pageTitle.value.trim() || undefined);
+      set('rss_title', rssTitle.value.trim() || undefined);
+      set('rss_description', rssDescription.value.trim() || undefined);
+      set('tags_title', tagsTitle.value.trim() || undefined);
+      set('image', postImage.value() || undefined);
+      set('redirect_from', redirectFrom.values());
       set('draft', draft.checked ? true : undefined);
       set('icon', icon.value() || undefined);
       set('template', template.value.trim() || undefined);
@@ -1100,14 +1285,12 @@ async function openSettings() {
         if (/^[[{]|^(true|false|null|-?\d+(\.\d+)?)$/.test(raw)) { try { v = JSON.parse(raw); } catch { v = raw; } }
         set(k, v);
       }
-      if (JSON.stringify(next) !== JSON.stringify(fm)) {
+      if (JSON.stringify(next) !== JSON.stringify(s.frontMatter)) {
         s.frontMatter = next;
-        s.frontMatterChanged = true;
+        s.frontMatterChanged = JSON.stringify(next) !== JSON.stringify(s.page.frontMatter);
       }
-      closePanel();
       updateStatus();
-    }, 'ndcms-btn--primary'),
-  ]);
+  });
 }
 
 /** A date picker that keeps a time of day (2024-05-01 10:30) when the page has one. */
@@ -1161,40 +1344,45 @@ function chipInput(initial: string[], suggestions: string[]) {
   const listId = 'ndcms-dl-' + Math.random().toString(36).slice(2);
   const entry = el('input', { class: 'ndcms-chips__input', list: listId, placeholder: 'Add…' }) as HTMLInputElement;
   const datalist = el('datalist', { id: listId }, ...suggestions.map((s) => el('option', { value: s })));
+  const changed = () => root.dispatchEvent(new Event('change', { bubbles: true }));
   const draw = () => {
     root.querySelectorAll('.ndcms-chip').forEach((c) => c.remove());
-    values.forEach((v, i) => root.insertBefore(el('span', { class: 'ndcms-chip' }, v, button('×', `Remove ${v}`, () => { values.splice(i, 1); draw(); })), entry));
+    values.forEach((v, i) => root.insertBefore(el('span', { class: 'ndcms-chip' }, v, button('×', `Remove ${v}`, () => { values.splice(i, 1); draw(); changed(); })), entry));
   };
+  // Reuse an existing term's exact spelling, so "docker" does not become a second tag.
+  const typed = () => entry.value.split(',').map((x) => x.trim()).filter(Boolean)
+    .map((part) => suggestions.find((s) => s.toLowerCase() === part.toLowerCase()) ?? part);
   const add = () => {
-    for (const part of entry.value.split(',').map((x) => x.trim()).filter(Boolean)) {
-      // Reuse an existing term's exact spelling, so "docker" does not become a second tag.
-      const match = suggestions.find((s) => s.toLowerCase() === part.toLowerCase()) ?? part;
-      if (!values.includes(match)) values.push(match);
-    }
+    const before = values.length;
+    for (const t of typed()) if (!values.includes(t)) values.push(t);
     entry.value = '';
     draw();
+    if (values.length !== before) changed();
   };
   entry.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(); }
-    if (e.key === 'Backspace' && !entry.value && values.length) { values.pop(); draw(); }
+    if (e.key === 'Backspace' && !entry.value && values.length) { values.pop(); draw(); changed(); }
   });
-  entry.addEventListener('change', add);
+  entry.addEventListener('change', (e) => { e.stopPropagation(); add(); });
   root.append(entry, datalist);
   draw();
-  return { root, values: () => { add(); return [...values]; } };
+  // Text still being typed counts too, without turning it into a chip yet.
+  return { root, values: () => [...new Set([...values, ...typed()])] };
 }
 
 // --- Saving -------------------------------------------------------------------------------------
 
-async function save() {
+async function save(overwrite = false) {
   if (!state) return;
+  closePanel();
   syncRichBlocks();
-  if (!isDirty()) { updateStatus('Nothing to save'); return; }
+  if (!isDirty() && !overwrite) { updateStatus('Nothing to save'); return; }
   const s = state;
-  const edits = s.blocks.map((b) => (b.original !== null && !b.changed ? { keep: b.original } : { source: b.source }));
+  // Overwriting sends every block's text, since the file's own blocks may have moved.
+  const edits = s.blocks.map((b) => (!overwrite && b.original !== null && !b.changed ? { keep: b.original } : { source: b.source }));
   updateStatus('Saving…');
   try {
-    const result = await api.saveBlocks(s.page.path, s.page.hash, edits, s.frontMatterChanged ? s.frontMatter : null);
+    const result = await api.saveBlocks(s.page.path, overwrite ? null : s.page.hash, edits, s.frontMatterChanged || overwrite ? s.frontMatter : null);
     if (state !== s) return;
     s.page = result.page;
     s.blocks = result.blocks.map(toEditorBlock);
@@ -1208,11 +1396,32 @@ async function save() {
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       updateStatus('Conflict', 'error');
-      if (confirm(`${e.message}\n\nReload the page now? Your unsaved edits will be lost.`)) void discard();
+      const choice = await conflictDialog();
+      if (choice === 'reload') void discard();
+      if (choice === 'overwrite') void save(true);
       return;
     }
     alertError(e);
   }
+}
+
+/** Asks what to do when the file changed on disk (another editor, git, a script) since it was opened. */
+function conflictDialog(): Promise<'reload' | 'overwrite' | null> {
+  return new Promise((resolve) => {
+    const close = (v: 'reload' | 'overwrite' | null) => { back.remove(); resolve(v); };
+    const back = el('div', { class: 'ndcms-modal' },
+      el('div', { class: 'ndcms-modal__box', role: 'alertdialog' },
+        el('h2', {}, 'This page changed on disk'),
+        el('p', {}, 'The file was changed outside this editor (another editor, git, or a script) since it was loaded here.'),
+        el('div', { class: 'ndcms-modal__actions' },
+          button('Cancel', 'Keep editing without saving', () => close(null)),
+          button('Reload the file', 'Load the version on disk. Your unsaved edits here are lost.', () => close('reload')),
+          button('Save my version', 'Replace the file with what you see here', () => close('overwrite'), 'ndcms-btn--primary'),
+        ),
+      ),
+    );
+    document.body.append(back);
+  });
 }
 
 function alertError(e: unknown) {

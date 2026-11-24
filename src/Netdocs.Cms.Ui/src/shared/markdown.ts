@@ -129,7 +129,7 @@ export function needsSourceEditing(kind: string, source: string, html: string): 
   if (!richKinds.has(kind)) return true;
   // attr_list braces, critic markup, macros, snippets, inline HTML, math, reference-style links
   // and hard line breaks survive only as source.
-  const sourceOnly = /\{\s*[:.#][^}]*\}|\{(\+\+|--|~~|==|>>)|\{\{|\{%|--8<--|<\/?[a-zA-Z][^>]*>|\$[^$\s][^$]*\$|\\\(|\]\[[^\]]*\]|\]\s*$| {2}$/m;
+  const sourceOnly = /\{\s*[:.#][^}]*\}|\{[^}\s]+=[^}]*\}|\{(\+\+|--|~~|==|>>)|\{\{|\{%|--8<--|<\/?[a-zA-Z][^>]*>|\$[^$\s][^$]*\$|\\\(|\]\[[^\]]*\]|\]\s*$| {2}$/m;
   if (sourceOnly.test(source)) return true;
   const probe = document.createElement('div');
   probe.innerHTML = html;
@@ -154,6 +154,7 @@ export const insertTemplates: InsertTemplate[] = [
   { id: 'p', group: 'Text', label: 'Paragraph', markdown: 'New paragraph.' },
   { id: 'h2', group: 'Text', label: 'Heading 2', markdown: '## Heading' },
   { id: 'h3', group: 'Text', label: 'Heading 3', markdown: '### Heading' },
+  { id: 'h4', group: 'Text', label: 'Heading 4', markdown: '#### Heading' },
   { id: 'ul', group: 'Text', label: 'Bulleted list', markdown: '- List item' },
   { id: 'ol', group: 'Text', label: 'Numbered list', markdown: '1. First step' },
   { id: 'task', group: 'Text', label: 'Task list', markdown: '- [ ] To do' },

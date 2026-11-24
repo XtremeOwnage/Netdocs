@@ -6,7 +6,7 @@ section: utils
 priority: optional
 maintainer: Netdocs contributors <noreply@github.com>
 description: |
-  A fast, flexible static site generator in .NET — a Material for MkDocs derivative.
+  A fast, flexible static site generator in .NET with a built-in visual editor — a Material for MkDocs derivative.
   Site configuration lives in appsettings.json and Markdown in docs/ builds with
   little to no change.
 vendor: Netdocs contributors

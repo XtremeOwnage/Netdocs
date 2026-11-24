@@ -636,7 +636,9 @@ function isRich(kind: string, source: string, html: string): boolean {
 function refreshThemeWidgets(root: HTMLElement) {
   const w = window as unknown as { document$?: { next: (d: Document) => void }; mermaid?: { run?: (o: unknown) => Promise<void> }; hljs?: { highlightElement: (e: Element) => void } };
   try { w.document$?.next(document); } catch { /* theme scripts are optional */ }
-  try { w.mermaid?.run?.({ nodes: root.querySelectorAll('.mermaid:not([data-processed])') }); } catch { /* optional */ }
+  // Diagrams with their own config (.nd-mermaid) are left to the theme's own renderer, which
+  // does not force the site palette on them.
+  try { w.mermaid?.run?.({ nodes: root.querySelectorAll('.mermaid:not([data-processed]):not(.nd-mermaid)') }); } catch { /* optional */ }
   try { root.querySelectorAll('pre code').forEach((c) => w.hljs?.highlightElement(c)); } catch { /* optional */ }
 }
 

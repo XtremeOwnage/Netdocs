@@ -8,12 +8,29 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-xtremeownage.github.io%2FNetdocs-blue)](https://xtremeownage.github.io/Netdocs/)
 
-A fast, flexible static site generator in **.NET 11** — a reimplementation of the
-[Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) experience with a
-first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and
-the Markdown in `docs/` builds with little to no change.
+A fast, flexible static site generator in **.NET 11** with a built-in visual editor. It is a
+reimplementation of the [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
+experience with a first-class C# plugin system. Site configuration lives in **`appsettings.json`**,
+and the Markdown in `docs/` builds with little to no change.
 
 > 📖 **Full documentation:** <https://xtremeownage.github.io/Netdocs/>
+
+## Visual editor
+
+`netdocs serve` also hosts a local CMS at <http://localhost:8000/__cms/>. It edits the same files you
+would edit by hand (Markdown pages, `appsettings.json`, template overrides). There is no database.
+
+![Editing a page in the Netdocs visual editor, with the callout panel open](docs-site/docs/assets/cms/callout-types.webp)
+
+- Pages are edited on the rendered page. Callouts, tabs, card grids, images, links, tables, code
+  blocks and Mermaid diagrams have their own forms.
+- Saving rewrites only the blocks that changed; the rest of the file is left as is.
+- Other screens cover pages, navigation, tags and categories, media, theme, template overrides,
+  plugins, settings and git.
+- It only listens on localhost and is not included in `netdocs build` output. Turn it off with
+  `--no-cms`.
+
+See the [Local CMS docs](https://xtremeownage.github.io/Netdocs/cms/) for details and screenshots.
 
 > [!IMPORTANT]
 > **Netdocs is an AI-generated derivative work** inspired by, and partially reusing
@@ -60,6 +77,7 @@ or Node toolchain to install.
 | Material theme | ✅ built-in | ✅ | ➖ theme | ➖ theme | ➖ theme |
 | Plugin language | C# (.NET DLL) | Python | Python | Ruby | Go templates/modules |
 | Live-reload dev server | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Built-in local CMS / visual editor | ✅ | ➖ | ➖ | ➖ | ➖ |
 | Incremental render cache | ✅ | ➖ | ➖ | ➖ | ✅ (fast) |
 | Parallel rendering | ✅ | ➖ | ➖ | ➖ | ✅ |
 | Built-in search | ✅ (lunr) | ✅ (lunr) | ✅ (lunr) | ➖ | ➖ |
@@ -131,7 +149,7 @@ Once installed, run the `netdocs` binary directly:
 # Build a site (looks for ./appsettings.json, or pass --config)
 netdocs build --config ./appsettings.json
 
-# Serve with live reload
+# Serve with live reload, plus the local CMS at http://localhost:8000/__cms/
 netdocs serve --config ./appsettings.json --port 8000
 ```
 
@@ -162,7 +180,7 @@ for the full input reference.
 | Command | Description |
 |---|---|
 | `netdocs build` | Build the site to the configured output dir (`site_dir`). |
-| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
+| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload, and the local CMS at `/__cms/` (`--no-cms` to turn it off). |
 | `netdocs --version` | Print the installed Netdocs version and exit. |
 
 Options: `--config/-f`, `--port/-p`, `--clean`, `--strict`, `--prod`, `--verbose/-v`.
@@ -183,7 +201,8 @@ Netdocs.slnx
  │  ├─ Netdocs.Core/           Config, discovery, Markdig pipeline, Scriban templating, build engine, dev server pieces
  │  ├─ Netdocs.Plugins/        Built-in plugins (snippets, search, tags, blog, meta, rss, ...)
  │  ├─ Netdocs.Theme.Material/ Scriban templates + theme assets (CSS/JS)
- │  └─ Netdocs.Cli/            `netdocs build|serve`
+ │  ├─ Netdocs.Cms.Ui/         Local CMS front end (Vite + Preact), built into Netdocs.Cli/Cms/wwwroot
+ │  └─ Netdocs.Cli/            `netdocs build|serve`, dev server and the CMS API
  └─ tests/
     └─ Netdocs.Core.Tests/
 ```

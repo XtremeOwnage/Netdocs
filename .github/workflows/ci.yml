@@ -28,3 +28,30 @@ jobs:
 
       - name: Test
         run: dotnet test Netdocs.slnx -c Release --no-build --verbosity normal
+
+  cms-ui:
+    name: CMS UI bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Netdocs.Cms.Ui/package-lock.json
+
+      - name: Build the admin app and in-page editor
+        working-directory: src/Netdocs.Cms.Ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Check the committed bundle is up to date
+        run: |
+          git add -N src/Netdocs.Cli/Cms/wwwroot
+          git diff --exit-code --stat -- src/Netdocs.Cli/Cms/wwwroot || {
+            echo "::error::src/Netdocs.Cli/Cms/wwwroot is out of date. Run 'npm ci && npm run build' in src/Netdocs.Cms.Ui and commit the result."
+            exit 1
+          }

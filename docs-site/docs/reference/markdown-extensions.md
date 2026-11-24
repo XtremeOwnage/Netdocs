@@ -26,6 +26,7 @@ The shared pipeline enables these by default:
 | Definition lists | `Term\n: Definition` | |
 | Autolinks | bare URLs | |
 | Media links | image/video embeds | |
+| Figures | `^^^` … `^^^ Caption` | `<figure>` with a `<figcaption>`. See [Figures](#figures). |
 | Mathematics | `$…$`, `$$…$$` | |
 
 ## Built-in block extensions
@@ -39,6 +40,20 @@ The shared pipeline enables these by default:
 !!! tip "See them rendered"
     The **[Admonitions & tabs](admonitions-and-tabs.md)** page shows every admonition type and
     tab pattern rendered live next to its Markdown — the fastest way to find the right syntax.
+
+### Figures
+
+Wrap an image (or anything else) in `^^^` fences to make it a figure. Text after the closing fence
+becomes the caption:
+
+```markdown
+^^^
+![The finished rack](img/rack.png){ width="420" }
+^^^ The rack after the 2026 rebuild
+```
+
+This renders `<figure>` with the content inside and a `<figcaption>` under it. The
+[visual editor](../cms/visual-editor.md#images) writes this syntax when you give an image a caption.
 
 ### Admonitions
 

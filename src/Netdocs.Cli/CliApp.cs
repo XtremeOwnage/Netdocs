@@ -139,7 +139,7 @@ public static class CliApp
     private static async Task<int> ServeAsync(string configPath, CliOptions opts, ILoggerFactory loggerFactory)
     {
         var (config, buildOptions) = LoadConfig(configPath, opts, serve: true);
-        var server = new DevServer(configPath, config, buildOptions, BuildRegistry(), loggerFactory, opts.Port);
+        var server = new DevServer(configPath, config, buildOptions, BuildRegistry(), loggerFactory, opts.Port, cms: !opts.NoCms);
         await server.RunAsync();
         return 0;
     }
@@ -342,6 +342,8 @@ public static class CliApp
                 case "--port" or "-p" when i + 1 < args.Length && int.TryParse(args[i + 1], out var port): opts.Port = port; i++; break;
                 case "--clean": opts.Clean = true; break;
                 case "--no-cache": opts.NoCache = true; break;
+                case "--no-cms": opts.NoCms = true; break;
+                case "--cms": opts.NoCms = false; break;
                 case "--remote" when i + 1 < args.Length: opts.Remote = args[++i]; break;
                 case "--branch" when i + 1 < args.Length: opts.Branch = args[++i]; break;
                 case "--interval" when i + 1 < args.Length && int.TryParse(args[i + 1], out var iv): opts.Interval = iv; i++; break;
@@ -364,7 +366,7 @@ public static class CliApp
               netdocs build [options]     Build the site to the output directory
               netdocs profile [options]   Build once and print a per-phase/plugin timing tree
               netdocs deploy [options]    Build, then publish to the configured deploy target
-              netdocs serve [options]     Serve with live reload
+              netdocs serve [options]     Serve with live reload and the local CMS (/__cms/)
               netdocs watch [options]     Publish daemon: poll a git remote and rebuild on push
               netdocs new [path]           Scaffold an annotated appsettings.json
               netdocs import [mkdocs.yml]  Convert an mkdocs.yml to appsettings.json
@@ -380,6 +382,7 @@ public static class CliApp
               -p, --port <port>     Dev server port (default 8000)
                   --clean           Remove existing output before building
                   --no-cache        Ignore the incremental render cache (full re-render)
+                  --no-cms          Serve without the local CMS and in-page editor (serve)
                   --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
                   --deploy          After 'build', publish to the configured deploy target
@@ -419,6 +422,7 @@ internal sealed class CliOptions
     public int Port { get; set; } = 8000;
     public bool Clean { get; set; }
     public bool NoCache { get; set; }
+    public bool NoCms { get; set; }
     public string Remote { get; set; } = "origin";
     public string? Branch { get; set; }
     public int Interval { get; set; } = 30;

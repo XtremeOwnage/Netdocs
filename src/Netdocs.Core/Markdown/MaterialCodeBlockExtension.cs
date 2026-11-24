@@ -40,11 +40,15 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 
         if (string.Equals(opts.Language, "mermaid", StringComparison.OrdinalIgnoreCase))
         {
+            // Material's bundle draws every pre.mermaid with its own palette, which overrides a
+            // diagram's own `config:` (theme, look). Diagrams that set one are emitted as a div,
+            // which the theme's mermaid partial renders with mermaid's own settings instead.
+            var custom = HasMermaidConfig(block);
             renderer.EnsureLine();
-            renderer.WriteLine("<pre class=\"mermaid\">");
+            renderer.WriteLine(custom ? "<div class=\"mermaid nd-mermaid\">" : "<pre class=\"mermaid\">");
             // Escaped so label HTML such as <br /> survives textContent.
             WriteEscapedLines(renderer, block);
-            renderer.WriteLine("</pre>");
+            renderer.WriteLine(custom ? "</div>" : "</pre>");
             return;
         }
 
@@ -69,6 +73,20 @@ public sealed class MaterialCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         renderer.Write('>');
         WriteEscapedLines(renderer, block);
         renderer.WriteLine("</code></pre></div>");
+    }
+
+    /// <summary>True when the diagram starts with front matter holding a <c>config:</c> block.</summary>
+    internal static bool HasMermaidConfig(Markdig.Syntax.LeafBlock block)
+    {
+        var lines = block.Lines;
+        if (lines.Count < 3 || lines.Lines[0].Slice.ToString().Trim() != "---") return false;
+        for (var i = 1; i < lines.Count; i++)
+        {
+            var line = lines.Lines[i].Slice.ToString();
+            if (line.Trim() == "---") return false;
+            if (line.StartsWith("config:", StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 
     private static void WriteEscapedLines(HtmlRenderer renderer, LeafBlock block)

@@ -13,6 +13,15 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+  <!--
+    The local CMS admin app and in-page editor (built from src/Netdocs.Cms.Ui with `npm run build`).
+    The built files are committed and embedded, so building Netdocs needs no Node toolchain.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Cms\wwwroot\**\*">
+      <LogicalName>cms/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
   <ItemGroup>
     <None Include="..\Netdocs.Theme.Material\templates\**\*" LinkBase="theme/templates" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Netdocs.Theme.Material\assets\**\*" LinkBase="theme/assets" CopyToOutputDirectory="PreserveNewest" />

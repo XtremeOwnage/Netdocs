@@ -19,6 +19,9 @@ public static class IconRegistry
     /// <summary>Number of icons available (for diagnostics/tests).</summary>
     public static int Count => Icons.Value.Count;
 
+    /// <summary>Every icon shortcode name, e.g. <c>material-home</c>.</summary>
+    public static IEnumerable<string> Names => Icons.Value.Keys;
+
     /// <summary>Look up an icon by shortcode name (without the surrounding colons),
     /// e.g. <c>material-application</c> or <c>octicons-arrow-right-24</c>.</summary>
     public static Icon? Get(string name) =>

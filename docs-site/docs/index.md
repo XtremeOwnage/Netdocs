@@ -1,14 +1,22 @@
 ---
 title: Netdocs
-description: A fast, flexible static site generator in .NET 11 — a Material for MkDocs derivative.
+description: A fast, flexible static site generator in .NET 11 with a built-in visual editor — a Material for MkDocs derivative.
 ---
 
 # Netdocs
 
-**Netdocs** is a fast, flexible static site generator written in **.NET 11**. It
-reimplements the [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
-experience with a first-class C# plugin system. Site configuration lives in
-**`appsettings.json`**, and Markdown in `docs/` builds with little to no change.
+**Netdocs** is a fast, flexible static site generator written in **.NET 11**, with a
+built-in visual editor. It reimplements the
+[Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) experience with a
+first-class C# plugin system. Site configuration lives in **`appsettings.json`**, and Markdown
+in `docs/` builds with little to no change.
+
+`netdocs serve` also hosts a local CMS with a visual editor at `http://localhost:8000/__cms/`. It
+edits your Markdown and config files directly, with no database. See [Local CMS](cms/index.md).
+
+^^^
+![Editing a page in the Netdocs visual editor, with the callout panel open](assets/cms/callout-types.webp)
+^^^ Editing a callout in the visual editor.
 
 !!! important "Attribution"
     Netdocs is an **AI-generated derivative work** inspired by, and partially reusing
@@ -27,6 +35,8 @@ experience with a first-class C# plugin system. Site configuration lives in
 - **Fast parallel builds** — a parallel render pipeline over Markdig.
 - **C# plugin system** — blog, tags, search, social, snippets, and more, all extensible.
 - **Live reload** — `netdocs serve` runs Kestrel with a WebSocket live-reload watcher.
+- **Visual editor** — `netdocs serve` includes a local CMS for editing pages and managing media,
+  navigation, plugins, templates and git. See [Local CMS](cms/index.md).
 
 ## Quick links
 

@@ -52,8 +52,24 @@ dotnet test Netdocs.slnx -c Release
 | `src/Netdocs.Plugins` | Built-in plugins. |
 | `src/Netdocs.Theme.Material` | Scriban templates + theme assets. |
 | `src/Netdocs.Cli` | `netdocs build|serve|watch`. |
+| `src/Netdocs.Core/Cms` | The local CMS: page blocks, media, git, navigation, plugins and templates. |
+| `src/Netdocs.Cms.Ui` | The CMS front end (Vite + Preact + TypeScript). |
 | `tests/Netdocs.Core.Tests` | xUnit tests (one file per plugin/area). |
 | `docs-site/` | The self-hosted documentation site. |
+
+### Working on the CMS front end
+
+The CMS UI's built bundle is committed in `src/Netdocs.Cli/Cms/wwwroot`, so building Netdocs needs
+no Node toolchain. After changing anything in `src/Netdocs.Cms.Ui`, rebuild it and commit the
+output with your change:
+
+```bash
+cd src/Netdocs.Cms.Ui
+npm ci
+npm run build    # type-checks, then writes to src/Netdocs.Cli/Cms/wwwroot
+```
+
+`npm run dev` rebuilds on every save while `netdocs serve` runs.
 
 ## Writing a plugin
 

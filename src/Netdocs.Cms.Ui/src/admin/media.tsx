@@ -1,5 +1,6 @@
 // Media library: browse, upload, rename, delete and optimize images.
 import { useMemo, useRef, useState } from 'preact/hooks';
+import { navigate, useRoute } from './router';
 import { api, formatBytes, type MediaItem, type WebpResult } from '../shared/api';
 import { Field, Loading, Modal, confirmAction, toast, toastError, useAction, useLoad } from './ui';
 
@@ -7,7 +8,10 @@ export function MediaScreen() {
   const { data, error, reload } = useLoad(() => api.media());
   const [folder, setFolder] = useState('');
   const [filter, setFilter] = useState('');
-  const [kind, setKind] = useState<'all' | 'image' | 'file' | 'unused' | 'convertible'>('all');
+  type Kind = 'all' | 'image' | 'file' | 'unused' | 'convertible';
+  const route = useRoute();
+  const [kind, setKindState] = useState<Kind>((route.params.get('show') as Kind | null) ?? 'all');
+  const setKind = (k: Kind) => { setKindState(k); navigate(k === 'all' ? '/media' : `/media?show=${k}`); };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<MediaItem | null>(null);
   const [optimize, setOptimize] = useState<string[] | null>(null);

@@ -44,18 +44,19 @@ export function TaxonomyScreen(props: { field: string }) {
         <div class="card card--hint">
           <h3>Clean-up suggestions</h3>
           {data.similar.length > 0 && <>
-            <p>These look like the same {noun} spelled differently. Merging rewrites every page that uses them.</p>
+            <p>These look like the same {noun} spelled differently. <b>Merge…</b> picks one name and rewrites every page that uses the others, so they become a single {noun}. Leave them alone if they really are different.</p>
+            <p class="muted small">Why a pair is listed: "same name" differs only in capitals, spaces or punctuation; "singular and plural" is one word with and without an s; "one/two letters apart" is a likely typo. The number on each {noun} is how many pages use it.</p>
             <ul class="plain">
               {data.similar.map((s) => (
                 <li key={s.names.join('|')}>
                   {s.names.map((n) => <span class="tag" key={n}>{n} <span class="muted">{data.terms.find((t) => t.name === n)?.count}</span></span>)}
                   <span class="muted small"> {s.reason}</span>{' '}
-                  <button class="btn btn--small" onClick={() => setRename(s.names)}>Merge…</button>
+                  <button class="btn btn--small" title={`Combine these into one ${noun} on every page`} onClick={() => setRename(s.names)}>Merge…</button>
                 </li>
               ))}
             </ul>
           </>}
-          {data.singleUse.length > 0 && <p class="muted">Used on only one page: {data.singleUse.slice(0, 40).map((n) => <span class="tag" key={n}>{n}</span>)}{data.singleUse.length > 40 && ` and ${data.singleUse.length - 40} more`}</p>}
+          {data.singleUse.length > 0 && <p class="muted" title="Often a typo, or a term worth merging into a broader one">Used on only one page: {data.singleUse.slice(0, 40).map((n) => <span class="tag" key={n}>{n}</span>)}{data.singleUse.length > 40 && ` and ${data.singleUse.length - 40} more`}</p>}
         </div>
       )}
 

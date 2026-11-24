@@ -148,7 +148,10 @@ public sealed class TemplateService(CmsWorkspace workspace)
         workspace.Reload();
     }
 
-    private void Validate(string json)
+    private void Validate(string json) => ValidateConfig(workspace, json);
+
+    /// <summary>Checks that config text still loads, without touching the real file.</summary>
+    internal static void ValidateConfig(CmsWorkspace workspace, string json)
     {
         var temp = Path.Combine(Path.GetDirectoryName(workspace.ConfigPath)!, $".appsettings.cms-{Guid.NewGuid():N}.json");
         try

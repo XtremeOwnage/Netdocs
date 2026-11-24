@@ -54,6 +54,12 @@ export interface GitStatus { isRepository: boolean; branch: string | null; upstr
 export interface GitCommit { hash: string; author: string; date: string; subject: string }
 export interface GitResult { ok: boolean; output: string }
 
+export interface PluginEntry { name: string; enabled: boolean; options: Record<string, Json>; index: number; known: boolean }
+export interface Abbreviation { term: string; definition: string }
+export interface AbbreviationFile { file: string; files: string[]; exists: boolean; entries: Abbreviation[] }
+export interface FileFilterConfig { exists: boolean; yaml: string; fields: Record<string, Json>; ignoreFile: string; ignoreText: string }
+export interface BlogAuthor { id: string; name: string; description: string; avatar: string }
+
 export interface IconMatch { name: string; shortcode: string; svg: string }
 export interface TemplateInfo { name: string; overridden: boolean; inTheme: boolean }
 
@@ -158,6 +164,7 @@ export const api = {
 
   media: () => request<MediaItem[]>('GET', '/media'),
   mediaUrl: (path: string) => `${cms.api}/media/file${q({ path, t: cms.token })}`,
+  blogAuthors: () => request<{ id: string; name: string; description: string }[]>('GET', '/blog/authors'),
   icons: (query: string, limit = 120) => request<IconMatch[]>('GET', '/icons' + q({ q: query, limit })),
   upload: (folder: string, files: File[], overwrite: boolean) => {
     const form = new FormData();
@@ -177,7 +184,8 @@ export const api = {
   gitUnstage: (paths: string[]) => request<GitResult>('POST', '/git/unstage', { paths }),
   gitDiscard: (paths: string[]) => request<GitResult>('POST', '/git/discard', { paths }),
   gitCommit: (message: string, stageAll: boolean) => request<GitResult>('POST', '/git/commit', { message, stageAll }),
-  gitLog: (count = 30) => request<GitCommit[]>('GET', '/git/log' + q({ count })),
+  gitLog: (count = 30) => request<GitCommit[]>('GET', '/git/history' + q({ count })),
+  gitFileUrl: (path: string, committed: boolean) => `${cms.api}/git/file${q({ path, committed, t: cms.token })}`,
   gitBranches: () => request<{ current: string | null; local: string[]; remote: string[] }>('GET', '/git/branches'),
   gitCheckout: (branch: string, create: boolean) => request<GitResult>('POST', '/git/checkout', { branch, create }),
   gitPull: () => request<GitResult>('POST', '/git/pull'),
@@ -188,6 +196,18 @@ export const api = {
   template: (name: string) => request<{ name: string; text: string; original: string | null; overridden: boolean }>('GET', '/template' + q({ name })),
   saveTemplate: (name: string, text: string) => request<void>('POST', '/template', { name, text }),
   revertTemplate: (name: string) => request<void>('POST', '/template/revert', { name }),
+  plugins: () => request<{ plugins: PluginEntry[] }>('GET', '/plugins'),
+  savePlugin: (name: string, enabled: boolean, options: Record<string, Json> | null) =>
+    request<{ plugins: PluginEntry[] }>('POST', '/plugins/save', { name, enabled, options }),
+  removePlugin: (name: string) => request<{ plugins: PluginEntry[] }>('POST', '/plugins/remove', { name }),
+  abbreviations: (file?: string) => request<AbbreviationFile>('GET', '/plugins/abbreviations' + q({ file })),
+  saveAbbreviations: (file: string, entries: Abbreviation[]) => request<AbbreviationFile>('POST', '/plugins/abbreviations', { file, entries }),
+  fileFilter: () => request<FileFilterConfig>('GET', '/plugins/file-filter'),
+  saveFileFilter: (body: { yaml?: string; fields?: Record<string, Json>; ignoreText?: string }) => request<FileFilterConfig>('POST', '/plugins/file-filter', body),
+  pluginAuthors: () => request<{ file: string; authors: BlogAuthor[] }>('GET', '/plugins/blog-authors'),
+  savePluginAuthors: (authors: BlogAuthor[]) => request<{ file: string; authors: BlogAuthor[] }>('POST', '/plugins/blog-authors', { authors }),
+  socialLinks: () => request<{ links: Record<string, Json>[] }>('GET', '/plugins/social-links'),
+  saveSocialLinks: (links: Record<string, Json>[]) => request<{ links: Record<string, Json>[] }>('POST', '/plugins/social-links', { links }),
   settings: () => request<Record<string, Json>>('GET', '/settings'),
   saveSettings: (settings: Record<string, Json>) => request<Record<string, Json>>('POST', '/settings', settings),
   configFile: () => request<{ text: string }>('GET', '/config'),

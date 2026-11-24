@@ -1,7 +1,8 @@
 // Theme settings, template overrides, site settings and the raw appsettings.json editor.
 import { useEffect, useState } from 'preact/hooks';
-import { api, type Json, type SiteInfo } from '../shared/api';
-import { CodeEditor, Diff, Field, Loading, confirmAction, toast, useAction, useLoad } from './ui';
+import { featureDocUrl, featureHelp } from './features';
+import { api, type Json, type SiteInfo, type TemplateInfo } from '../shared/api';
+import { CodeEditor, Diff, Field, Loading, Modal, confirmAction, toast, useAction, useLoad } from './ui';
 
 type Obj = Record<string, Json>;
 const obj = (v: Json | undefined): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : {});
@@ -67,9 +68,13 @@ export function ThemeScreen(props: { site: SiteInfo }) {
         </div>
         <div class="card">
           <h3>Features</h3>
+          <p class="muted small">Optional behaviors of the Material theme. Each one links to its documentation.</p>
           <div class="feature-list">
             {[...new Set([...props.site.features, ...features])].map((f) => (
-              <label class="check" key={f}><input type="checkbox" checked={features.includes(f)} onChange={(e) => setTheme('features', (e.target as HTMLInputElement).checked ? [...features, f] : features.filter((x) => x !== f))} /> <code>{f}</code></label>
+              <div class="feature" key={f}>
+                <label class="check" title={featureHelp[f]?.text}><input type="checkbox" checked={features.includes(f)} onChange={(e) => setTheme('features', (e.target as HTMLInputElement).checked ? [...features, f] : features.filter((x) => x !== f))} /> <code>{f}</code></label>
+                {featureHelp[f] && <p class="feature__help">{featureHelp[f].text} <a href={featureDocUrl(featureHelp[f].doc)} target="_blank" rel="noopener" title="Open the documentation for this feature">Docs ↗</a></p>}
+              </div>
             ))}
           </div>
         </div>
@@ -80,43 +85,139 @@ export function ThemeScreen(props: { site: SiteInfo }) {
 
 export function TemplatesScreen(props: { name: string | null }) {
   const list = useLoad(() => api.templates());
+  const pages = useLoad(() => api.pages());
   const [name, setName] = useState<string | null>(props.name);
   const current = useLoad(() => (name ? api.template(name) : Promise.resolve(null)), [name]);
   const [text, setText] = useState('');
   const [showDiff, setShowDiff] = useState(false);
+  const [live, setLive] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [opened, setOpened] = useState<{ name: string; text: string; overridden: boolean } | null>(null);
+  const [previewPath, setPreviewPath] = useState<string>(() => { try { return localStorage.getItem('ndcms-template-preview') ?? ''; } catch { return ''; } });
+  const [creating, setCreating] = useState(false);
+  const [frameKey, setFrameKey] = useState(0);
   const { busy, run } = useAction();
-  useEffect(() => { if (current.data) setText(current.data.text); }, [current.data]);
+  useEffect(() => {
+    if (!current.data) return;
+    setText(current.data.text);
+    // Remember the template as it was when opened, so live edits can be undone.
+    if (!opened || opened.name !== current.data.name) setOpened({ name: current.data.name, text: current.data.text, overridden: current.data.overridden });
+  }, [current.data]);
+
+  // Live preview: write the draft (debounced) so the site rebuilds and the preview reloads.
+  useEffect(() => {
+    if (!live || !current.data || text === current.data.text) return;
+    const handle = setTimeout(async () => {
+      try {
+        await api.saveTemplate(current.data!.name, text);
+        setLiveError(null);
+        current.reload();
+        list.reload();
+      } catch (e) {
+        setLiveError(e instanceof Error ? e.message : String(e));
+      }
+    }, 1200);
+    return () => clearTimeout(handle);
+  }, [text, live]);
+
   if (!list.data) return <Loading error={list.error} />;
   const t = current.data;
   const dirty = !!t && text !== t.text;
   const diffText = t?.original != null && text !== t.original ? simpleDiff(t.original, text) : '';
+  const livePages = (pages.data ?? []).filter((p) => p.url !== null);
+  const previewPage = livePages.find((p) => p.path === previewPath) ?? livePages.find((p) => p.path === 'index.md') ?? livePages[0];
+  const changedSinceOpen = !!opened && !!t && opened.name === t.name && (text !== opened.text || t.overridden !== opened.overridden);
+
+  const undoAll = async () => {
+    if (!opened || !t) return;
+    if (!confirmAction(`Put ${t.name} back the way it was when you opened it?`)) return;
+    if (opened.overridden) await run(() => api.saveTemplate(opened.name, opened.text), 'Restored');
+    else await run(() => api.revertTemplate(opened.name), 'Restored the theme version');
+    current.reload();
+    list.reload();
+  };
+
+  const pageTemplatesList = list.data.filter((x) => !x.name.includes('/'));
+  const partials = list.data.filter((x) => x.name.includes('/'));
+  const item = (x: TemplateInfo) => (
+    <li key={x.name}>
+      <button class={`btn btn--link mono${x.name === name ? ' on' : ''}`} title={x.inTheme ? 'A theme template' : 'A template you added'} onClick={() => { if (!dirty || live || confirmAction('Drop unsaved template edits?')) { setName(x.name); setShowDiff(false); setOpened(null); location.hash = `#/templates?name=${encodeURIComponent(x.name)}`; } }}>{x.name}</button>
+      {x.overridden && <span class="badge badge--warn" title={x.inTheme ? 'You changed this template' : 'Added by you'}>{x.inTheme ? 'custom' : 'new'}</span>}
+    </li>
+  );
 
   return (
     <section class="editor-screen">
       <header class="screen-head">
         <h1>Templates</h1>
-        {t && <div class="row">
-          <span class="mono">{t.name}</span>
-          {t.overridden ? <span class="badge badge--warn">customized</span> : <span class="badge">theme default</span>}
-          {t.original !== null && <button class="btn" onClick={() => setShowDiff(!showDiff)}>{showDiff ? 'Edit' : 'Compare with theme'}</button>}
-          {t.overridden && <button class="btn btn--danger" disabled={busy} onClick={async () => { if (confirmAction(`Delete your version of ${t.name} and go back to the theme's?`)) { await run(() => api.revertTemplate(t.name), 'Reverted'); current.reload(); list.reload(); } }}>Revert to theme</button>}
-          <button class="btn btn--primary" disabled={busy || !dirty} onClick={async () => { const r = await run(() => api.saveTemplate(t.name, text).then(() => true), t.overridden ? 'Saved' : 'Saved as an override'); if (r) { current.reload(); list.reload(); } }}>Save</button>
-        </div>}
+        <div class="row">
+          <button class="btn" title="Make a new page template that pages can choose in their settings" onClick={() => setCreating(true)}>+ New page template</button>
+          {t && <>
+            <span class="mono">{t.name}</span>
+            {t.overridden ? <span class="badge badge--warn">customized</span> : <span class="badge">theme default</span>}
+            {t.original !== null && <button class="btn" title="Show what you changed compared with the theme's version" onClick={() => setShowDiff(!showDiff)}>{showDiff ? 'Edit' : 'Compare with theme'}</button>}
+            {t.overridden && <button class="btn btn--danger" disabled={busy} title={t.original === null ? 'Delete this template' : 'Delete your version and use the theme\'s again'} onClick={async () => { if (confirmAction(t.original === null ? `Delete the template ${t.name}? Pages that use it fall back to main.html.` : `Delete your version of ${t.name} and go back to the theme's?`)) { await run(() => api.revertTemplate(t.name), t.original === null ? 'Deleted' : 'Reverted'); setLive(false); current.reload(); list.reload(); } }}>{t.original === null ? 'Delete template' : 'Revert to theme'}</button>}
+            {changedSinceOpen && <button class="btn" disabled={busy} title="Undo every change since you opened this template" onClick={() => void undoAll()}>↶ Undo all</button>}
+            <label class="check" title="Save as you type so the preview shows your change within a second or two. Undo all puts it back."><input type="checkbox" checked={live} onChange={() => setLive(!live)} /> Live preview</label>
+            <button class="btn btn--primary" disabled={busy || !dirty} onClick={async () => { const r = await run(() => api.saveTemplate(t.name, text).then(() => true), t.overridden ? 'Saved' : 'Saved as an override'); if (r) { current.reload(); list.reload(); } }}>Save</button>
+          </>}
+        </div>
       </header>
-      <p class="muted small">Templates use Scriban. Saving writes a copy to the site's template overrides folder{list.data.some((x) => x.overridden) ? '' : ' (created as "overrides" and set as theme.customDir on first save)'}; the theme's own files are never changed.</p>
-      <div class="templates-layout">
-        <ul class="plain template-list">
-          {list.data.map((x) => (
-            <li key={x.name}><button class={`btn btn--link mono${x.name === name ? ' on' : ''}`} onClick={() => { if (!dirty || confirmAction('Drop unsaved template edits?')) { setName(x.name); setShowDiff(false); location.hash = `#/templates?name=${encodeURIComponent(x.name)}`; } }}>{x.name}</button>{x.overridden && <span class="badge badge--warn">custom</span>}</li>
-          ))}
-        </ul>
+      <p class="muted small">Templates use Scriban. Saving writes a copy to the site's template overrides folder{list.data.some((x) => x.overridden) ? '' : ' (created as "overrides" and set as theme.customDir on first save)'}; the theme's own files are never changed. Page templates are the ones a page can pick in its settings; partials are pieces those pages include.</p>
+      {liveError && <div class="card card--hint"><b>Not applied:</b> <span class="mono small">{liveError}</span></div>}
+      <div class="templates-layout templates-layout--preview">
+        <div class="template-list">
+          <div class="field__label">Page templates</div>
+          <ul class="plain">{pageTemplatesList.map(item)}</ul>
+          <div class="field__label">Partials</div>
+          <ul class="plain">{partials.map(item)}</ul>
+        </div>
         <div class="editor-code">
           {!name && <p class="muted">Pick a template to view or customize it.</p>}
           {name && !t && <Loading error={current.error} />}
           {t && (showDiff ? <Diff text={diffText} /> : <CodeEditor language="html" value={text} onChange={setText} onSave={() => { if (dirty) void run(() => api.saveTemplate(t.name, text), 'Saved').then(() => { current.reload(); list.reload(); }); }} />)}
         </div>
+        <div class="template-preview">
+          <div class="row">
+            <span class="field__label">Preview</span>
+            <select class="input" value={previewPage?.path ?? ''} title="The page to preview" onChange={(e) => {
+              const v = (e.target as HTMLSelectElement).value;
+              setPreviewPath(v);
+              try { localStorage.setItem('ndcms-template-preview', v); } catch { /* private mode */ }
+            }}>
+              {livePages.map((p) => <option key={p.path} value={p.path}>{p.title} ({p.path})</option>)}
+            </select>
+            <button class="btn btn--small" title="Reload the preview" onClick={() => setFrameKey((k) => k + 1)}>⟳ Reload</button>
+          </div>
+          {previewPage
+            ? <iframe key={frameKey + previewPage.path} class="preview-frame" title="Site preview" src={'/' + previewPage.url + '?cms-preview=1'} />
+            : <p class="muted">No built pages to preview yet.</p>}
+          <p class="muted small">{live ? 'Live: your edits are saved and shown here within a couple of seconds.' : 'Shows the saved templates. Turn on Live preview, or Save, to see your edits.'}</p>
+        </div>
       </div>
+      {creating && <NewTemplateDialog existing={list.data.map((x) => x.name)} onClose={() => setCreating(false)} onCreate={async (newName, from) => {
+        const source = await api.template(from);
+        const ok = await run(() => api.saveTemplate(newName, source.text).then(() => true), `Created ${newName}`);
+        if (ok) { setCreating(false); list.reload(); setName(newName); setOpened(null); location.hash = `#/templates?name=${encodeURIComponent(newName)}`; }
+      }} />}
     </section>
+  );
+}
+
+function NewTemplateDialog(props: { existing: string[]; onClose: () => void; onCreate: (name: string, from: string) => void }) {
+  const [name, setName] = useState('');
+  const pagesOnly = props.existing.filter((n) => !n.includes('/') && n !== '404.html');
+  const [from, setFrom] = useState(pagesOnly.includes('main.html') ? 'main.html' : pagesOnly[0] ?? '');
+  const file = name.trim() ? (name.trim().toLowerCase().endsWith('.html') ? name.trim() : name.trim() + '.html').replace(/[^\w.-]+/g, '-') : '';
+  const taken = props.existing.includes(file);
+  return (
+    <Modal title="New page template" onClose={props.onClose} actions={<>
+      <button class="btn" onClick={props.onClose}>Cancel</button>
+      <button class="btn btn--primary" disabled={!file || taken || !from} onClick={() => props.onCreate(file, from)}>Create</button>
+    </>}>
+      <Field label="Name" hint={taken ? 'A template with that name already exists.' : file ? `Saved as ${file} in the overrides folder. Pages choose it with template: ${file}` : 'For example landing or wide-page'}><input class="input mono" value={name} autoFocus onInput={(e) => setName((e.target as HTMLInputElement).value)} /></Field>
+      <Field label="Start from" hint="A copy of this template is the starting point"><select class="input" value={from} onChange={(e) => setFrom((e.target as HTMLSelectElement).value)}>{pagesOnly.map((n) => <option key={n} value={n}>{n}</option>)}</select></Field>
+    </Modal>
   );
 }
 

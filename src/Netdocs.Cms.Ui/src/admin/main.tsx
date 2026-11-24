@@ -5,12 +5,13 @@ import './admin.css';
 import { api, formatBytes, type SiteInfo } from '../shared/api';
 import { Loading, Toasts, useLoad } from './ui';
 import { useRoute } from './router';
-import { PageEditorScreen, PagesScreen } from './pages';
+import { PageEditorScreen, PagesScreen, isPost } from './pages';
 import { NavScreen } from './nav';
 import { TaxonomyScreen } from './taxonomy';
 import { MediaScreen } from './media';
 import { GitScreen } from './git';
 import { SettingsScreen, TemplatesScreen, ThemeScreen } from './theme';
+import { PluginsScreen } from './plugins';
 
 const sections = [
   { path: '/', label: 'Dashboard', icon: '◧' },
@@ -21,6 +22,7 @@ const sections = [
   { path: '/git', label: 'Source control', icon: '⎇' },
   { path: '/theme', label: 'Theme', icon: '🎨' },
   { path: '/templates', label: 'Templates', icon: '⟨⟩' },
+  { path: '/plugins', label: 'Plugins', icon: '🧩' },
   { path: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -70,6 +72,7 @@ function App() {
     case '/media': screen = <MediaScreen key={rebuilds} />; break;
     case '/git': screen = <GitScreen key={rebuilds} />; break;
     case '/theme': screen = <ThemeScreen site={site.data} />; break;
+    case '/plugins': screen = <PluginsScreen name={route.params.get('name')} />; break;
     case '/templates': screen = <TemplatesScreen name={route.params.get('name')} />; break;
     case '/settings': screen = <SettingsScreen site={site.data} />; break;
     default: screen = <p>Not found. <a href="#/">Back to the dashboard</a></p>;
@@ -100,7 +103,7 @@ function Dashboard(props: { site: SiteInfo }) {
   if (!pages.data) return <Loading error={pages.error} />;
   const recent = [...pages.data].sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, 8);
   const drafts = pages.data.filter((p) => p.draft).length;
-  const unlisted = pages.data.filter((p) => !p.inNav).length;
+  const unlisted = pages.data.filter((p) => !p.inNav && !isPost(p)).length;
   const convertible = media.data?.filter((m) => /\.(png|jpe?g|gif|bmp)$/i.test(m.path)) ?? [];
   const unused = media.data?.filter((m) => m.references === 0).length ?? 0;
   return (
@@ -108,8 +111,8 @@ function Dashboard(props: { site: SiteInfo }) {
       <header class="screen-head"><h1>{props.site.siteName}</h1><a class="btn btn--primary" href="#/pages">Manage pages</a></header>
       <div class="stats">
         <a class="stat" href="#/pages"><strong>{pages.data.length}</strong><span>pages</span></a>
-        <a class="stat" href="#/pages"><strong>{drafts}</strong><span>drafts</span></a>
-        <a class="stat" href="#/nav"><strong>{unlisted}</strong><span>not in navigation</span></a>
+        <a class="stat" href="#/pages?show=drafts" title="List the draft pages"><strong>{drafts}</strong><span>drafts</span></a>
+        <a class="stat" href="#/pages?show=unlisted" title="Pages that are not blog posts and are missing from the navigation"><strong>{unlisted}</strong><span>not in navigation</span></a>
         <a class="stat" href="#/taxonomy"><strong>{tags.data?.terms.length ?? '…'}</strong><span>tags</span></a>
         <a class="stat" href="#/media"><strong>{media.data?.length ?? '…'}</strong><span>media files{media.data ? ` · ${formatBytes(media.data.reduce((n, m) => n + m.size, 0))}` : ''}</span></a>
         <a class="stat" href="#/git"><strong>{git.data?.isRepository ? git.data.files.length : '–'}</strong><span>{git.data?.isRepository ? `uncommitted on ${git.data.branch}` : 'no git repository'}</span></a>
@@ -123,9 +126,9 @@ function Dashboard(props: { site: SiteInfo }) {
           <h3>Worth a look</h3>
           <ul class="plain">
             {(tags.data?.similar.length ?? 0) > 0 && <li>🏷 {tags.data!.similar.length} group(s) of tags look like duplicates. <a href="#/taxonomy">Review</a></li>}
-            {convertible.length > 0 && <li>🖼 {convertible.length} PNG/JPEG image(s) could be converted to WebP. <a href="#/media">Optimize</a></li>}
-            {unused > 0 && <li>🗑 {unused} media file(s) are not used by any page. <a href="#/media">Review</a></li>}
-            {unlisted > 0 && <li>☰ {unlisted} page(s) are not in the navigation. <a href="#/nav">Review</a></li>}
+            {convertible.length > 0 && <li>🖼 {convertible.length} PNG/JPEG image(s) could be converted to WebP. <a href="#/media?show=convertible">Optimize</a></li>}
+            {unused > 0 && <li>🗑 {unused} media file(s) are not used by any page. <a href="#/media?show=unused" title="Media no page links to. Images used only by templates or the config also show here, so check before deleting.">Review</a></li>}
+            {unlisted > 0 && <li>☰ {unlisted} page(s) are not in the navigation. <a href="#/pages?show=unlisted">Review</a></li>}
             {(git.data?.files.length ?? 0) > 0 && <li>⎇ {git.data!.files.length} uncommitted change(s). <a href="#/git">Commit</a></li>}
           </ul>
           <p class="muted small">Tip: every page of the running site has an <b>✎ Edit page</b> button for editing in place.</p>

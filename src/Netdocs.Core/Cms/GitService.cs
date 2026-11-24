@@ -198,6 +198,36 @@ public sealed class GitService(CmsWorkspace workspace)
 
     public Task<GitResult> FetchAsync(CancellationToken ct) => RunChecked(["fetch", "--prune"], ct);
 
+    /// <summary>
+    /// A file's bytes as committed (<paramref name="committed"/>: the last commit) or as it is on
+    /// disk now. Null when it does not exist in that version. Used for before/after image previews.
+    /// </summary>
+    public async Task<byte[]?> ReadFileAsync(string path, bool committed, CancellationToken ct)
+    {
+        var rel = await SafePathAsync(path, ct);
+        if (!committed)
+        {
+            var full = Path.Combine(_repoRoot!, rel.Replace('/', Path.DirectorySeparatorChar));
+            return File.Exists(full) ? await File.ReadAllBytesAsync(full, ct) : null;
+        }
+        var psi = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = _repoRoot!,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var a in new[] { "show", "HEAD:" + rel }) psi.ArgumentList.Add(a);
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        using var proc = Process.Start(psi);
+        if (proc is null) return null;
+        using var buffer = new MemoryStream();
+        var copy = proc.StandardOutput.BaseStream.CopyToAsync(buffer, ct);
+        var err = proc.StandardError.ReadToEndAsync(ct);
+        await Task.WhenAll(copy, err, proc.WaitForExitAsync(ct));
+        return proc.ExitCode == 0 ? buffer.ToArray() : null;
+    }
+
     private async Task<List<string>> PathsAsync(IReadOnlyList<string> paths, CancellationToken ct)
     {
         if (paths.Count == 0) return [await ScopeAsync(ct)];

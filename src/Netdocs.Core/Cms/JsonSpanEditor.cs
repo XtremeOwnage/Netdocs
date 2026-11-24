@@ -72,6 +72,75 @@ public static class JsonSpanEditor
         return json;
     }
 
+    /// <summary>
+    /// Returns <paramref name="json"/> with item <paramref name="index"/> of the array at
+    /// <paramref name="arrayPath"/> replaced by <paramref name="value"/>. An index equal to the
+    /// item count appends; a null <paramref name="value"/> removes the item. The array is created
+    /// when it is missing. Other items keep their bytes, so comments between them survive.
+    /// </summary>
+    public static string SetArrayItem(string json, int index, JsonNode? value, params string[] arrayPath)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json);
+        var span = FindValue(bytes, arrayPath);
+        if (span is null)
+        {
+            if (value is null) return json;
+            return Set(json, new JsonArray(value.DeepClone()), arrayPath);
+        }
+        if (bytes[span.Value.ValueStart] != (byte)'[') throw new CmsException($"'{string.Join('.', arrayPath)}' is not a list in the config file.");
+
+        var items = new List<(int Start, int End)>();
+        var reader = new Utf8JsonReader(bytes.AsSpan(span.Value.ValueStart, span.Value.ValueEnd - span.Value.ValueStart), ReaderOptions);
+        reader.Read();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            var start = span.Value.ValueStart + (int)reader.TokenStartIndex;
+            reader.Skip();
+            items.Add((start, span.Value.ValueStart + (int)reader.BytesConsumed));
+        }
+        if (index < 0 || index > items.Count) throw new CmsException("The list item was not found.");
+
+        var arrayIndent = LineIndent(bytes, span.Value.PropertyStart);
+        var itemIndent = items.Count > 0 ? LineIndent(bytes, items[0].Start) : arrayIndent + "  ";
+        if (index == items.Count)
+        {
+            if (value is null) return json;
+            var text = Serialize(value, itemIndent);
+            if (items.Count == 0)
+            {
+                var close = span.Value.ValueEnd - 1;
+                return Splice(bytes, span.Value.ValueStart + 1, close, "\n" + itemIndent + text + "\n" + arrayIndent);
+            }
+            return Splice(bytes, items[^1].End, items[^1].End, ",\n" + itemIndent + text);
+        }
+
+        var (itemStart, itemEnd) = items[index];
+        if (value is not null)
+            return Splice(bytes, itemStart, itemEnd, Serialize(value, LineIndent(bytes, itemStart)));
+
+        // Remove the item with one of its commas, and the line it sat on.
+        int from, to;
+        if (index + 1 < items.Count)
+        {
+            from = itemStart;
+            while (from > 0 && bytes[from - 1] is (byte)' ' or (byte)'\t') from--;
+            var next = items[index + 1].Start;
+            while (next > 0 && bytes[next - 1] is (byte)' ' or (byte)'\t') next--;
+            to = next;
+        }
+        else if (index > 0)
+        {
+            from = items[index - 1].End;
+            to = itemEnd;
+        }
+        else
+        {
+            from = span.Value.ValueStart + 1;
+            to = span.Value.ValueEnd - 1;
+        }
+        return Splice(bytes, from, to, "");
+    }
+
     private readonly record struct ValueSpan(int PropertyStart, int ValueStart, int ValueEnd, bool IsObject);
 
     private static ValueSpan? FindRoot(byte[] bytes)
@@ -204,6 +273,12 @@ public static class JsonSpanEditor
             case JsonObject obj when obj.All(p => p.Value is JsonValue or null) && InlineObject(obj) is { Length: <= InlineLimit } inline:
                 sb.Append(inline);
                 break;
+            // A short object holding one small nested object, like a plugin entry
+            // ({ "name": "rss", "options": { "atom": true } }), also stays on one line.
+            case JsonObject obj when obj.All(p => p.Value is JsonValue or null || (p.Value is JsonObject inner && inner.All(q => q.Value is JsonValue or null)))
+                && InlineNested(obj) is { Length: <= InlineLimit } nested:
+                sb.Append(nested);
+                break;
             case JsonObject obj:
                 {
                     sb.Append("{\n");
@@ -237,6 +312,15 @@ public static class JsonSpanEditor
                 break;
         }
     }
+
+    private static string InlineNested(JsonObject obj) =>
+        "{ " + string.Join(", ", obj.Select(p => JsonSerializer.Serialize(p.Key, WriteOptions) + ": " + p.Value switch
+        {
+            null => "null",
+            JsonObject { Count: 0 } => "{}",
+            JsonObject inner => InlineObject(inner),
+            var v => v.ToJsonString(WriteOptions),
+        })) + " }";
 
     private static string InlineObject(JsonObject obj) =>
         "{ " + string.Join(", ", obj.Select(p => JsonSerializer.Serialize(p.Key, WriteOptions) + ": " + (p.Value is null ? "null" : p.Value.ToJsonString(WriteOptions)))) + " }";

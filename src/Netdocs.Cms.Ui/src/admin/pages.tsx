@@ -3,13 +3,23 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { api, type FrontMatter, type Json, type PageDocument, type PageSummary } from '../shared/api';
 import { ChipInput, CodeEditor, Field, Loading, Modal, confirmAction, toast, toastError, useAction, useLoad } from './ui';
 import { openIconPicker, pageTemplates } from '../shared/pickers';
-import { navigate } from './router';
+import { navigate, useRoute } from './router';
+
+type SortKey = 'title' | 'path' | 'tags' | 'date' | 'modified';
+
+/** Blog posts live under a posts folder; the blog lists them, so they are not "missing" from the navigation. */
+export const isPost = (p: { path: string }) => /(^|\/)posts\//.test(p.path);
 
 export function PagesScreen() {
   const { data, error, reload } = useLoad(() => api.pages());
   const [filter, setFilter] = useState('');
   const [tag, setTag] = useState('');
-  const [onlyUnlisted, setOnlyUnlisted] = useState(false);
+  const route = useRoute();
+  type Show = 'all' | 'drafts' | 'published' | 'posts' | 'unlisted';
+  const initialShow = route.params.get('show') as Show | null;
+  const [show, setShowState] = useState<Show>(initialShow ?? 'all');
+  const setShow = (v: Show) => { setShowState(v); navigate(v === 'all' ? '/pages' : `/pages?show=${v}`); };
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'modified', desc: true });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<null | { kind: 'new' } | { kind: 'move'; page: PageSummary } | { kind: 'tags' }>(null);
   const { run } = useAction();
@@ -19,8 +29,12 @@ export function PagesScreen() {
     const term = filter.toLowerCase();
     return (!term || p.path.toLowerCase().includes(term) || p.title.toLowerCase().includes(term))
       && (!tag || p.tags.includes(tag))
-      && (!onlyUnlisted || !p.inNav);
-  }), [data, filter, tag, onlyUnlisted]);
+      && (show === 'all' || (show === 'drafts' ? p.draft : show === 'published' ? !p.draft : show === 'posts' ? isPost(p) : !p.inNav && !isPost(p)));
+  }).sort((a, b) => {
+    const value = (p: PageSummary) => (sort.key === 'tags' ? p.tags.join(', ') : sort.key === 'date' ? p.date ?? '' : (p[sort.key] as string) ?? '');
+    const c = value(a).localeCompare(value(b), undefined, { numeric: true, sensitivity: 'base' });
+    return sort.desc ? -c : c;
+  }), [data, filter, tag, show, sort]);
 
   if (!data) return <Loading error={error} />;
 
@@ -50,11 +64,25 @@ export function PagesScreen() {
           <option value="">All tags</option>
           {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <label class="check"><input type="checkbox" checked={onlyUnlisted} onChange={() => setOnlyUnlisted(!onlyUnlisted)} /> Not in navigation</label>
+        <select class="input input--auto" value={show} title="Which pages to list" onChange={(e) => setShow((e.target as HTMLSelectElement).value as typeof show)}>
+          <option value="all">All pages</option>
+          <option value="drafts">Drafts only ({data.filter((p) => p.draft).length})</option>
+          <option value="published">Published only</option>
+          <option value="posts">Blog posts ({data.filter(isPost).length})</option>
+          <option value="unlisted">Not in navigation, not a post ({data.filter((p) => !p.inNav && !isPost(p)).length})</option>
+        </select>
         {selected.size > 0 && <button class="btn" onClick={() => setDialog({ kind: 'tags' })}>Tag {selected.size} selected…</button>}
       </div>
       <table class="table">
-        <thead><tr><th><input type="checkbox" aria-label="Select all" checked={rows.length > 0 && rows.every((r) => selected.has(r.path))} onChange={(e) => setSelected((e.target as HTMLInputElement).checked ? new Set(rows.map((r) => r.path)) : new Set())} /></th><th>Title</th><th>Path</th><th>Tags</th><th>Updated</th><th /></tr></thead>
+        <thead><tr><th><input type="checkbox" aria-label="Select all" checked={rows.length > 0 && rows.every((r) => selected.has(r.path))} onChange={(e) => setSelected((e.target as HTMLInputElement).checked ? new Set(rows.map((r) => r.path)) : new Set())} /></th>{(
+          [['title', 'Title'], ['path', 'Path'], ['tags', 'Tags'], ['date', 'Date'], ['modified', 'File changed']] as [SortKey, string][]
+        ).map(([key, text]) => (
+          <th key={key} class="sortable" aria-sort={sort.key === key ? (sort.desc ? 'descending' : 'ascending') : 'none'}>
+            <button class="th-sort" title={`Sort by ${text.toLowerCase()}`} onClick={() => setSort({ key, desc: sort.key === key ? !sort.desc : key === 'modified' || key === 'date' })}>
+              {text} <span class="muted">{sort.key === key ? (sort.desc ? '▼' : '▲') : '↕'}</span>
+            </button>
+          </th>
+        ))}<th /></tr></thead>
         <tbody>
           {rows.map((p) => (
             <tr key={p.path}>
@@ -62,10 +90,11 @@ export function PagesScreen() {
               <td>
                 <a href={`#/pages/edit?path=${encodeURIComponent(p.path)}`}>{p.title}</a>
                 {p.draft && <span class="badge badge--warn">draft</span>}
-                {!p.inNav && <span class="badge" title="Not listed in the navigation">unlisted</span>}
+                {!p.inNav && !isPost(p) && <span class="badge" title="Not listed in the navigation, and not a blog post (posts are listed by the blog instead)">unlisted</span>}
               </td>
               <td class="mono">{p.path}</td>
               <td>{p.tags.map((t) => <span class="tag" key={t}>{t}</span>)}</td>
+              <td class="muted nowrap">{p.date ?? ''}</td>
               <td class="muted nowrap">{new Date(p.modified).toLocaleString()}</td>
               <td class="actions">
                 <a class="btn btn--small btn--primary" href={`#/pages/edit?path=${encodeURIComponent(p.path)}`}>✎ Edit</a>
@@ -303,13 +332,13 @@ export function PageEditorScreen(props: { path: string }) {
           </div>
           {mode !== 'visual' && <button class="btn" disabled={!dirty} onClick={() => { setBody(data.body); setFm(structuredClone(data.frontMatter)); setRaw(data.raw); }}>Revert</button>}
           <button class="btn btn--primary" disabled={busy || !dirty} onClick={() => void save()}>Save</button>
-          {data.url !== null && <a class="btn btn--ghost" href={'/' + data.url} target="_blank" rel="noopener" title="Open the page in a new tab">↗</a>}
-          <button class="btn btn--ghost" title="Reload from disk" onClick={() => {
+          {data.url !== null && <a class="btn btn--ghost" href={'/' + data.url} target="_blank" rel="noopener" title="Open the page on the site in a new tab">View ↗</a>}
+          <button class="btn btn--ghost" title="Load the file again from disk (drops unsaved edits)" onClick={() => {
             if (dirty && !confirmAction('Reload and lose unsaved edits?')) return;
             setVisualDirty(false);
             setFrameKey((k) => k + 1);
             reload();
-          }}>⟳</button>
+          }}>⟳ Reload</button>
         </div>
       </header>
       {mode === 'visual' ? (

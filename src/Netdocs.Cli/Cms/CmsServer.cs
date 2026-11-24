@@ -40,6 +40,7 @@ public sealed class CmsServer
     private MediaService _media;
     private GitService _git;
     private TemplateService _templates;
+    private PluginService _plugins;
     private CmsRenderer? _renderer;
     private Dictionary<string, string> _urlToPath = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, string> _pathToUrl = new(StringComparer.OrdinalIgnoreCase);
@@ -59,6 +60,7 @@ public sealed class CmsServer
         _media = new MediaService(_workspace, _content);
         _git = new GitService(_workspace);
         _templates = new TemplateService(_workspace);
+        _plugins = new PluginService(_workspace);
     }
 
     /// <summary>Random per-run secret the admin app and in-page editor send with each API call.</summary>
@@ -78,6 +80,7 @@ public sealed class CmsServer
                 _media = new MediaService(_workspace, _content);
                 _git = new GitService(_workspace);
                 _templates = new TemplateService(_workspace);
+                _plugins = new PluginService(_workspace);
             }
             else
             {
@@ -131,7 +134,7 @@ public sealed class CmsServer
             // <img src> and <a href> cannot send headers, so read-only file fetches may carry the
             // token in the query string instead.
             var token = request.Headers.TryGetValue(TokenHeader, out var header) ? header.ToString()
-                : HttpMethods.IsGet(request.Method) && request.Path.StartsWithSegments(BasePath + "/api/media/file") ? request.Query["t"].ToString()
+                : HttpMethods.IsGet(request.Method) && (request.Path.StartsWithSegments(BasePath + "/api/media/file") || request.Path.StartsWithSegments(BasePath + "/api/git/file")) ? request.Query["t"].ToString()
                 : "";
             if (token.Length == 0 || !CryptographicOperations.FixedTimeEquals(
                     System.Text.Encoding.UTF8.GetBytes(token), System.Text.Encoding.UTF8.GetBytes(Token)))
@@ -251,7 +254,13 @@ public sealed class CmsServer
         api.MapPost("/git/unstage", (PathsRequest req, CancellationToken ct) => _git.UnstageAsync(req.Paths ?? [], ct));
         api.MapPost("/git/discard", (PathsRequest req, CancellationToken ct) => _git.DiscardAsync(req.Paths ?? [], ct));
         api.MapPost("/git/commit", (CommitRequest req, CancellationToken ct) => _git.CommitAsync(req.Message, req.StageAll, ct));
-        api.MapGet("/git/log", (int? count, CancellationToken ct) => _git.LogAsync(count ?? 30, ct));
+        // Not "/git/log": privacy blocklists in browser extensions block URLs containing "/log?".
+        api.MapGet("/git/history", (int? count, CancellationToken ct) => _git.LogAsync(count ?? 30, ct));
+        api.MapGet("/git/file", async (string path, bool? committed, CancellationToken ct) =>
+        {
+            var bytes = await _git.ReadFileAsync(path, committed ?? false, ct);
+            return bytes is null ? Results.NotFound() : Results.Bytes(bytes, ContentTypes.For(path));
+        });
         api.MapGet("/git/branches", async (CancellationToken ct) =>
         {
             var (current, local, remote) = await _git.BranchesAsync(ct);
@@ -261,6 +270,9 @@ public sealed class CmsServer
         api.MapPost("/git/pull", (CancellationToken ct) => _git.PullAsync(ct));
         api.MapPost("/git/push", (CancellationToken ct) => _git.PushAsync(ct));
         api.MapPost("/git/fetch", (CancellationToken ct) => _git.FetchAsync(ct));
+
+        // Blog authors (for the author picker)
+        api.MapGet("/blog/authors", () => BlogAuthors.List(_workspace));
 
         // Icons (for the icon picker)
         api.MapGet("/icons", (string? q, int? limit) => IconCatalog.Search(q ?? "", Math.Clamp(limit ?? 120, 1, 500)));
@@ -274,6 +286,19 @@ public sealed class CmsServer
         });
         api.MapPost("/template", (SaveTemplate req) => { _templates.Save(req.Name, req.Text); return Results.Ok(new { ok = true }); });
         api.MapPost("/template/revert", (NameRequest req) => { _templates.Revert(req.Name); return Results.Ok(new { ok = true }); });
+        // Plugins
+        api.MapGet("/plugins", () => PluginList(_plugins.List()));
+        api.MapPost("/plugins/save", (SavePlugin req) => PluginList(_plugins.Save(req.Name, req.Enabled, req.Options)));
+        api.MapPost("/plugins/remove", (NameRequest req) => PluginList(_plugins.Remove(req.Name)));
+        api.MapGet("/plugins/abbreviations", (string? file) => _plugins.ReadAbbreviations(file));
+        api.MapPost("/plugins/abbreviations", (SaveAbbreviations req) => _plugins.SaveAbbreviations(req.File, req.Entries ?? []));
+        api.MapGet("/plugins/file-filter", () => _plugins.ReadFileFilter());
+        api.MapPost("/plugins/file-filter", (SaveFileFilter req) => _plugins.SaveFileFilter(req.Yaml, req.Fields, req.IgnoreText));
+        api.MapGet("/plugins/blog-authors", () => new { file = _plugins.AuthorsFile(), authors = _plugins.ReadAuthors() });
+        api.MapPost("/plugins/blog-authors", (SaveAuthors req) => new { file = _plugins.AuthorsFile(), authors = _plugins.SaveAuthors(req.Authors ?? []) });
+        api.MapGet("/plugins/social-links", () => new { links = _plugins.ReadSocialLinks() });
+        api.MapPost("/plugins/social-links", (SaveSocialLinks req) => new { links = _plugins.SaveSocialLinks(req.Links ?? []) });
+
         api.MapGet("/settings", () => _templates.ReadSettings());
         api.MapPost("/settings", (JsonObject settings) => { _templates.SaveSettings(settings); return Results.Ok(_templates.ReadSettings()); });
         api.MapGet("/config", () => new { text = _templates.ReadConfigFile() });
@@ -345,6 +370,16 @@ public sealed class CmsServer
     public sealed record PathRequest(string Path);
     public sealed record PathsRequest(List<string>? Paths);
     public sealed record NameRequest(string Name);
+    public sealed record SavePlugin(string Name, bool Enabled, JsonObject? Options);
+    public sealed record SaveAbbreviations(string? File, List<Abbreviation>? Entries);
+    public sealed record SaveFileFilter(string? Yaml, JsonObject? Fields, string? IgnoreText);
+    public sealed record SaveAuthors(List<BlogAuthor>? Authors);
+    public sealed record SaveSocialLinks(JsonArray? Links);
+
+    private object PluginList(IReadOnlyList<PluginEntry> entries) => new
+    {
+        plugins = entries.Select(e => new { e.Name, e.Enabled, e.Options, e.Index, known = _registry.Contains(e.Name) }),
+    };
     public sealed record SavePage(string Path, string? Hash, JsonElement? FrontMatter, string? Body);
     public sealed record SaveRaw(string Path, string? Hash, string Raw);
     public sealed record CreatePage(string Path, string? Title, JsonElement? FrontMatter, string? Body, bool AddToNav);

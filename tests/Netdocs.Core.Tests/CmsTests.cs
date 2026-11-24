@@ -454,3 +454,81 @@ public class CmsIconCatalogTests
         Assert.StartsWith("<svg", hits[0].Svg);
     }
 }
+
+public class CmsPluginServiceTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "netdocs-cms-plugins-" + Guid.NewGuid().ToString("N"));
+    private readonly PluginService _plugins;
+    private string ConfigPath => Path.Combine(_root, "appsettings.json");
+
+    public CmsPluginServiceTests()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "docs", "_include"));
+        File.WriteAllText(ConfigPath, """
+            {
+              "Netdocs": {
+                "siteName": "Test",
+                "plugins": [
+                  { "name": "search" }, // keep me
+                  { "name": "rss", "options": { "atom": true } },
+                  { "name": "tags" }
+                ]
+              }
+            }
+            """);
+        File.WriteAllText(Path.Combine(_root, "docs", "_include", "abbv.md"), "<!-- shared -->\n*[HTML]: HyperText Markup Language\n*[CSS]: Cascading Style Sheets\n");
+        _plugins = new PluginService(new CmsWorkspace(ConfigPath, Configuration.JsonConfigLoader.Load(ConfigPath)));
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, true); } catch (IOException) { }
+    }
+
+    [Fact]
+    public void Disabling_keeps_options_and_other_entries()
+    {
+        _plugins.Save("rss", false, new System.Text.Json.Nodes.JsonObject { ["atom"] = true });
+        var text = File.ReadAllText(ConfigPath);
+        Assert.Contains("""{ "name": "rss", "enabled": false, "options": { "atom": true } }""", text);
+        Assert.Contains("// keep me", text);
+        Assert.Contains("""{ "name": "tags" }""", text);
+        Assert.False(_plugins.List().Single(p => p.Name == "rss").Enabled);
+        // A disabled plugin is not loaded.
+        Assert.DoesNotContain(Configuration.JsonConfigLoader.Load(ConfigPath).Plugins, p => p.Name == "rss");
+    }
+
+    [Fact]
+    public void Adds_and_removes_plugins()
+    {
+        _plugins.Save("blog", true, null);
+        Assert.Equal(["search", "rss", "tags", "blog"], _plugins.List().Select(p => p.Name));
+        _plugins.Remove("rss");
+        Assert.Equal(["search", "tags", "blog"], _plugins.List().Select(p => p.Name));
+        _plugins.Remove("blog");
+        var text = File.ReadAllText(ConfigPath);
+        Assert.Contains("// keep me", text);
+        Assert.Equal(["search", "tags"], _plugins.List().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void Rewrites_abbreviations_in_place()
+    {
+        _plugins.SaveAbbreviations(null, [new("K8s", "Kubernetes"), new("k8s", "Kubernetes"), new("HTML", "HyperText Markup Language")]);
+        Assert.Equal("<!-- shared -->\n*[K8s]: Kubernetes\n*[k8s]: Kubernetes\n*[HTML]: HyperText Markup Language\n",
+            File.ReadAllText(Path.Combine(_root, "docs", "_include", "abbv.md")));
+        Assert.Throws<CmsException>(() => _plugins.SaveAbbreviations(null, [new("A", "x"), new("A", "y")]));
+    }
+
+    [Fact]
+    public void Writes_file_filter_and_authors()
+    {
+        var result = _plugins.SaveFileFilter(null, new System.Text.Json.Nodes.JsonObject { ["enabled"] = true, ["exclude_tag"] = new System.Text.Json.Nodes.JsonArray("draft") }, "internal/\n");
+        Assert.Equal(["draft"], result.Fields["exclude_tag"]!.AsArray().Select(x => x!.ToString()));
+        Assert.Equal("internal/\n", result.IgnoreText);
+
+        var authors = _plugins.SaveAuthors([new("jdoe", "Jane \"JD\" Doe", "Maintainer", "")]);
+        Assert.Equal("Jane \"JD\" Doe", authors.Single().Name);
+        Assert.Throws<CmsException>(() => _plugins.SaveAuthors([new("bad id", "x", "", "")]));
+    }
+}

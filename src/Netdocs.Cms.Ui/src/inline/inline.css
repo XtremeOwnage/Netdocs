@@ -276,3 +276,36 @@ html.ndcms-editing body { padding-bottom: var(--ndcms-bar-h); }
 .ndcms-icon-preview { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 1px solid var(--ndcms-line); border-radius: 6px; }
 .ndcms-icon-preview svg { width: 20px; height: 20px; fill: currentColor; }
 .ndcms-icon-name { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+/* Insert points next to the block being edited stand out, so adding content above or below it is obvious. */
+.ndcms-btn--tool b { font-weight: 700; }
+.ndcms-btn--tool span { font-weight: 500; }
+.ndcms-insert:has(+ .ndcms-block--active), .ndcms-block--active + .ndcms-insert { height: 30px; }
+.ndcms-insert:has(+ .ndcms-block--active) .ndcms-insert__line, .ndcms-block--active + .ndcms-insert .ndcms-insert__line {
+  opacity: .35; top: 14px; height: 0; background: none; border-top: 2px dashed var(--ndcms-accent);
+}
+.ndcms-insert:has(+ .ndcms-block--active) .ndcms-insert__toggle, .ndcms-block--active + .ndcms-insert .ndcms-insert__toggle {
+  opacity: 1; top: 3px; width: auto; height: 24px; padding: 0 10px; border-radius: 12px;
+  background: var(--ndcms-accent); color: var(--ndcms-accent-fg); border-color: var(--ndcms-accent); font-size: 12px;
+}
+.ndcms-insert:has(+ .ndcms-block--active) .ndcms-insert__toggle::after { content: " Add above"; font-weight: 500; }
+.ndcms-block--active + .ndcms-insert .ndcms-insert__toggle::after { content: " Add below"; font-weight: 500; }
+.ndcms-block--active { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ndcms-accent) 12%, transparent), 0 6px 18px rgb(0 0 0 / .12); }
+.ndcms-task { cursor: pointer; }
+
+/* Settings sections and clickable post metadata */
+.ndcms-section { border-top: 1px solid var(--ndcms-line); padding: 8px 0 2px; }
+.ndcms-section:first-child { border-top: 0; padding-top: 0; }
+.ndcms-section > summary { cursor: pointer; font-weight: 700; font-size: 13px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--ndcms-muted); }
+.ndcms-section[open] > summary { color: var(--ndcms-fg); }
+html.ndcms-editing .ndcms-meta {
+  --ndcms-accent: var(--md-primary-fg-color, #4051b5);
+  --ndcms-accent-fg: var(--md-primary-bg-color, #fff);
+  --ndcms-bg: var(--md-default-bg-color, #fff);
+  --ndcms-fg: var(--md-default-fg-color, #1f2328);
+  --ndcms-line: var(--md-default-fg-color--lightest, #d0d7de);
+  position: relative; cursor: pointer; border-radius: 8px; outline: 1px dashed var(--ndcms-line); outline-offset: 6px;
+}
+html.ndcms-editing .ndcms-meta:hover { outline-color: var(--ndcms-accent); }
+.ndcms-meta__btn { display: none; margin-bottom: 8px; font-size: 12px; }
+html.ndcms-editing .ndcms-meta__btn { display: inline-block; }

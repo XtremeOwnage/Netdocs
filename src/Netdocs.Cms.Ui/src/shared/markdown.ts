@@ -240,3 +240,26 @@ export function formatTabs(tabs: Tab[]): string {
     return `===${t.selected ? '+' : ''} "${t.title.replace(/"/g, "'")}"\n\n${body}`;
   }).join('\n\n');
 }
+
+/**
+ * Languages the code block editor suggests: what highlight.js (the default highlighter) colors,
+ * plus Mermaid diagrams. Any other name still works; it is just shown without colors.
+ */
+export const codeLanguages: [string, string][] = [
+  ['text', 'Plain text'], ['bash', 'Bash / shell'], ['sh', 'Shell'], ['shell', 'Shell session'], ['console', 'Console output'],
+  ['powershell', 'PowerShell'], ['bat', 'Windows batch'], ['python', 'Python'], ['py', 'Python'], ['javascript', 'JavaScript'],
+  ['js', 'JavaScript'], ['typescript', 'TypeScript'], ['ts', 'TypeScript'], ['jsx', 'JSX'], ['tsx', 'TSX'], ['json', 'JSON'],
+  ['jsonc', 'JSON with comments'], ['yaml', 'YAML'], ['yml', 'YAML'], ['toml', 'TOML'], ['ini', 'INI / config'], ['xml', 'XML'],
+  ['html', 'HTML'], ['css', 'CSS'], ['scss', 'SCSS'], ['less', 'Less'], ['markdown', 'Markdown'], ['md', 'Markdown'],
+  ['csharp', 'C#'], ['cs', 'C#'], ['fsharp', 'F#'], ['vbnet', 'VB.NET'], ['java', 'Java'], ['kotlin', 'Kotlin'], ['scala', 'Scala'],
+  ['groovy', 'Groovy'], ['go', 'Go'], ['rust', 'Rust'], ['c', 'C'], ['cpp', 'C++'], ['objectivec', 'Objective-C'], ['swift', 'Swift'],
+  ['php', 'PHP'], ['ruby', 'Ruby'], ['perl', 'Perl'], ['lua', 'Lua'], ['r', 'R'], ['julia', 'Julia'], ['dart', 'Dart'],
+  ['elixir', 'Elixir'], ['erlang', 'Erlang'], ['haskell', 'Haskell'], ['clojure', 'Clojure'], ['ocaml', 'OCaml'], ['zig', 'Zig'],
+  ['sql', 'SQL'], ['pgsql', 'PostgreSQL'], ['graphql', 'GraphQL'], ['dockerfile', 'Dockerfile'], ['makefile', 'Makefile'],
+  ['cmake', 'CMake'], ['nginx', 'nginx config'], ['apache', 'Apache config'], ['properties', 'Java properties'],
+  ['diff', 'Diff / patch'], ['plaintext', 'Plain text'], ['latex', 'LaTeX'], ['protobuf', 'Protocol Buffers'],
+  ['terraform', 'Terraform / HCL'], ['hcl', 'HCL'], ['nix', 'Nix'], ['arduino', 'Arduino'], ['armasm', 'ARM assembly'],
+  ['x86asm', 'x86 assembly'], ['vhdl', 'VHDL'], ['verilog', 'Verilog'], ['matlab', 'MATLAB'], ['wasm', 'WebAssembly'],
+  ['http', 'HTTP'], ['csv', 'CSV'], ['jinja', 'Jinja / templates'], ['twig', 'Twig'], ['handlebars', 'Handlebars'],
+  ['vim', 'Vim script'], ['awk', 'AWK'], ['mermaid', 'Mermaid diagram'],
+];

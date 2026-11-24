@@ -5,7 +5,7 @@
 import './inline.css';
 import { api, cms, ApiError, type FrontMatter, type Json, type PageDocument, type RenderedBlock } from '../shared/api';
 import {
-  admonitionTypes, formatAdmonition, formatFence, formatTabs, htmlToMarkdown, insertTemplates,
+  admonitionTypes, codeLanguages, formatAdmonition, formatFence, formatTabs, htmlToMarkdown, insertTemplates,
   needsSourceEditing, parseAdmonition, parseFence, parseTabs, richKinds,
 } from '../shared/markdown';
 import { imageMarkdown, openIconPicker, openImagePicker, openLinkPicker, pageTemplates, parseImageMarkdown } from '../shared/pickers';
@@ -80,6 +80,8 @@ function findArticle(): HTMLElement | null {
 // --- Toolbar ----------------------------------------------------------------------------------
 
 function mountToolbar() {
+  // The template editor's preview shows the page exactly as visitors see it.
+  if (new URLSearchParams(location.search).has('cms-preview')) return;
   bar = el('div', { class: `ndcms-bar${embedded ? ' ndcms-bar--embedded' : ''}`, role: 'toolbar', 'aria-label': 'Netdocs CMS' });
   if (embedded) document.documentElement.classList.add('ndcms-embedded');
   (window as unknown as { __netdocsCmsDirty: () => boolean }).__netdocsCmsDirty = () => isDirty();
@@ -144,7 +146,7 @@ function renderToolbar() {
   }
   const quick = el('div', { class: 'ndcms-bar__insert', role: 'group', 'aria-label': 'Insert' },
     el('span', { class: 'ndcms-bar__label' }, 'Insert'),
-    ...quickInserts.map((q) => button(q.icon, `Insert ${q.label.toLowerCase()} after the selected block`, () => void insertTemplate(insertPosition(), q.id), 'ndcms-btn--tool')),
+    ...quickInserts.map((q) => button(`<b>${q.icon}</b>${q.short ? ` <span>${q.short}</span>` : ''}`, `Insert ${q.label.toLowerCase()} after the selected block`, () => void insertTemplate(insertPosition(), q.id), 'ndcms-btn--tool')),
     moreMenu(),
   );
   bar.append(
@@ -169,19 +171,19 @@ function updateStatus(message?: string, kind: 'info' | 'error' | 'ok' = 'info') 
 
 // Toolbar shortcuts: the most used blocks, one click each. "More" lists everything.
 const quickInserts = [
-  { id: 'p', icon: '¶', label: 'Text' },
-  { id: 'h2', icon: 'H2', label: 'Heading' },
-  { id: 'h3', icon: 'H3', label: 'Subheading' },
-  { id: 'ul', icon: '•≡', label: 'Bulleted list' },
-  { id: 'ol', icon: '1≡', label: 'Numbered list' },
-  { id: 'task', icon: '☑', label: 'Task list' },
-  { id: 'image', icon: '🖼', label: 'Image' },
-  { id: 'table', icon: '▦', label: 'Table' },
-  { id: 'note', icon: 'ⓘ', label: 'Callout box' },
-  { id: 'tabs', icon: '⊟', label: 'Tabs' },
-  { id: 'code', icon: '{ }', label: 'Code block' },
-  { id: 'quote', icon: '❝', label: 'Quote' },
-  { id: 'hr', icon: '―', label: 'Divider' },
+  { id: 'p', icon: '¶', label: 'Text', short: 'Text' },
+  { id: 'h2', icon: 'H2', label: 'Heading', short: '' },
+  { id: 'h3', icon: 'H3', label: 'Subheading', short: '' },
+  { id: 'ul', icon: '•', label: 'Bulleted list', short: 'List' },
+  { id: 'ol', icon: '1.', label: 'Numbered list', short: 'List' },
+  { id: 'task', icon: '☑', label: 'Task list', short: 'Tasks' },
+  { id: 'image', icon: '🖼', label: 'Image', short: 'Image' },
+  { id: 'table', icon: '▦', label: 'Table', short: 'Table' },
+  { id: 'note', icon: 'ⓘ', label: 'Callout box', short: 'Callout' },
+  { id: 'tabs', icon: '⊟', label: 'Tabs', short: 'Tabs' },
+  { id: 'code', icon: '{ }', label: 'Code block', short: 'Code' },
+  { id: 'quote', icon: '❝', label: 'Quote', short: 'Quote' },
+  { id: 'hr', icon: '―', label: 'Divider', short: 'Line' },
 ];
 
 function insertPosition(): number {
@@ -260,8 +262,26 @@ async function enterEditMode() {
     document.documentElement.classList.add('ndcms-editing');
     renderToolbar();
     renderBlocks();
+    attachMetadataEditors();
   } catch (e) {
     alertError(e);
+  }
+}
+
+/** The blog post sidebar (author, date, category) and the page title open the page settings. */
+function attachMetadataEditors() {
+  for (const target of document.querySelectorAll<HTMLElement>('.nd-post-sidebar, .md-content__inner > header')) {
+    if (target.classList.contains('ndcms-meta')) continue;
+    target.classList.add('ndcms-meta');
+    target.title = 'Click to edit the post details: date, authors, categories…';
+    const edit = button('✎ Edit details', 'Edit the date, authors, categories and other page settings', () => void openSettings(), 'ndcms-meta__btn');
+    target.prepend(edit);
+    target.addEventListener('click', (e) => {
+      if (!state) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void openSettings();
+    }, true);
   }
 }
 
@@ -327,7 +347,6 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
   content.innerHTML = block.html || `<p class="ndcms-muted">(${block.kind} block with no visible output)</p>`;
   block.el = wrapper;
   block.content = content;
-  block.renderedHtml = content.innerHTML;
 
   const tools = el('div', { class: 'ndcms-block__tools' },
     el('span', { class: 'ndcms-block__kind' }, label(block.kind)),
@@ -340,6 +359,27 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
     button('⧉', 'Duplicate', () => duplicate(index)),
     button('🗑', 'Delete block', () => remove(index), 'ndcms-btn--danger'),
   );
+
+  // Task list boxes can be ticked right on the page.
+  content.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((box) => {
+    box.removeAttribute('disabled');
+    box.classList.add('ndcms-task');
+    box.title = box.checked ? 'Mark as not done' : 'Mark as done';
+  });
+  const onTask = (e: Event) => {
+    const box = (e.target as HTMLElement).closest?.('input[type="checkbox"]');
+    if (!box || !content.contains(box)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type !== 'click') return;
+    const n = [...content.querySelectorAll('input[type="checkbox"]')].indexOf(box);
+    void toggleTask(index, n);
+  };
+  content.addEventListener('mousedown', onTask, true);
+  content.addEventListener('click', onTask, true);
+
+  // Captured after the tweaks above, so they do not count as an edit.
+  block.renderedHtml = content.innerHTML;
 
   wrapper.addEventListener('focusin', () => { activeIndex = index; markActive(); });
   wrapper.addEventListener('mousedown', () => { activeIndex = index; markActive(); });
@@ -391,6 +431,29 @@ function inserter(position: number): HTMLElement {
   }, 'ndcms-insert__toggle');
   wrap.append(el('span', { class: 'ndcms-insert__line' }), toggle, menu);
   return wrap;
+}
+
+/** Flips the n-th task box of a block in its markdown: `- [ ]` ⇄ `- [x]`. */
+async function toggleTask(index: number, n: number) {
+  if (!state) return;
+  syncRichBlocks();
+  const block = state.blocks[index];
+  let seen = -1;
+  const lines = block.source.split('\n').map((line) => line.replace(/^(\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+)\[( |x|X)\]/, (m, lead: string, mark: string) => {
+    seen++;
+    return seen === n ? `${lead}[${mark === ' ' ? 'x' : ' '}]` : m;
+  }));
+  if (seen < n) return;
+  block.source = lines.join('\n');
+  block.changed = true;
+  activeIndex = index;
+  try {
+    await renderSource(block);
+  } catch (e) {
+    alertError(e);
+    return;
+  }
+  renderBlocks();
 }
 
 function markActive() {
@@ -707,11 +770,17 @@ function openBlockEditor(index: number, forceSource = false) {
   }
 
   if (fence) {
-    const lang = input(fence.lang, 'python, yaml, mermaid…');
+    const lang = input(fence.lang, 'Start typing: python, yaml, bash, mermaid…');
+    const langList = 'ndcms-langs';
+    lang.setAttribute('list', langList);
+    if (!document.getElementById(langList)) {
+      document.body.append(el('datalist', { id: langList }, ...codeLanguages.map(([id, name]) => el('option', { value: id }, name))));
+    }
+    lang.addEventListener('focus', () => lang.select());
     const options = input(fence.options, 'title="file.py" linenums="1" hl_lines="2 3"');
     const code = textarea(fence.code, 16);
     openPanel(fence.lang === 'mermaid' ? 'Mermaid diagram' : 'Code block', el('div', {},
-      field('Language', lang),
+      field('Language', lang, 'Pick from the list or type any language name. Leave empty for no highlighting.'),
       field('Options', options, 'title, linenums, hl_lines and other fence options'),
       field('Code', code),
     ), [
@@ -907,7 +976,7 @@ function tableEditor(initial: Table) {
 }
 
 // Front matter keys with their own controls; anything else is shown as a custom attribute.
-const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide', 'nav_title', 'page_title', 'authors', 'status'];
+const knownKeys = ['title', 'description', 'tags', 'categories', 'date', 'draft', 'icon', 'template', 'hide', 'nav_title', 'page_title', 'authors', 'slug'];
 
 async function openSettings() {
   if (!state) return;
@@ -916,19 +985,25 @@ async function openSettings() {
   const str = (k: string) => (typeof fm[k] === 'string' || typeof fm[k] === 'number' ? String(fm[k]) : '');
   const list = (k: string) => (Array.isArray(fm[k]) ? (fm[k] as Json[]).map(String) : typeof fm[k] === 'string' ? [fm[k] as string] : []);
 
-  const [tagTerms, categoryTerms, templates] = await Promise.all([
+  const [tagTerms, categoryTerms, templates, authorList] = await Promise.all([
     api.taxonomy('tags').then((t) => t.terms.map((x) => x.name)).catch(() => [] as string[]),
     api.taxonomy('categories').then((t) => t.terms.map((x) => x.name)).catch(() => [] as string[]),
     pageTemplates(),
+    api.blogAuthors().catch(() => [] as { id: string; name: string }[]),
   ]);
+  const dateMap = typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date) ? fm.date as Record<string, Json> : null;
+  const isPost = /(^|\/)posts\//.test(s.page.path) || 'authors' in fm || 'categories' in fm || dateMap !== null;
 
   const title = input(str('title'));
   const navTitle = input(str('nav_title'), 'Shorter label for the navigation');
   const description = textarea(str('description'), 3, false);
   const tags = chipInput(list('tags'), tagTerms);
   const categories = chipInput(list('categories'), categoryTerms);
-  const dateValue = typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date) ? String((fm.date as Record<string, Json>).created ?? '') : str('date');
-  const date = dateInput(dateValue);
+  const date = dateInput(dateMap ? String(dateMap.created ?? '') : str('date'));
+  const updated = dateInput(dateMap ? String(dateMap.updated ?? '') : '');
+  const authors = chipInput(list('authors'), authorList.map((a) => a.id));
+  const slug = input(str('slug'), 'Leave empty to build it from the title');
+  const pageTitle = input(str('page_title'), 'Leave empty to use the title');
   const draft = el('input', { type: 'checkbox' }) as HTMLInputElement;
   draft.checked = fm.draft === true;
   const icon = iconInput(str('icon'));
@@ -951,19 +1026,40 @@ async function openSettings() {
   };
   for (const [k, v] of Object.entries(fm)) if (!knownKeys.includes(k)) addCustom(k, v);
 
+  const section = (name: string, open: boolean, ...children: HTMLElement[]) => {
+    const d = el('details', { class: 'ndcms-section' }, el('summary', {}, name), ...children);
+    d.open = open;
+    return d;
+  };
+  const authorHint = authorList.length
+    ? 'Authors from .authors.yml: ' + authorList.map((a) => `${a.id} (${a.name})`).join(', ')
+    : 'Author ids come from the blog\'s .authors.yml file; none was found.';
+
   openPanel('Page settings', el('div', {},
-    field('Title', title),
-    field('Navigation title', navTitle),
-    field('Description', description, 'Used for search results and social cards'),
-    field('Tags', tags.root),
-    field('Categories', categories.root, 'Blog post categories'),
-    field('Date', date.root),
-    el('label', { class: 'ndcms-check' }, draft, ' Draft (hidden from the published blog)'),
-    field('Icon', icon.root, 'Shown next to the page in the navigation'),
-    field('Template', template, 'Page templates come from the theme and your overrides folder'),
-    el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Hide'), el('div', { class: 'ndcms-checks' }, ...hideBoxes)),
-    el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Custom attributes'), el('small', { class: 'ndcms-muted' }, 'Values may be text or JSON (lists, numbers, true/false).'), customRows,
-      button('+ Add attribute', 'Add a front matter key', () => addCustom('', ''))),
+    section('Page', true,
+      field('Title', title),
+      field('Description', description, 'Used for search results and social cards'),
+      field('Tags', tags.root),
+    ),
+    section('Blog post', isPost,
+      field('Published', date.root, 'The post date shown on the page and used to sort the blog'),
+      field('Updated', updated.root, 'Optional: when the post was last revised'),
+      field('Authors', authors.root, authorHint),
+      field('Categories', categories.root, 'The blog\'s category pages list the post under each one'),
+      field('URL slug', slug, 'The last part of the post\'s address'),
+      el('label', { class: 'ndcms-check' }, draft, ' Draft (left out of the published blog)'),
+    ),
+    section('Navigation and layout', !isPost,
+      field('Navigation title', navTitle, 'Shorter label for the navigation'),
+      field('Browser tab title', pageTitle),
+      field('Icon', icon.root, 'Shown next to the page in the navigation'),
+      field('Template', template, 'Page templates come from the theme and your overrides folder'),
+      el('div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, 'Hide parts of the page'), el('div', { class: 'ndcms-checks' }, ...hideBoxes)),
+    ),
+    section('Other attributes', customs.length > 0,
+      el('div', { class: 'ndcms-field' }, el('small', { class: 'ndcms-muted' }, 'Any other front matter key. Values may be text or JSON (lists, numbers, true/false).'), customRows,
+        button('+ Add attribute', 'Add a front matter key', () => addCustom('', ''))),
+    ),
   ), [
     button('Apply', 'Apply to the page (then Save)', () => {
       const next: FrontMatter = {};
@@ -978,8 +1074,18 @@ async function openSettings() {
       set('description', description.value.trim() || undefined);
       set('tags', tags.values());
       set('categories', categories.values());
-      if (typeof fm.date === 'object' && fm.date && !Array.isArray(fm.date)) set('date', { ...(fm.date as Record<string, Json>), created: date.value() });
-      else set('date', date.value() || undefined);
+      // A post with an update date uses the map form: date: { created, updated }.
+      const created = date.value();
+      const changed = updated.value();
+      if (dateMap || changed) {
+        const map: Record<string, Json> = { ...(dateMap ?? {}) };
+        if (created) map.created = created; else delete map.created;
+        if (changed) map.updated = changed; else delete map.updated;
+        set('date', Object.keys(map).length === 0 ? undefined : Object.keys(map).length === 1 && map.created ? created : map);
+      } else set('date', created || undefined);
+      set('authors', authors.values());
+      set('slug', slug.value.trim() || undefined);
+      set('page_title', pageTitle.value.trim() || undefined);
       set('draft', draft.checked ? true : undefined);
       set('icon', icon.value() || undefined);
       set('template', template.value.trim() || undefined);

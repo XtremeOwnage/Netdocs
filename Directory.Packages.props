@@ -12,17 +12,17 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
-    <!-- Pinned to the 3.x line on purpose: ImageSharp 4.0 switched to the Six Labors Split
-         License and fails the build without a registered license key (sixlabors.lic). Netdocs is
-         a zero-config OSS tool distributed to users, so we stay on the Apache-2.0 3.1.x releases. -->
-    <PackageVersion Include="SixLabors.ImageSharp" Version="3.2.0" />
-    <PackageVersion Include="SixLabors.ImageSharp.Drawing" Version="2.2.0" />
+    <!-- Pinned to ImageSharp 3.1.x and Drawing 2.1.x: from ImageSharp 3.2.0 / Drawing 2.2.0 the
+         Six Labors Split License applies and the build fails without a license key (sixlabors.lic).
+         Netdocs is a zero-config OSS tool distributed to users, so it stays on the Apache-2.0 releases. -->
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageVersion Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
     <PackageVersion Include="Scriban" Version="7.6.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />

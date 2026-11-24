@@ -1,49 +1,51 @@
 version: 2
+# Every ecosystem runs on Monday and groups its updates, so a week's bumps arrive as at most one
+# PR per ecosystem. The cooldown skips releases younger than 3 days, which avoids yanked or
+# quickly-patched versions.
 updates:
-  # .NET / NuGet dependencies (Central Package Management)
+  # .NET / NuGet dependencies (Central Package Management). Every bump edits
+  # Directory.Packages.props, so separate PRs conflict with each other once one merges.
+  # Minor and patch bumps share one PR; majors get their own.
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
     ignore:
-      # ImageSharp 4.0 moved to the Six Labors Split License and its build targets fail outright
-      # without a registered key ("No Six Labors license found ... obtain a license from
-      # sixlabors.com/pricing"). Netdocs ships as a zero-config OSS binary, so it stays on the
-      # Apache-2.0 3.1.x line -- see the pin in Directory.Packages.props. Drawing's next major
-      # depends on ImageSharp 4.x, so it carries the same constraint.
-      # Without this, every ImageSharp release reopens a PR that cannot build.
+      # From ImageSharp 3.2.0 / Drawing 2.2.0 the Six Labors Split License applies and the build
+      # fails without a license key. Netdocs stays on the Apache-2.0 releases; see the pin in
+      # Directory.Packages.props.
       - dependency-name: "SixLabors.ImageSharp"
-        update-types: ["version-update:semver-major"]
+        versions: [">= 3.2.0"]
       - dependency-name: "SixLabors.ImageSharp.Drawing"
-        update-types: ["version-update:semver-major"]
+        versions: [">= 2.2.0"]
     groups:
-      microsoft-extensions:
-        patterns:
-          - "Microsoft.Extensions.*"
-      test:
-        patterns:
-          - "xunit*"
-          - "Microsoft.NET.Test.Sdk"
-      # Catch-all: bundle every remaining minor/patch bump into a single PR to
-      # cut down on review noise. Major bumps are intentionally left out so they
-      # still open as individual PRs and get reviewed on their own.
       nuget-minor-patch:
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
+      # Microsoft.Extensions.* majors follow the .NET release and move together.
+      microsoft-extensions-major:
+        patterns:
+          - "Microsoft.Extensions.*"
+        update-types:
+          - "major"
 
-  # GitHub Actions workflow dependencies. Actions are bumped as one group across
-  # all update types (including major) because action major bumps are frequent,
-  # low-risk, and were previously opening a separate PR per action.
+  # GitHub Actions. All update types share one PR: action majors are frequent and low-risk.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: "ci"
     groups:
@@ -59,6 +61,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps(frontend)"
@@ -68,12 +73,16 @@ updates:
           - "*"
 
   # The local CMS admin app and in-page editor (src/Netdocs.Cms.Ui). A bump here needs
-  # `npm run build` so the committed bundle in src/Netdocs.Cli/Cms/wwwroot matches; the CI
-  # "CMS UI bundle" job fails until it does.
+  # `npm ci && npm run build` so the committed bundle in src/Netdocs.Cli/Cms/wwwroot matches;
+  # the CI "CMS UI bundle" job fails until it does. All update types share one PR, since each
+  # needs that rebuild anyway.
   - package-ecosystem: "npm"
     directory: "/src/Netdocs.Cms.Ui"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps(cms)"

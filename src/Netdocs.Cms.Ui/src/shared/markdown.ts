@@ -176,6 +176,7 @@ export const insertTemplates: InsertTemplate[] = [
   { id: 'code-lines', group: 'Code', label: 'Code with line numbers', markdown: '```python linenums="1" hl_lines="2"\nfirst = 1\nsecond = 2\n```' },
   { id: 'mermaid', group: 'Code', label: 'Mermaid diagram', markdown: '```mermaid\ngraph LR\n  A[Start] --> B{Choice}\n  B -->|Yes| C[Done]\n  B -->|No| A\n```' },
   { id: 'math', group: 'Code', label: 'Math block', markdown: '$$\nE = mc^2\n$$' },
+  { id: 'timeline', group: 'Code', label: 'Timeline (timeline plugin)', markdown: '```timeline\ntitle: Project\ninputs:\n  - name: start\n    label: Project start\n    default: 01/04/2027\noutputs:\n  - name: kickoff\n    label: Kick-off meeting\n    type: weekdays\n    expr: start + 1\n  - name: build\n    label: Build\n    type: weekdays\n    expr: kickoff + 1\n    duration: 10\n```' },
   { id: 'footnote', group: 'Extras', label: 'Footnote definition', markdown: '[^1]: The footnote text.' },
   { id: 'abbr', group: 'Extras', label: 'Abbreviation', markdown: '*[HTML]: HyperText Markup Language' },
   { id: 'button', group: 'Extras', label: 'Button link', markdown: '[Get started](index.md){ .md-button .md-button--primary }' },

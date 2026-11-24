@@ -9,6 +9,10 @@ import {
   needsSourceEditing, parseAdmonition, parseFence, parseTabs, richKinds,
 } from '../shared/markdown';
 import { imageMarkdown, openIconPicker, openImagePicker, openLinkPicker, pageTemplates, parseImageMarkdown } from '../shared/pickers';
+import {
+  formatExpr, formatTimeline, fromIsoDate, parseExpr, parseTimeline, pickerFormat, toIsoDate,
+  type Timeline, type TimelineExclusion, type TimelineInput, type TimelineOutput,
+} from '../shared/timeline';
 
 interface EditorBlock {
   /** Index of the original block in the file, or null for a new block. */
@@ -945,6 +949,12 @@ function editBlock(ctx: EditCtx, forceSource = false) {
     return;
   }
 
+  const timeline = fence && fence.lang === 'timeline' ? parseTimeline(fence.code) : null;
+  if (fence && timeline) {
+    openTimelineEditor(ctx, fence, timeline);
+    return;
+  }
+
   if (fence) {
     const lang = input(fence.lang, 'Start typing: python, yaml, bash, mermaid…');
     const langList = 'ndcms-langs';
@@ -1246,6 +1256,180 @@ function openMermaidEditor(ctx: EditCtx, fence: ReturnType<typeof parseFence> & 
   ), [
     button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
   ], () => apply(formatFence({ ...fence, code: formatMermaid({ ...d, title: title.value, theme: theme.value, look: look.value, body: code.value }) })), ctx.nested);
+}
+
+// --- Timelines (timeline plugin) ---------------------------------------------------------------
+
+/** Which days count: `all` (the plugin's default) or `weekdays`. A missing type stays missing unless changed. */
+function typeSelect(value: string | undefined) {
+  const s = select(value ?? 'all', ['all', 'weekdays']);
+  s.querySelector('option[value="all"]')!.textContent = 'Every day';
+  s.querySelector('option[value="weekdays"]')!.textContent = 'Weekdays only';
+  return { root: s, value: () => (s.value === 'all' && value === undefined ? undefined : s.value) };
+}
+
+/** A date typed in the block's `date_format`, with a date picker next to it when that format allows one. */
+function timelineDate(value: string, format: () => string, placeholder: string) {
+  const text = input(value, placeholder);
+  const picker = el('input', { type: 'date', class: 'ndcms-input ndcms-tl__picker', title: 'Pick a date' }) as HTMLInputElement;
+  const sync = () => {
+    const f = format();
+    picker.hidden = !pickerFormat(f);
+    picker.value = toIsoDate(text.value, f);
+  };
+  picker.addEventListener('change', () => {
+    if (!picker.value) return;
+    text.value = fromIsoDate(picker.value, format());
+    text.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  text.addEventListener('input', sync);
+  sync();
+  return { root: el('div', { class: 'ndcms-row' }, text, picker), value: () => text.value.trim(), sync };
+}
+
+/** A list of fieldsets with add, remove and move buttons. */
+function rowList<T>(legend: string, items: T[], build: (item: T, box: HTMLElement) => () => T, blank: () => T, addLabel: string) {
+  const list = el('div', { class: 'ndcms-tl__list' });
+  const rows: { box: HTMLElement; value: () => T }[] = [];
+  const add = (item: T) => {
+    const box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, legend));
+    const row = { box, value: build(item, box) };
+    rows.push(row);
+    box.append(el('div', { class: 'ndcms-row' },
+      button('↑', 'Move up', () => { const i = rows.indexOf(row); if (i > 0) { rows.splice(i, 1); rows.splice(i - 1, 0, row); list.insertBefore(box, rows[i].box); } }, 'ndcms-btn--small'),
+      button('↓', 'Move down', () => { const i = rows.indexOf(row); if (i < rows.length - 1) { rows.splice(i, 1); rows.splice(i + 1, 0, row); rows[i].box.after(box); } }, 'ndcms-btn--small'),
+      button('Remove', `Remove this ${legend.toLowerCase()}`, () => { rows.splice(rows.indexOf(row), 1); box.remove(); }, 'ndcms-btn--danger ndcms-btn--small'),
+    ));
+    list.append(box);
+  };
+  items.forEach(add);
+  const root = el('div', {}, list, button(addLabel, addLabel, () => add(blank())));
+  return { root, value: () => rows.map((r) => r.value()) };
+}
+
+function openTimelineEditor(ctx: EditCtx, fence: ReturnType<typeof parseFence> & object, t: Timeline) {
+  const title = input(t.title ?? '', 'Diagram title (optional)');
+  const dateFormat = input(t.date_format ?? '', 'MM/DD/YYYY');
+  const display = input(t.display_date_format ?? '', 'dddd MMM dd, yyyy');
+  const fmt = () => dateFormat.value.trim() || 'MM/DD/YYYY';
+  const summary = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  summary.checked = t.show_summary ?? true;
+  const editEx = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  editEx.checked = t.edit_exclusions ?? false;
+  const dates: ReturnType<typeof timelineDate>[] = [];
+  const date = (v: string, ph = fmt()) => { const d = timelineDate(v, fmt, ph); dates.push(d); return d; };
+  dateFormat.addEventListener('input', () => dates.forEach((d) => d.sync()));
+
+  // Names an `expr` can point at, for the autocomplete list.
+  const refs = el('datalist', { id: `ndcms-tl-refs-${Date.now()}` });
+  const nameInputs: HTMLInputElement[] = [];
+  const refreshRefs = () => refs.replaceChildren(...nameInputs.filter((n) => n.isConnected && n.value.trim()).map((n) => el('option', { value: n.value.trim() })));
+  const nameInput = (v: string) => {
+    const n = input(v, 'name (letters, digits, _)');
+    n.pattern = '[A-Za-z_][A-Za-z0-9_]*';
+    nameInputs.push(n);
+    n.addEventListener('input', refreshRefs);
+    return n;
+  };
+  const duration = (v: string | undefined) => {
+    const d = el('input', { type: 'number', min: '0', step: '1', class: 'ndcms-input', placeholder: '0' }) as HTMLInputElement;
+    d.value = v ?? '';
+    return d;
+  };
+
+  const inputs = rowList<TimelineInput>('Input date', t.inputs, (i, box) => {
+    const name = nameInput(i.name);
+    const label = input(i.label ?? '', 'Shown on the diagram (defaults to the name)');
+    const def = date(i.default);
+    const type = typeSelect(i.type);
+    const dur = duration(i.duration);
+    const editable = el('input', { type: 'checkbox' }) as HTMLInputElement;
+    editable.checked = i.editable ?? true;
+    box.append(
+      el('div', { class: 'ndcms-grid2' }, field('Name', name), field('Label', label)),
+      field('Date', def.root, 'Starting value of the date picker on the page.'),
+      el('div', { class: 'ndcms-grid2' }, field('Counts', type.root), field('Duration (days)', dur, '0 is a milestone.')),
+      el('label', { class: 'ndcms-check' }, editable, ' Readers can change this date'),
+    );
+    return () => ({
+      name: name.value.trim(), label: label.value.trim() || undefined, default: def.value(), type: type.value(),
+      duration: dur.value.trim() || undefined, editable: editable.checked ? (i.editable === undefined ? undefined : true) : false,
+    });
+  }, () => ({ name: 'start', default: fromIsoDate(new Date().toISOString().slice(0, 10), fmt()) }), '+ Add input date');
+
+  const outputs = rowList<TimelineOutput>('Computed date', t.outputs, (o, box) => {
+    const name = nameInput(o.name);
+    const label = input(o.label ?? '', 'Shown on the diagram (defaults to the name)');
+    const parsed = parseExpr(o.expr);
+    const exprText = input(o.expr, 'start + 5');
+    const ref = input(parsed?.ref ?? '', 'earlier name');
+    ref.setAttribute('list', refs.id);
+    ref.addEventListener('focus', refreshRefs);
+    const sign = select(parsed?.sign ?? '+', ['+', '-']);
+    sign.querySelector('option[value="+"]')!.textContent = '+ after';
+    sign.querySelector('option[value="-"]')!.textContent = '− before';
+    const count = el('input', { type: 'number', min: '0', step: '1', class: 'ndcms-input', placeholder: '0' }) as HTMLInputElement;
+    count.value = parsed?.count ?? '';
+    // An expr the form can't split stays as text.
+    const simple = el('div', { class: 'ndcms-row' }, ref, sign, count, el('span', { class: 'ndcms-muted' }, 'days'));
+    simple.hidden = !parsed;
+    exprText.hidden = !!parsed;
+    const type = typeSelect(o.type);
+    const dur = duration(o.duration);
+    box.append(
+      el('div', { class: 'ndcms-grid2' }, field('Name', name), field('Label', label)),
+      field('Starts', parsed ? simple : exprText, 'Counted from the end of the earlier date. Days are counted the way "Counts" says.'),
+      el('div', { class: 'ndcms-grid2' }, field('Counts', type.root), field('Duration (days)', dur, '0 is a milestone.')),
+    );
+    return () => ({
+      name: name.value.trim(), label: label.value.trim() || undefined, type: type.value(),
+      expr: parsed ? formatExpr(ref.value.trim(), sign.value, count.value) : exprText.value.trim(), duration: dur.value.trim() || undefined,
+    });
+  }, () => ({ name: `step${nameInputs.filter((n) => n.isConnected).length}`, type: 'weekdays', expr: nameInputs.filter((n) => n.isConnected).at(-1)?.value.trim() + ' + 1', duration: '1' }), '+ Add computed date');
+
+  const exclusions = rowList<TimelineExclusion>('Excluded date', t.exclusions ?? [], (e, box) => {
+    const range = el('input', { type: 'checkbox' }) as HTMLInputElement;
+    range.checked = typeof e !== 'string';
+    const from = date(typeof e === 'string' ? e : e.from);
+    const to = date(typeof e === 'string' ? '' : e.to);
+    const toField = field('To', to.root);
+    toField.hidden = !range.checked;
+    range.addEventListener('change', () => { toField.hidden = !range.checked; });
+    box.append(field(range.checked ? 'From' : 'Date', from.root), el('label', { class: 'ndcms-check' }, range, ' A range of days'), toField);
+    return () => (range.checked && to.value() ? { from: from.value(), to: to.value() } : from.value());
+  }, () => '', '+ Add excluded date');
+
+  openPanel('Timeline', el('div', {},
+    el('p', { class: 'ndcms-muted' }, 'Input dates get a date picker on the page; computed dates follow from them. ',
+      el('a', { href: `${cms.admin}#/plugins?name=timeline`, target: embedded ? '_top' : '_self' }, 'Plugin settings'), ' · ',
+      el('a', { href: 'https://xtremeownage.github.io/Netdocs/plugins/timeline/', target: '_blank', rel: 'noreferrer' }, 'Timeline docs ↗')),
+    refs,
+    field('Title', title),
+    el('div', { class: 'ndcms-grid2' },
+      field('Date format', dateFormat, 'How the dates below are written. Tokens: YYYY MM DD.'),
+      field('Table date format', display, 'How the summary table shows dates.')),
+    el('div', { class: 'ndcms-checks' },
+      el('label', { class: 'ndcms-check' }, summary, ' Show the date table'),
+      el('label', { class: 'ndcms-check' }, editEx, ' Readers can add and remove excluded dates')),
+    field('Input dates', inputs.root),
+    field('Computed dates', outputs.root, 'Each one can only use names listed above it.'),
+    field('Excluded dates', exclusions.root, 'Holidays and closures. They never count as a day.'),
+  ), [
+    button('Edit source', 'Edit the raw YAML', () => ctx.toSource()),
+  ], () => ctx.apply(formatFence({
+    ...fence,
+    code: formatTimeline({
+      title: title.value.trim() || undefined,
+      date_format: dateFormat.value.trim() || undefined,
+      display_date_format: display.value.trim() || undefined,
+      show_summary: summary.checked ? (t.show_summary === undefined ? undefined : true) : false,
+      edit_exclusions: editEx.checked ? true : (t.edit_exclusions === undefined ? undefined : false),
+      exclusions: exclusions.value().filter((e) => (typeof e === 'string' ? e : e.from)),
+      inputs: inputs.value(),
+      outputs: outputs.value(),
+    }),
+  })), ctx.nested);
+  refreshRefs();
 }
 
 // --- Image blocks --------------------------------------------------------------------------------

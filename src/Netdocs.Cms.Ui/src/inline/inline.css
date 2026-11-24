@@ -387,3 +387,7 @@ html.ndcms-editing .ndcms-meta__btn { display: inline-block; }
 .ndcms-card__tools { position: absolute; top: -4px; right: 8px; display: flex; gap: 2px; background: var(--ndcms-bg); }
 .ndcms-card__tools .ndcms-btn { padding: 0 6px; font-size: 12px; }
 .ndcms-card__large { align-self: end; padding-bottom: 8px; }
+
+.ndcms-tl__picker { flex: 0 0 auto; width: auto; min-width: 0; }
+.ndcms-tl__list .ndcms-row { margin-top: 4px; }
+.ndcms-btn--small { padding: 2px 8px; font-size: 12px; }

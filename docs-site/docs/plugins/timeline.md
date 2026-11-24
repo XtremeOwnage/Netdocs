@@ -104,6 +104,8 @@ bar starts the weekday after the previous one *ends*, not the day it started. Si
 `edit_exclusions` is on, try adding a holiday in the middle of Sprint 1 too — its end date (and
 everything after it) shifts to absorb the extra day.
 
+In the [visual editor](../cms/visual-editor.md#timelines), a timeline block opens as a form.
+
 ## How it works
 
 The plugin runs as a Markdown preprocessor (order `15`, same tier as

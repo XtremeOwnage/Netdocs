@@ -1,5 +1,5 @@
 // Theme settings, template overrides, site settings and the raw appsettings.json editor.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { featureDocUrl, featureHelp } from './features';
 import { api, type Json, type SiteInfo, type TemplateInfo } from '../shared/api';
 import { CodeEditor, Diff, Field, Loading, Modal, confirmAction, toast, useAction, useLoad } from './ui';
@@ -7,6 +7,38 @@ import { CodeEditor, Diff, Field, Loading, Modal, confirmAction, toast, useActio
 type Obj = Record<string, Json>;
 const obj = (v: Json | undefined): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : {});
 const str = (v: Json | undefined) => (typeof v === 'string' ? v : '');
+
+const viewports = [
+  { id: 'fit', label: 'Fit pane', width: null },
+  { id: 'mobile', label: 'Mobile · 390px', width: 390 },
+  { id: 'tablet', label: 'Tablet · 820px', width: 820 },
+  { id: 'laptop', label: 'Laptop · 1366px', width: 1366 },
+  { id: 'desktop', label: 'Desktop · 1920px', width: 1920 },
+  { id: 'wide', label: 'Extra wide · 2560px', width: 2560 },
+];
+
+/** An iframe rendered at a chosen viewport width and scaled down to fit its pane. */
+function ScaledFrame(props: { src: string; width: number | null; onLoad: () => void; status: string | null }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    if (!box.current) return;
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(box.current);
+    return () => ro.disconnect();
+  }, []);
+  const scale = props.width && size.w ? Math.min(1, size.w / props.width) : 1;
+  const style = props.width
+    ? { width: props.width + 'px', height: (size.h / scale) + 'px', transform: `scale(${scale})`, transformOrigin: '0 0' }
+    : { width: '100%', height: '100%' };
+  return (
+    <div class="preview-box" ref={box}>
+      <iframe class="preview-frame" title="Site preview" src={props.src} style={style} onLoad={props.onLoad} />
+      {props.width && <span class="preview-scale">{props.width}px{scale < 1 ? ` · shown at ${Math.round(scale * 100)}%` : ''}</span>}
+      {props.status && <div class="preview-status"><span class="spinner" /> {props.status}</div>}
+    </div>
+  );
+}
 
 export function ThemeScreen(props: { site: SiteInfo }) {
   const { data, error, reload } = useLoad(() => api.settings());
@@ -90,7 +122,12 @@ export function TemplatesScreen(props: { name: string | null }) {
   const current = useLoad(() => (name ? api.template(name) : Promise.resolve(null)), [name]);
   const [text, setText] = useState('');
   const [showDiff, setShowDiff] = useState(false);
-  const [live, setLive] = useState(false);
+  const [live, setLiveState] = useState(() => { try { return localStorage.getItem('ndcms-template-live') !== 'off'; } catch { return true; } });
+  const setLive = (v: boolean) => { setLiveState(v); try { localStorage.setItem('ndcms-template-live', v ? 'on' : 'off'); } catch { /* private mode */ } };
+  /** Where a live edit is: waiting for typing to pause, saving, or waiting for the rebuilt page. */
+  const [phase, setPhase] = useState<'idle' | 'pending' | 'saving' | 'rebuilding'>('idle');
+  const [viewport, setViewportState] = useState<string>(() => { try { return localStorage.getItem('ndcms-template-viewport') ?? 'fit'; } catch { return 'fit'; } });
+  const setViewport = (v: string) => { setViewportState(v); try { localStorage.setItem('ndcms-template-viewport', v); } catch { /* private mode */ } };
   const [liveError, setLiveError] = useState<string | null>(null);
   const [opened, setOpened] = useState<{ name: string; text: string; overridden: boolean } | null>(null);
   const [previewPath, setPreviewPath] = useState<string>(() => { try { return localStorage.getItem('ndcms-template-preview') ?? ''; } catch { return ''; } });
@@ -107,18 +144,28 @@ export function TemplatesScreen(props: { name: string | null }) {
   // Live preview: write the draft (debounced) so the site rebuilds and the preview reloads.
   useEffect(() => {
     if (!live || !current.data || text === current.data.text) return;
+    setPhase('pending');
     const handle = setTimeout(async () => {
+      setPhase('saving');
       try {
         await api.saveTemplate(current.data!.name, text);
         setLiveError(null);
+        setPhase('rebuilding');
         current.reload();
         list.reload();
       } catch (e) {
+        setPhase('idle');
         setLiveError(e instanceof Error ? e.message : String(e));
       }
-    }, 1200);
+    }, 900);
     return () => clearTimeout(handle);
   }, [text, live]);
+  // The preview reloads itself after the rebuild; give up waiting after a while.
+  useEffect(() => {
+    if (phase !== 'rebuilding') return;
+    const t = setTimeout(() => setPhase('idle'), 15000);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   if (!list.data) return <Loading error={list.error} />;
   const t = current.data;
@@ -187,10 +234,15 @@ export function TemplatesScreen(props: { name: string | null }) {
             }}>
               {livePages.map((p) => <option key={p.path} value={p.path}>{p.title} ({p.path})</option>)}
             </select>
+            <select class="input input--auto" value={viewport} title="Preview width" onChange={(e) => setViewport((e.target as HTMLSelectElement).value)}>
+              {viewports.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </select>
             <button class="btn btn--small" title="Reload the preview" onClick={() => setFrameKey((k) => k + 1)}>⟳ Reload</button>
           </div>
           {previewPage
-            ? <iframe key={frameKey + previewPage.path} class="preview-frame" title="Site preview" src={'/' + previewPage.url + '?cms-preview=1'} />
+            ? <ScaledFrame key={frameKey + previewPage.path} width={viewports.find((v) => v.id === viewport)?.width ?? null} src={'/' + previewPage.url + '?cms-preview=1'}
+                onLoad={() => setPhase((p) => (p === 'rebuilding' ? 'idle' : p))}
+                status={phase === 'idle' ? null : phase === 'pending' ? 'Waiting for you to pause typing…' : phase === 'saving' ? 'Saving the template…' : 'Regenerating the site…'} />
             : <p class="muted">No built pages to preview yet.</p>}
           <p class="muted small">{live ? 'Live: your edits are saved and shown here within a couple of seconds.' : 'Shows the saved templates. Turn on Live preview, or Save, to see your edits.'}</p>
         </div>

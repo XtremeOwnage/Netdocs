@@ -163,7 +163,7 @@ export const insertTemplates: InsertTemplate[] = [
   { id: 'hr', group: 'Text', label: 'Divider', markdown: '---' },
   { id: 'table', group: 'Text', label: 'Table', markdown: '| Column | Column |\n| ------ | ------ |\n| Cell   | Cell   |' },
   { id: 'image', group: 'Media', label: 'Image', markdown: '![Description](image.png)' },
-  { id: 'figure', group: 'Media', label: 'Image with caption', markdown: '<figure markdown>\n  ![Description](image.png){ width="400" }\n  <figcaption>Caption</figcaption>\n</figure>' },
+  { id: 'figure', group: 'Media', label: 'Image with caption', markdown: '^^^\n![Description](image.png){ width="400" }\n^^^ Caption' },
   { id: 'note', group: 'Callouts', label: 'Admonition (note)', markdown: '!!! note "Note"\n\n    Text inside the note.' },
   { id: 'tip', group: 'Callouts', label: 'Admonition (tip)', markdown: '!!! tip\n\n    A helpful suggestion.' },
   { id: 'warning', group: 'Callouts', label: 'Admonition (warning)', markdown: '!!! warning\n\n    Something to be careful about.' },

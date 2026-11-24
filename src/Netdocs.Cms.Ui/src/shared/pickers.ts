@@ -225,13 +225,14 @@ export function imageMarkdown(img: PickedImage): string {
   const attrs = img.width ? `{ width="${img.width.replace(/\D/g, '')}" }` : '';
   const image = `![${img.alt.replace(/[[\]]/g, '')}](${encodeURI(img.src)})${attrs}`;
   if (!img.caption) return image;
-  return `<figure markdown>\n  ${image}\n  <figcaption>${img.caption.replace(/</g, '&lt;')}</figcaption>\n</figure>`;
+  return `^^^\n${image}\n^^^ ${img.caption.replace(/\n/g, ' ')}`;
 }
 
 /** Reads an image or figure block back into picker fields, or null when it is something else. */
 export function parseImageMarkdown(source: string, pagePath: string): PickedImage | null {
   const s = source.trim();
-  const fig = /^<figure markdown(?:="1")?>\s*\n\s*(!\[[^\]]*\]\([^)]+\)(?:\{[^}]*\})?)\s*\n\s*<figcaption>([\s\S]*?)<\/figcaption>\s*\n<\/figure>$/.exec(s);
+  const fig = /^<figure markdown(?:="1")?>\s*\n\s*(!\[[^\]]*\]\([^)]+\)(?:\{[^}]*\})?)\s*\n\s*<figcaption>([\s\S]*?)<\/figcaption>\s*\n<\/figure>$/.exec(s)
+    ?? /^\^{3,}\s*\n\s*(!\[[^\]]*\]\([^)]+\)(?:\{[^}]*\})?)\s*\n\^{3,}[ \t]*(.*)$/.exec(s);
   const imageText = fig ? fig[1] : s;
   const m = /^!\[([^\]]*)\]\(([^)\s]+)\)(\{[^}]*\})?$/.exec(imageText);
   if (!m) return null;

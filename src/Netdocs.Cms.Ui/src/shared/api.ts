@@ -27,6 +27,9 @@ export interface PageDocument {
   raw: string;
 }
 
+/** A page that a plugin fills in when the site builds (the tag index, the blog index). */
+export interface GeneratedInfo { plugin: string; label: string; what: string }
+
 export interface RenderedBlock {
   index: number;
   kind: string;
@@ -145,7 +148,7 @@ export const api = {
   movePage: (from: string, to: string) => request<{ path: string; updatedPages: number; navUpdated: boolean }>('POST', '/page/move', { from, to }),
   deletePage: (path: string) => request<void>('POST', '/page/delete', { path }),
   references: (path: string) => request<string[]>('GET', '/page/references' + q({ path })),
-  blocks: (path: string) => request<{ page: PageDocument; blocks: RenderedBlock[] }>('GET', '/page/blocks' + q({ path })),
+  blocks: (path: string) => request<{ page: PageDocument; blocks: RenderedBlock[]; generated: GeneratedInfo | null }>('GET', '/page/blocks' + q({ path })),
   saveBlocks: (path: string, hash: string | null, blocks: { keep?: number; source?: string }[], frontMatter: FrontMatter | null) =>
     request<{ page: PageDocument; blocks: RenderedBlock[] }>('POST', '/page/blocks/save', { path, hash, blocks, frontMatter }),
   render: (path: string, body: string, frontMatter: FrontMatter) =>

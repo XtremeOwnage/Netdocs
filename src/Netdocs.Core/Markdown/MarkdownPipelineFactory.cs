@@ -28,6 +28,7 @@ public static class MarkdownPipelineFactory
             .UseAutoLinks()
             .UseListExtras()
             .UseMediaLinks()
+            .UseFigures()             // ^^^ … ^^^ caption: an image with a caption
             .UseMathematics();
 
         builder.Extensions.AddIfNotAlready(new AdmonitionExtension());

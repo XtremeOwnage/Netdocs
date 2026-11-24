@@ -184,7 +184,7 @@ public sealed class CmsServer
         {
             var doc = _content.Read(path);
             var blocks = await Renderer.RenderBlocksAsync(doc.Path, doc.FrontMatter, doc.Body, ct);
-            return new { page = doc, blocks };
+            return new { page = doc, blocks, generated = GeneratedBy(doc) };
         });
         api.MapPost("/page/blocks/save", async (SaveBlocks req, CancellationToken ct) =>
         {
@@ -375,6 +375,23 @@ public sealed class CmsServer
     public sealed record SaveFileFilter(string? Yaml, JsonObject? Fields, string? IgnoreText);
     public sealed record SaveAuthors(List<BlogAuthor>? Authors);
     public sealed record SaveSocialLinks(JsonArray? Links);
+
+    /// <summary>Pages a plugin fills in at build time: the tags index and the blog index.</summary>
+    private object? GeneratedBy(PageDocument doc)
+    {
+        var plugins = _plugins.List();
+        bool On(string name) => plugins.Any(p => p.Enabled && p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (On("tags") && System.Text.RegularExpressions.Regex.IsMatch(doc.Body, @"<!--\s*material/tags"))
+            return new { plugin = "tags", label = "Tags", what = "the tag index (every tag, with the pages that use it)" };
+        if (On("blog"))
+        {
+            var blog = plugins.First(p => p.Enabled && p.Name.Equals("blog", StringComparison.OrdinalIgnoreCase));
+            var dir = (blog.Options["blog_dir"]?.ToString() ?? "blog/").Trim('/');
+            if (doc.Path.Equals((dir.Length > 0 ? dir + "/" : "") + "index.md", StringComparison.OrdinalIgnoreCase))
+                return new { plugin = "blog", label = "Blog", what = "the list of posts, with the archive and category links" };
+        }
+        return null;
+    }
 
     private object PluginList(IReadOnlyList<PluginEntry> entries) => new
     {

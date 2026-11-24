@@ -324,3 +324,20 @@ html.ndcms-editing .ndcms-meta__btn { display: inline-block; }
 .ndcms-modal__box { background: var(--ndcms-bg, #fff); color: var(--ndcms-fg, #222); border-radius: 10px; padding: 18px 20px; max-width: 460px; box-shadow: 0 10px 40px rgb(0 0 0 / .35); font: 14px/1.45 system-ui, sans-serif; }
 .ndcms-modal__box h2 { margin: 0 0 8px; font-size: 17px; }
 .ndcms-modal__actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+
+/* Content a plugin adds at build time */
+.ndcms-generated { margin: 12px 0; border: 1px dashed var(--ndcms-accent); border-radius: 8px; overflow: hidden; font-family: var(--ndcms-font); }
+.ndcms-generated__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 14px; background: color-mix(in srgb, var(--ndcms-accent) 10%, transparent); font-size: 13px; }
+.ndcms-generated__head .ndcms-muted { flex: 1 1 300px; }
+.ndcms-generated__snapshot { max-height: 320px; overflow: hidden; padding: 0 14px; opacity: .55; pointer-events: none; user-select: none; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+.ndcms-image-editor { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.ndcms-image-editor__preview { width: 140px; max-height: 110px; object-fit: contain; border: 1px solid var(--ndcms-line); border-radius: 6px; background: repeating-conic-gradient(#8881 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
+.ndcms-image-editor__src { display: block; font-size: 12px; word-break: break-all; margin-bottom: 6px; }
+.ndcms-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.ndcms-section-title { margin: 14px 0 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ndcms-muted); }
+.ndcms-types { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.ndcms-type { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--type-color) 45%, transparent); border-left: 4px solid var(--type-color); border-radius: 5px; background: color-mix(in srgb, var(--type-color) 8%, transparent); color: inherit; font: 13px var(--ndcms-font); cursor: pointer; text-align: left; }
+.ndcms-type:hover { background: color-mix(in srgb, var(--type-color) 18%, transparent); }
+.ndcms-type.on { background: color-mix(in srgb, var(--type-color) 28%, transparent); outline: 2px solid var(--type-color); outline-offset: -1px; font-weight: 600; }
+.ndcms-type__icon { width: 16px; height: 16px; flex: none; background: var(--type-color); -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
+.ndcms-types__custom { grid-column: 1 / -1; }

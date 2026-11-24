@@ -266,7 +266,7 @@ ul.plain li { padding: 3px 0; }
 .template-preview { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .template-preview .row { flex-wrap: nowrap; }
 .template-preview select { flex: 1; min-width: 0; }
-.template-preview .preview-frame { flex: 1; min-height: 300px; }
+.template-preview > .preview-frame { flex: 1; min-height: 300px; }
 @media (max-width: 1300px) { .templates-layout--preview { grid-template-columns: 200px minmax(0, 1fr); } .template-preview { grid-column: 1 / -1; height: 70vh; } }
 
 /* Plugins */
@@ -308,3 +308,9 @@ ul.plain li { padding: 3px 0; }
 .icon-preview { display: inline-flex; width: 22px; height: 22px; flex: none; align-items: center; justify-content: center; color: var(--fg); }
 .icon-preview svg { width: 20px; height: 20px; fill: currentColor; }
 .icon-preview--none { color: var(--muted); font-size: 12px; border: 1px dashed var(--line); border-radius: 4px; }
+.preview-box { position: relative; flex: 1; min-height: 300px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.preview-box .preview-frame { display: block; border: 0; }
+.preview-scale { position: absolute; right: 8px; bottom: 8px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: rgb(0 0 0 / .55); color: #fff; pointer-events: none; }
+.preview-status { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 14px; background: var(--accent); color: #fff; font-size: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / .25); }
+.spinner { width: 12px; height: 12px; border: 2px solid rgb(255 255 255 / .4); border-top-color: #fff; border-radius: 50%; animation: nd-spin .8s linear infinite; display: inline-block; }
+@keyframes nd-spin { to { transform: rotate(360deg); } }

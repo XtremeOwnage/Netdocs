@@ -139,6 +139,7 @@ public static partial class MarkdownBlocks
         FencedCodeBlock => "code",
         CodeBlock => "code",
         HtmlBlock => "html",
+        Markdig.Extensions.Figures.Figure => "figure",
         ThematicBreakBlock => "hr",
         Table => "table",
         AdmonitionBlock => "admonition",

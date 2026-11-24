@@ -3,7 +3,7 @@
 // admonitions, tabs, code, diagrams and anything else open a form or the block's markdown source.
 // Saving sends only the changed blocks, so untouched markdown stays byte-for-byte the same.
 import './inline.css';
-import { api, cms, ApiError, type FrontMatter, type Json, type PageDocument, type RenderedBlock } from '../shared/api';
+import { api, cms, ApiError, type FrontMatter, type GeneratedInfo, type Json, type PageDocument, type RenderedBlock } from '../shared/api';
 import {
   admonitionTypes, codeLanguages, formatAdmonition, formatFence, formatTabs, htmlToMarkdown, insertTemplates,
   needsSourceEditing, parseAdmonition, parseFence, parseTabs, richKinds,
@@ -34,6 +34,8 @@ interface State {
   reloadPending: boolean;
   /** Number of blocks in the file when it was loaded. */
   originalCount: number;
+  /** Set when a plugin adds content to this page at build time. */
+  generated: GeneratedInfo | null;
 }
 
 let state: State | null = null;
@@ -248,7 +250,7 @@ async function enterEditMode() {
   if (!article || !cms.path) return;
   updateStatus('Loading…');
   try {
-    const { page, blocks } = await api.blocks(cms.path);
+    const { page, blocks, generated } = await api.blocks(cms.path);
     state = {
       page,
       blocks: blocks.map(toEditorBlock),
@@ -258,6 +260,7 @@ async function enterEditMode() {
       originalArticle: article.innerHTML,
       reloadPending: false,
       originalCount: blocks.length,
+      generated,
     };
     document.documentElement.classList.add('ndcms-editing');
     renderToolbar();
@@ -322,7 +325,7 @@ function renderBlocks() {
     s.article.append(renderBlock(block, i));
     s.article.append(inserter(i + 1));
   });
-  if (s.blocks.length === 0) {
+  if (s.blocks.length === 0 && !s.generated) {
     s.article.replaceChildren(el('div', { class: 'ndcms-empty' },
       el('p', {}, 'This page is empty. Start with:'),
       el('div', { class: 'ndcms-empty__choices' }, ...quickInserts.slice(0, 10).map((q) => button(`<span>${q.icon}</span> ${q.label}`, `Add ${q.label.toLowerCase()}`, () => void insertTemplate(0, q.id), 'ndcms-empty__choice'))),
@@ -336,9 +339,34 @@ function renderBlocks() {
     s.article.lastElementChild?.remove();
     s.article.append(end);
   }
+  if (s.generated) {
+    // Where the plugin's output goes: at the tags marker, else after the page's own text.
+    const marker = s.blocks.findIndex((b) => /<!--\s*material\/tags/.test(b.source));
+    const banner = generatedBanner(s.generated, s.originalArticle);
+    const at = marker >= 0 ? s.blocks[marker].el : null;
+    if (at) at.after(banner); else s.article.lastElementChild?.before(banner);
+  }
   markActive();
   refreshThemeWidgets(s.article);
   updateStatus();
+}
+
+/** Stands in for content a plugin adds at build time, which is not part of the page's markdown. */
+function generatedBanner(info: GeneratedInfo, originalHtml: string): HTMLElement {
+  const snapshot = el('div', { class: 'ndcms-generated__snapshot md-typeset', 'aria-hidden': 'true' });
+  snapshot.innerHTML = originalHtml;
+  snapshot.querySelectorAll('h1, .ndcms-bar, script, .md-content__button').forEach((n) => n.remove());
+  if (!snapshot.textContent?.trim()) snapshot.hidden = true;
+  snapshot.querySelectorAll('a, button, input').forEach((n) => n.setAttribute('tabindex', '-1'));
+  const settings = el('a', { class: 'ndcms-btn', href: `${cms.admin}#/plugins?name=${encodeURIComponent(info.plugin)}`, target: embedded ? '_top' : '_self' }, `${info.label} plugin settings ›`);
+  return el('div', { class: 'ndcms-generated' },
+    el('div', { class: 'ndcms-generated__head' },
+      el('strong', {}, `⚙ Made by the ${info.label} plugin`),
+      el('span', { class: 'ndcms-muted' }, ` ${info.what[0].toUpperCase() + info.what.slice(1)} is added here when the site builds, so it can't be edited as text. Add your own text above or below it, or change what it shows in the plugin settings.`),
+      settings,
+    ),
+    snapshot,
+  );
 }
 
 function renderBlock(block: EditorBlock, index: number): HTMLElement {
@@ -421,7 +449,7 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
 const label = (kind: string) => ({
   paragraph: 'Text', heading: 'Heading', list: 'List', quote: 'Quote', table: 'Table', code: 'Code', html: 'HTML',
   hr: 'Divider', admonition: 'Admonition', tabs: 'Tabs', footnotes: 'Footnote', references: 'Link references',
-  abbreviations: 'Abbreviations', math: 'Math',
+  abbreviations: 'Abbreviations', math: 'Math', figure: 'Image',
 } as Record<string, string>)[kind] ?? kind;
 
 function inserter(position: number): HTMLElement {
@@ -567,7 +595,7 @@ async function renderSource(block: EditorBlock) {
 /** Text-like blocks are edited in place; tables, images and the rest use a form. */
 function isRich(kind: string, source: string, html: string): boolean {
   if (kind === 'table') return false;
-  if (parseImageMarkdown(source, state?.page.path ?? cms.path ?? '')) return false;
+  if (parseImageMarkdown(source, state?.page.path ?? cms.path ?? '') || parseImageBlock(source)) return false;
   // A block that is one link gets the link form.
   if (parseLinkBlock(source)) return false;
   return richKinds.has(kind) && !needsSourceEditing(kind, source, html);
@@ -778,6 +806,11 @@ function openBlockEditor(index: number, forceSource = false) {
   };
   const live = (compute: () => string) => () => apply(compute());
 
+  const imageBlock = !forceSource ? parseImageBlock(block.source) : null;
+  if (imageBlock) {
+    openImageEditor(index, imageBlock, (md) => apply(md));
+    return;
+  }
   const image = !forceSource ? parseImageMarkdown(block.source, s.page.path) : null;
   if (image) {
     void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked), true); });
@@ -797,14 +830,14 @@ function openBlockEditor(index: number, forceSource = false) {
   const tabs = !forceSource && !admonition && !fence ? parseTabs(block.source) : null;
 
   if (admonition) {
-    const type = select(admonition.type, admonitionTypes);
+    const type = admonitionTypePicker(admonition.type);
     const style = select(admonition.marker, ['!!!', '???', '???+']);
     const title = input(admonition.title ?? '', 'Leave empty for the default title');
     const noTitle = el('input', { type: 'checkbox' }) as HTMLInputElement;
     noTitle.checked = admonition.title === '';
     const body = richArea(admonition.body, s.page.path);
     openPanel('Callout box', el('div', {},
-      field('Type', type),
+      field('Type', type.root),
       field('Style', style, '!!! always open · ??? collapsed · ???+ collapsible, open'),
       field('Title', title),
       el('label', { class: 'ndcms-check' }, noTitle, ' Hide the title bar'),
@@ -812,9 +845,14 @@ function openBlockEditor(index: number, forceSource = false) {
     ), [
       button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
     ], live(() => formatAdmonition({
-      marker: style.value as '!!!', type: type.value, extra: admonition.extra,
+      marker: style.value as '!!!', type: type.value(), extra: admonition.extra,
       title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value(),
     })));
+    return;
+  }
+
+  if (fence && fence.lang === 'mermaid') {
+    openMermaidEditor(index, fence, (md) => apply(md));
     return;
   }
 
@@ -865,6 +903,220 @@ function openBlockEditor(index: number, forceSource = false) {
   openPanel(`${label(block.kind)} · markdown`, el('div', {},
     field('Markdown', source, 'Any Netdocs markdown works here: admonitions, tabs, attr lists, icons, macros… Changes show on the page as you type.'),
   ), [], live(() => source.value));
+}
+
+// --- Callout types -------------------------------------------------------------------------------
+
+/** Material's colors for each callout type. */
+const admonitionColors: Record<string, string> = {
+  note: '#448aff', abstract: '#00b0ff', info: '#00b8d4', tip: '#00bfa5', success: '#00c853', question: '#64dd17',
+  warning: '#ff9100', failure: '#ff5252', danger: '#ff1744', bug: '#f50057', example: '#7c4dff', quote: '#9e9e9e',
+};
+
+/** A grid of callout types, each in its own color with the icon the theme draws for it. */
+function admonitionTypePicker(value: string) {
+  let current = value;
+  const root = el('div', { class: 'ndcms-types' });
+  const custom = input(admonitionTypes.includes(value) ? '' : value, 'or another type…');
+  custom.classList.add('ndcms-types__custom');
+  const draw = () => {
+    root.querySelectorAll('.ndcms-type').forEach((b) => b.classList.toggle('on', (b as HTMLElement).dataset.type === current));
+  };
+  for (const t of admonitionTypes) {
+    const icon = el('span', { class: 'ndcms-type__icon' });
+    icon.style.setProperty('--icon', `var(--md-admonition-icon--${t})`);
+    const b = el('button', { type: 'button', class: 'ndcms-type', 'data-type': t, title: t }, icon, el('span', {}, t));
+    b.style.setProperty('--type-color', admonitionColors[t]);
+    b.addEventListener('click', () => { current = t; custom.value = ''; draw(); root.dispatchEvent(new Event('change', { bubbles: true })); });
+    root.append(b);
+  }
+  custom.addEventListener('input', () => { if (custom.value.trim()) { current = custom.value.trim(); draw(); } });
+  root.append(custom);
+  draw();
+  return { root, value: () => current };
+}
+
+// --- Mermaid diagrams -----------------------------------------------------------------------------
+
+/** A diagram's front matter: `title`, and the `config` keys this form edits; other lines are kept. */
+function parseMermaid(code: string) {
+  const m = /^---\n([\s\S]*?)\n---\n?/.exec(code);
+  const result = { title: '', theme: '', look: '', other: [] as string[], configOther: [] as string[], body: m ? code.slice(m[0].length) : code };
+  if (!m) return result;
+  let inConfig = false;
+  for (const line of m[1].split('\n')) {
+    if (/^config:\s*$/.test(line)) { inConfig = true; continue; }
+    if (inConfig && /^\s+/.test(line)) {
+      const kv = /^\s+(theme|look):\s*(.*)$/.exec(line);
+      if (kv) result[kv[1] as 'theme' | 'look'] = kv[2].replace(/^["']|["']$/g, '');
+      else result.configOther.push(line);
+      continue;
+    }
+    inConfig = false;
+    const t = /^title:\s*(.*)$/.exec(line);
+    if (t) result.title = t[1].replace(/^["']|["']$/g, '');
+    else if (line.trim()) result.other.push(line);
+  }
+  return result;
+}
+
+function formatMermaid(d: ReturnType<typeof parseMermaid>): string {
+  const lines: string[] = [];
+  if (d.title.trim()) lines.push(`title: ${/[:#'"]/.test(d.title) ? JSON.stringify(d.title.trim()) : d.title.trim()}`);
+  lines.push(...d.other);
+  const config = [...(d.theme ? [`  theme: ${d.theme}`] : []), ...(d.look ? [`  look: ${d.look}`] : []), ...d.configOther];
+  if (config.length) lines.push('config:', ...config);
+  return (lines.length ? `---\n${lines.join('\n')}\n---\n` : '') + d.body.replace(/^\n+/, '');
+}
+
+function openMermaidEditor(index: number, fence: ReturnType<typeof parseFence> & object, apply: (md: string) => Promise<void>) {
+  const d = parseMermaid(fence.code);
+  const title = input(d.title, 'Shown above the diagram (optional)');
+  const theme = select(d.theme, ['', 'default', 'neutral', 'dark', 'forest', 'base']);
+  theme.querySelector('option[value=""]')!.textContent = 'Site default (follows light/dark)';
+  const look = select(d.look, ['', 'classic', 'handDrawn']);
+  look.querySelector('option[value=""]')!.textContent = 'Classic';
+  look.querySelector('option[value="handDrawn"]')!.textContent = 'Hand-drawn';
+  const code = textarea(d.body, 16);
+  const kinds: [string, string][] = [
+    ['flowchart TD\n    A[Start] --> B{Choice}\n    B -->|Yes| C[Do it]\n    B -->|No| D[Skip]', 'Flowchart'],
+    ['sequenceDiagram\n    Alice->>Bob: Hello\n    Bob-->>Alice: Hi!', 'Sequence'],
+    ['classDiagram\n    Animal <|-- Dog\n    Animal : +name', 'Class'],
+    ['stateDiagram-v2\n    [*] --> Idle\n    Idle --> Busy\n    Busy --> Idle', 'State'],
+    ['erDiagram\n    CUSTOMER ||--o{ ORDER : places', 'Entity relationship'],
+    ['gantt\n    dateFormat YYYY-MM-DD\n    section Build\n    Panels :a1, 2026-01-01, 7d\n    Wiring :after a1, 5d', 'Gantt'],
+    ['pie\n    "Solar" : 60\n    "Grid" : 40', 'Pie'],
+    ['mindmap\n  root((Project))\n    Power\n    Network', 'Mind map'],
+    ['timeline\n    2025 : Planning\n    2026 : Build', 'Timeline'],
+  ];
+  const starter = select('', ['', ...kinds.map((k) => k[1])]);
+  starter.querySelector('option[value=""]')!.textContent = 'Start from an example…';
+  starter.addEventListener('change', () => {
+    const k = kinds.find((x) => x[1] === starter.value);
+    if (k && (!code.value.trim() || confirm('Replace the diagram with this example?'))) code.value = k[0];
+    starter.value = '';
+  });
+  openPanel('Mermaid diagram', el('div', {},
+    field('Title', title),
+    el('div', { class: 'ndcms-grid2' }, field('Theme', theme), field('Look', look)),
+    field('Diagram', code, 'Mermaid syntax. The page shows your change as you type.'),
+    starter,
+    el('small', { class: 'ndcms-muted' }, 'Syntax help: ', el('a', { href: 'https://mermaid.js.org/intro/', target: '_blank', rel: 'noreferrer' }, 'mermaid.js.org ↗')),
+  ), [
+    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
+  ], () => apply(formatFence({ ...fence, code: formatMermaid({ ...d, title: title.value, theme: theme.value, look: look.value, body: code.value }) })));
+}
+
+// --- Image blocks --------------------------------------------------------------------------------
+
+interface ImageBlock {
+  src: string; alt: string; title: string; width: string; align: string; attrs: string;
+  caption: string; href: string; linkTitle: string; linkAttrs: string;
+}
+
+const IMG = String.raw`!\[([^\]]*)\]\(\s*<?([^\s)>]+)>?(?:\s+"([^"]*)")?\s*\)(\{[^}]*\})?`;
+
+/** Splits `{ width="400" align=left .round }` into width, align and the rest. */
+function imageAttrs(raw: string | undefined) {
+  const inner = (raw ?? '').replace(/^\{|\}$/g, '').trim();
+  const parts = inner.match(/(?:[^\s"']+(?:="[^"]*"|='[^']*')?)+/g) ?? [];
+  const take = (k: string) => {
+    const i = parts.findIndex((p) => p.startsWith(k + '='));
+    if (i < 0) return '';
+    const v = parts.splice(i, 1)[0].slice(k.length + 1).replace(/^["']|["']$/g, '');
+    return v;
+  };
+  const width = take('width');
+  const align = take('align');
+  return { width, align, rest: parts.join(' ') };
+}
+
+/** An image block: a plain image, an image that links somewhere, either one in a figure with a caption. */
+function parseImageBlock(source: string): ImageBlock | null {
+  let s = source.trim();
+  let caption = '';
+  const fig = /^<figure markdown(?:="1")?>\s*\n([\s\S]*?)\n\s*<figcaption>([\s\S]*?)<\/figcaption>\s*\n<\/figure>$/.exec(s);
+  const caret = fig ? null : /^\^{3,}\s*\n([\s\S]*?)\n\^{3,}[ \t]*(.*)$/.exec(s);
+  if (fig) { s = fig[1].trim(); caption = fig[2].replace(/&lt;/g, '<').trim(); }
+  else if (caret) { s = caret[1].trim(); caption = caret[2].trim(); }
+  const linked = new RegExp(String.raw`^\[(${IMG})\]\(\s*<?([^\s)>]+)>?(?:\s+"([^"]*)")?\s*\)(\{[^}]*\})?$`).exec(s);
+  const plain = linked ? null : new RegExp('^' + IMG + '$').exec(s);
+  const m = linked ? new RegExp('^' + IMG + '$').exec(linked[1]) : plain;
+  if (!m) return null;
+  const a = imageAttrs(m[4]);
+  return {
+    src: m[2], alt: m[1], title: m[3] ?? '', width: a.width, align: a.align, attrs: a.rest, caption,
+    href: linked ? linked[6] : '', linkTitle: linked ? linked[7] ?? '' : '', linkAttrs: linked ? (linked[8] ?? '').replace(/^\{|\}$/g, '').trim() : '',
+  };
+}
+
+function formatImageBlock(i: ImageBlock): string {
+  const attrs = [i.width ? `width="${i.width.replace(/[^\d%a-z]/gi, '')}"` : '', i.align ? `align=${i.align}` : '', i.attrs.trim()].filter(Boolean).join(' ');
+  const title = i.title.trim() ? ` "${i.title.trim().replace(/"/g, '&quot;')}"` : '';
+  let md = `![${i.alt.replace(/[[\]]/g, '')}](${i.src}${title})${attrs ? `{ ${attrs} }` : ''}`;
+  if (i.href.trim()) {
+    const lt = i.linkTitle.trim() ? ` "${i.linkTitle.trim().replace(/"/g, '&quot;')}"` : '';
+    md = `[${md}](${i.href.trim()}${lt})${i.linkAttrs.trim() ? `{${i.linkAttrs.trim()}}` : ''}`;
+  }
+  if (!i.caption.trim()) return md;
+  // Markdig's figure syntax: the caption follows the closing ^^^.
+  return `^^^\n${md}\n^^^ ${i.caption.trim().replace(/\n/g, ' ')}`;
+}
+
+function openImageEditor(index: number, img: ImageBlock, apply: (md: string) => Promise<void>) {
+  if (!state) return;
+  const s = state;
+  const cur = { ...img };
+  const preview = el('img', { class: 'ndcms-image-editor__preview', alt: '' }) as HTMLImageElement;
+  const srcLabel = el('span', { class: 'ndcms-muted ndcms-image-editor__src' });
+  const draw = () => {
+    preview.src = /^(https?:)?\/\//.test(cur.src) ? cur.src : api.mediaUrl(docsPath(s.page.path, decodeURI(cur.src)));
+    srcLabel.textContent = decodeURI(cur.src);
+  };
+  draw();
+  const change = button('Change image…', 'Pick another image or upload one', async () => {
+    const picked = await openImagePicker(s.page.path, { alt: alt.value, path: docsPath(s.page.path, decodeURI(cur.src)) });
+    if (!picked) return;
+    cur.src = encodeURI(picked.src);
+    if (!alt.value && picked.alt) alt.value = picked.alt;
+    draw();
+    preview.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const alt = input(img.alt, 'Describe the image for screen readers and search');
+  const title = input(img.title, 'Shown when hovering (optional)');
+  const width = input(img.width, 'e.g. 400 or 50%');
+  const align = select(img.align, ['', 'left', 'right']);
+  align.querySelector('option[value=""]')!.textContent = 'In line with the text';
+  align.querySelector('option[value="left"]')!.textContent = 'Float left, text wraps';
+  align.querySelector('option[value="right"]')!.textContent = 'Float right, text wraps';
+  const caption = input(img.caption, 'Shown under the image (optional)');
+  const href = input(img.href, 'Empty: the image is not a link');
+  const browse = button('Browse…', 'Link to a page, a file or a URL', async () => {
+    const chosen = await openLinkPicker(s.page.path, href.value);
+    if (chosen) { href.value = chosen; href.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  const linkParts = attrParts(img.linkAttrs);
+  const newTab = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  newTab.checked = linkParts.target === '_blank';
+  const attrs = input(img.attrs, '.shadow loading=lazy');
+  const compute = () => formatImageBlock({
+    ...cur, alt: alt.value, title: title.value, width: width.value.trim(), align: align.value, caption: caption.value,
+    href: href.value, linkTitle: img.linkTitle, attrs: attrs.value,
+    linkAttrs: [newTab.checked ? 'target=_blank' : '', linkParts.rest].filter(Boolean).join(' '),
+  });
+  openPanel('Image', el('div', {},
+    el('div', { class: 'ndcms-image-editor' }, preview, el('div', {}, srcLabel, change)),
+    field('Alt text', alt, 'Read aloud by screen readers. Leave empty only for decorative images.'),
+    field('Caption', caption),
+    el('div', { class: 'ndcms-grid2' }, field('Width', width, 'Pixels, or a percentage'), field('Placement', align)),
+    field('Tooltip', title),
+    el('div', { class: 'ndcms-section-title' }, 'Link'),
+    field('Opens', el('div', { class: 'ndcms-row' }, href, browse), 'Make the image a link to a page, a full-size copy, or another site'),
+    el('label', { class: 'ndcms-check' }, newTab, ' Open in a new tab'),
+    field('Other attributes', attrs, 'Attribute list for the image: classes (.shadow) and key=value pairs'),
+  ), [
+    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
+  ], () => apply(compute()));
 }
 
 // --- Link blocks ---------------------------------------------------------------------------------

@@ -110,6 +110,7 @@ function mountToolbar() {
   status = el('span', { class: 'ndcms-status' });
   renderToolbar();
   document.body.append(bar);
+  keepFullPageLoads();
 
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && state) {
@@ -337,6 +338,37 @@ function mergeWrappers<T extends { index: number; kind: string; source: string; 
     i = end;
   }
   return out;
+}
+
+/**
+ * The editor and its toolbar belong to the page they were loaded with. Material's instant
+ * navigation swaps the page content in place, which would leave the toolbar on the old page
+ * (in edit mode, with nothing editable). So links to other pages load the page in full, and
+ * anything else that swaps the page (Back, Forward, search results) reloads it.
+ */
+function keepFullPageLoads() {
+  const loadedPath = location.pathname;
+  if (!embedded) {
+    window.addEventListener('click', (e) => {
+      const a = (e.target as HTMLElement).closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      if (a.target && a.target !== '_self') return;
+      if (a.closest('.ndcms-block, .ndcms-panel, .ndcms-bar, .ndcms-meta, .ndp-overlay, .ndcms-modal')) return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || url.pathname === location.pathname) return;
+      if (isDirty() && !confirm('Leave this page and lose your unsaved changes?')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+      // Keep the theme's instant navigation from seeing the click; the browser follows the link.
+      e.stopImmediatePropagation();
+      if (state) state.reloadPending = false;
+      state = null;
+    }, true);
+  }
+  const w = window as unknown as { document$?: { subscribe: (f: () => void) => unknown } };
+  try {
+    w.document$?.subscribe(() => {
+      if (location.pathname !== loadedPath || (state && !state.article.isConnected)) location.reload();
+    });
+  } catch { /* the theme's scripts are optional */ }
 }
 
 async function exitEditMode(force = false) {
@@ -768,6 +800,8 @@ function closeAllPanels() {
  * short pause, so there is no Apply step: the panel's last state is applied when it closes.
  * A `nested` panel stacks on the open one and returns to it when done.
  */
+let escapeBound = false;
+
 function openPanel(title: string, body: HTMLElement, actions: HTMLElement[], live?: () => void | Promise<void>, nested = false) {
   if (!nested) closeAllPanels();
   const under = panels[panels.length - 1];
@@ -794,6 +828,18 @@ function openPanel(title: string, body: HTMLElement, actions: HTMLElement[], liv
     entry.flush = () => { if (timer) run(); };
   }
   root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePanel(); } });
+  if (!escapeBound) {
+    escapeBound = true;
+    // Esc also works when the focus is on the page rather than in the panel. Dialogs and menus
+    // opened from a panel (pickers, the insert menu) close first.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || !panels.length) return;
+      const t = e.target as HTMLElement;
+      if (t.closest?.('.ndcms-panel, .ndcms-insert--open, .ndp-overlay, .ndcms-modal') || document.querySelector('.ndp-overlay, .ndcms-modal')) return;
+      e.preventDefault();
+      closePanel();
+    });
+  }
   panels.push(entry);
   document.body.append(root);
   root.querySelector<HTMLElement>('input, textarea, select')?.focus();

@@ -304,6 +304,17 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void MermaidFence_WithConfig_RendersDivSoItsThemeApplies()
+    {
+        var html = Render("```mermaid\n---\ntitle: Flow\nconfig:\n  theme: forest\n---\ngraph TD; A-->B;\n```\n");
+        Assert.Contains("<div class=\"mermaid nd-mermaid\">", html);
+        Assert.DoesNotContain("<pre class=\"mermaid\">", html);
+
+        var titleOnly = Render("```mermaid\n---\ntitle: Flow\n---\ngraph TD; A-->B;\n```\n");
+        Assert.Contains("<pre class=\"mermaid\">", titleOnly);
+    }
+
+    [Fact]
     public void MermaidFence_EscapesLabelHtml()
     {
         var html = Render("```mermaid\nflowchart LR\n  A[\"one<br />two\"]\n```\n");

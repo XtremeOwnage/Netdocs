@@ -162,6 +162,22 @@ state, entity relationship, Gantt, pie, mind map, timeline, git graph and user j
 
 See [Mermaid diagrams](../reference/mermaid.md#themes-per-diagram) for the syntax this writes.
 
+### Timelines
+
+A ```` ```timeline ```` block from the [timeline plugin](../plugins/timeline.md) opens as a form:
+the title, the date formats, whether the date table shows and whether readers can edit exclusions,
+then one row per input date, computed date and excluded date. Dates have a date picker when the
+block's `date_format` uses only `YYYY`, `MM` and `DD` tokens. A computed date is set as an earlier
+name plus or minus a number of days; an `expr` the form can't split stays as text. **Timeline** in
+the insert menu adds a small working example.
+
+^^^
+![The timeline panel editing an input date](../assets/cms/timeline.webp)
+^^^ The page redraws the timeline as you change the form.
+
+Blocks with YAML the form doesn't cover, such as comments or keys the plugin doesn't read, open in
+the code editor instead, so nothing in them is lost.
+
 ### Tables
 
 Tables open in a grid where you can type into cells, add and remove rows and columns, and set each

@@ -1,10 +1,15 @@
 version: 2
+# Every ecosystem runs on Monday. The cooldown skips releases younger than 3 days, which avoids
+# yanked or quickly re-patched versions.
 updates:
   # .NET / NuGet dependencies (Central Package Management)
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps"
@@ -42,6 +47,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     commit-message:
       prefix: "ci"
     groups:
@@ -57,6 +65,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps(frontend)"
@@ -72,6 +83,9 @@ updates:
     directory: "/src/Netdocs.Cms.Ui"
     schedule:
       interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps(cms)"

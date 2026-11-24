@@ -9,33 +9,31 @@ updates:
     commit-message:
       prefix: "deps"
     ignore:
-      # ImageSharp 4.0 moved to the Six Labors Split License and its build targets fail outright
-      # without a registered key ("No Six Labors license found ... obtain a license from
+      # ImageSharp 3.2 and 4.0 use the Six Labors Split License and their build targets fail
+      # outright without a registered key ("No Six Labors license found ... obtain a license from
       # sixlabors.com/pricing"). Netdocs ships as a zero-config OSS binary, so it stays on the
-      # Apache-2.0 3.1.x line -- see the pin in Directory.Packages.props. Drawing's next major
-      # depends on ImageSharp 4.x, so it carries the same constraint.
+      # Apache-2.0 3.1.x line -- see the pin in Directory.Packages.props. Drawing 2.2+ depends on
+      # ImageSharp 3.2, so it carries the same constraint.
       # Without this, every ImageSharp release reopens a PR that cannot build.
       - dependency-name: "SixLabors.ImageSharp"
-        update-types: ["version-update:semver-major"]
+        versions: [">= 3.2.0"]
       - dependency-name: "SixLabors.ImageSharp.Drawing"
-        update-types: ["version-update:semver-major"]
+        versions: [">= 2.2.0"]
+    # Every package version lives in Directory.Packages.props, so separate PRs for overlapping
+    # groups conflict with each other as soon as one merges. Two groups keep it to at most two
+    # PRs a week: all minor and patch bumps together, and all major bumps together.
     groups:
-      microsoft-extensions:
-        patterns:
-          - "Microsoft.Extensions.*"
-      test:
-        patterns:
-          - "xunit*"
-          - "Microsoft.NET.Test.Sdk"
-      # Catch-all: bundle every remaining minor/patch bump into a single PR to
-      # cut down on review noise. Major bumps are intentionally left out so they
-      # still open as individual PRs and get reviewed on their own.
       nuget-minor-patch:
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
+      nuget-major:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
 
   # GitHub Actions workflow dependencies. Actions are bumped as one group across
   # all update types (including major) because action major bumps are frequent,

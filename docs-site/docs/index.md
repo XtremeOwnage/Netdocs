@@ -27,6 +27,8 @@ experience with a first-class C# plugin system. Site configuration lives in
 - **Fast parallel builds** — a parallel render pipeline over Markdig.
 - **C# plugin system** — blog, tags, search, social, snippets, and more, all extensible.
 - **Live reload** — `netdocs serve` runs Kestrel with a WebSocket live-reload watcher.
+- **Local CMS** — while `netdocs serve` runs, edit pages visually, manage media, navigation,
+  plugins and templates, and commit to git from the browser. See [Local CMS](cms/index.md).
 
 ## Quick links
 

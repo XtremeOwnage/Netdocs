@@ -25,7 +25,7 @@ Usage:
 |---|---|
 | `netdocs build` | Build the site to the configured output dir (`siteDir`). |
 | `netdocs profile` | Build once (cache-bypassed) and print a tree of where build time is spent. |
-| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
+| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload, and the [local CMS](../cms/index.md) at `/__cms/`. |
 | `netdocs watch` | Long-running publish daemon: polls a git remote and rebuilds when the tracked branch advances. |
 | `netdocs new` | Scaffold a fully-annotated `appsettings.json` (all common options + doc links). |
 | `netdocs import` | Convert an existing `mkdocs.yml` into a Netdocs `appsettings.json`. |
@@ -97,6 +97,7 @@ the numbers are comparable run to run rather than skewed by cache hits.
 |---|---|---|
 | `--config <path>` | `-f` | Path to `appsettings.json` (default `./appsettings.json`). |
 | `--port <port>` | `-p` | Dev server port for `serve` (default `8000`). |
+| `--no-cms` | | `serve`: run without the [local CMS](../cms/index.md) and the in-page editor. |
 | `--clean` | | Remove existing output before building. |
 | `--no-cache` | | Ignore the incremental render cache and re-render every page. |
 | `--strict` | | Treat build warnings (including [validation](validation.md) problems, plugin/template errors) as failures. |

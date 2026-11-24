@@ -60,6 +60,7 @@ or Node toolchain to install.
 | Material theme | ✅ built-in | ✅ | ➖ theme | ➖ theme | ➖ theme |
 | Plugin language | C# (.NET DLL) | Python | Python | Ruby | Go templates/modules |
 | Live-reload dev server | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Built-in local CMS / visual editor | ✅ | ➖ | ➖ | ➖ | ➖ |
 | Incremental render cache | ✅ | ➖ | ➖ | ➖ | ✅ (fast) |
 | Parallel rendering | ✅ | ➖ | ➖ | ➖ | ✅ |
 | Built-in search | ✅ (lunr) | ✅ (lunr) | ✅ (lunr) | ➖ | ➖ |
@@ -131,7 +132,7 @@ Once installed, run the `netdocs` binary directly:
 # Build a site (looks for ./appsettings.json, or pass --config)
 netdocs build --config ./appsettings.json
 
-# Serve with live reload
+# Serve with live reload, plus the local CMS at http://localhost:8000/__cms/
 netdocs serve --config ./appsettings.json --port 8000
 ```
 
@@ -162,7 +163,7 @@ for the full input reference.
 | Command | Description |
 |---|---|
 | `netdocs build` | Build the site to the configured output dir (`site_dir`). |
-| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload. |
+| `netdocs serve` | Kestrel dev server with file-watch rebuilds + WebSocket live reload, and the local CMS at `/__cms/` (`--no-cms` to turn it off). |
 | `netdocs --version` | Print the installed Netdocs version and exit. |
 
 Options: `--config/-f`, `--port/-p`, `--clean`, `--strict`, `--prod`, `--verbose/-v`.
@@ -183,7 +184,8 @@ Netdocs.slnx
  │  ├─ Netdocs.Core/           Config, discovery, Markdig pipeline, Scriban templating, build engine, dev server pieces
  │  ├─ Netdocs.Plugins/        Built-in plugins (snippets, search, tags, blog, meta, rss, ...)
  │  ├─ Netdocs.Theme.Material/ Scriban templates + theme assets (CSS/JS)
- │  └─ Netdocs.Cli/            `netdocs build|serve`
+ │  ├─ Netdocs.Cms.Ui/         Local CMS front end (Vite + Preact), built into Netdocs.Cli/Cms/wwwroot
+ │  └─ Netdocs.Cli/            `netdocs build|serve`, dev server and the CMS API
  └─ tests/
     └─ Netdocs.Core.Tests/
 ```

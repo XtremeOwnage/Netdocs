@@ -222,13 +222,36 @@ gantt
   Theme tweaks         :         thm, after par, 4d
 ```
 
+## Themes per diagram
+
+A diagram normally uses the site's colors and follows the light and dark switch. To give one diagram
+its own title, theme or hand-drawn look, start it with Mermaid front matter:
+
+````markdown
+```mermaid
+---
+title: Home network
+config:
+  theme: forest
+  look: handDrawn
+---
+flowchart LR
+    ISP([Internet]) --> FW[Firewall] --> SW{Core switch}
+```
+````
+
+The themes are `default`, `neutral`, `dark`, `forest` and `base`. A diagram with a `config:` block is
+drawn with exactly those settings instead of the site palette, so pick a theme that reads well on both
+light and dark pages. The [visual editor](../cms/visual-editor.md#mermaid-diagrams) has a form for
+these settings and starter examples for every common diagram type.
+
 ## Tips
 
 - **Keep definitions valid.** If a diagram fails to parse, Mermaid silently leaves the source
   visible rather than breaking the page.
 - **Indentation matters** for some diagram types (e.g. `pie`, `gantt`); use spaces, not tabs.
-- **Theming.** Mermaid initializes with `startOnLoad: false` and Netdocs drives rendering itself.
-  To customize colors, edit `partials/mermaid.html` and pass a `theme`/`themeVariables` object to
+- **Theming.** For one diagram, use [front matter](#themes-per-diagram). To change every diagram,
+  override `partials/mermaid.html` and pass a `theme`/`themeVariables` object to
   `mermaid.initialize(...)`.
 
 See also the [Code blocks](code-blocks.md) reference for the full list of fence options.

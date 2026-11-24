@@ -250,7 +250,7 @@ html.ndcms-editing body { padding-bottom: var(--ndcms-bar-h); }
 .ndcms-empty__choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .ndcms-empty__choice { padding: 10px 14px; }
 .ndcms-empty__choice span { display: inline-block; min-width: 18px; font-weight: 700; }
-.ndcms-empty, .ndcms-add-end, .ndcms-rich, .ndcms-table-editor, .ndcms-icon-field {
+.ndcms-empty, .ndcms-add-end, .ndcms-rich, .ndcms-nested, .ndcms-table-editor, .ndcms-icon-field {
   --ndcms-accent: var(--md-primary-fg-color, #4051b5);
   --ndcms-bg: var(--md-default-bg-color, #fff);
   --ndcms-fg: var(--md-default-fg-color, #1f2328);
@@ -341,3 +341,49 @@ html.ndcms-editing .ndcms-meta__btn { display: inline-block; }
 .ndcms-type.on { background: color-mix(in srgb, var(--type-color) 28%, transparent); outline: 2px solid var(--type-color); outline-offset: -1px; font-weight: 600; }
 .ndcms-type__icon { width: 16px; height: 16px; flex: none; background: var(--type-color); -webkit-mask: var(--icon) center / contain no-repeat; mask: var(--icon) center / contain no-repeat; }
 .ndcms-types__custom { grid-column: 1 / -1; }
+
+/* Floated images: in edit mode the block holds its image, so outlines and insert points stay put. */
+.ndcms-block:has(img[align]) { display: flow-root; }
+.ndcms-block:has(img[align]) .ndcms-block__content::after {
+  content: "Text after this image wraps beside it on the published page";
+  display: block; clear: both; padding-top: 2px; font: 11px var(--ndcms-font, system-ui); color: var(--md-default-fg-color--light, #6b7280);
+}
+
+/* Stacked panels: a block inside a callout, tab or card */
+.ndcms-panel__back { font-size: 18px; line-height: 1; padding: 2px 8px; }
+.ndcms-panel__crumb { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.ndcms-panel--nested .ndcms-panel__head { background: color-mix(in srgb, var(--ndcms-accent) 6%, transparent); }
+
+/* Blocks inside a callout, tab, card or grid */
+.ndcms-nested { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.ndcms-nested > .ndcms-btn--link { align-self: flex-start; }
+.ndcms-nested__list { padding: 6px 10px; border: 1px solid var(--ndcms-line); border-radius: 6px; font-size: 15px; min-height: 60px; }
+.ndcms-nested__item { position: relative; margin: 0 -6px; padding: 2px 6px; border-radius: 5px; outline: 1px dashed transparent; }
+.ndcms-nested__item:hover, .ndcms-nested__item:focus-within { outline-color: var(--ndcms-line); }
+.ndcms-nested__item:has(img[align]) { display: flow-root; }
+.ndcms-nested__item--structured .ndcms-nested__content { cursor: pointer; }
+.ndcms-nested__item--structured:hover .ndcms-nested__content { background: color-mix(in srgb, var(--ndcms-accent) 5%, transparent); }
+.ndcms-nested__content { outline: none; }
+.ndcms-nested__content[contenteditable="true"] { cursor: text; }
+.ndcms-nested__content[contenteditable="true"]:focus { background: color-mix(in srgb, var(--ndcms-accent) 4%, transparent); }
+.ndcms-nested__content > :first-child { margin-top: 0.3em; }
+.ndcms-nested__content > :last-child { margin-bottom: 0.3em; }
+.ndcms-nested__tools {
+  position: absolute; top: -12px; right: 4px; z-index: 3; display: none; gap: 2px; align-items: center;
+  padding: 1px 3px; border-radius: 6px; background: var(--ndcms-bg); border: 1px solid var(--ndcms-line); font: 11px var(--ndcms-font, system-ui);
+}
+.ndcms-nested__tools .ndcms-btn { padding: 0 5px; font-size: 11px; }
+.ndcms-nested__item:hover > .ndcms-nested__tools, .ndcms-nested__item:focus-within > .ndcms-nested__tools { display: flex; }
+.ndcms-nested .ndcms-format { position: absolute; bottom: calc(100% + 2px); left: 0; right: 0; top: auto; z-index: 8; flex-wrap: wrap; }
+.ndcms-nested__insert { height: 10px; }
+.ndcms-nested__insert .ndcms-insert__toggle { width: 18px; height: 18px; top: -4px; font-size: 12px; }
+.ndcms-nested__insert .ndcms-insert__line { top: 4px; }
+.ndcms-nested__insert--end { height: auto; margin-top: 6px; }
+.ndcms-nested__insert--end .ndcms-insert__menu { left: 0; transform: none; top: 30px; }
+.ndcms-nested__add { font-size: 12px; }
+
+/* Card grid form */
+.ndcms-card { position: relative; }
+.ndcms-card__tools { position: absolute; top: -4px; right: 8px; display: flex; gap: 2px; background: var(--ndcms-bg); }
+.ndcms-card__tools .ndcms-btn { padding: 0 6px; font-size: 12px; }
+.ndcms-card__large { align-self: end; padding-bottom: 8px; }

@@ -13,6 +13,9 @@ import { imageMarkdown, openIconPicker, openImagePicker, openLinkPicker, pageTem
 interface EditorBlock {
   /** Index of the original block in the file, or null for a new block. */
   original: number | null;
+  /** Every file block this one stands for, when several were joined (a grid's opening tag, its
+   * content and its closing tag). */
+  span?: number[];
   kind: string;
   source: string;
   html: string;
@@ -206,7 +209,7 @@ function moreMenu(): HTMLElement {
 }
 
 /** A searchable list of every block type; picking one inserts it at `position()`. */
-function blockMenu(position: () => number, onPick: () => void): HTMLElement {
+function blockMenu(position: () => number, onPick: () => void, pick?: (id: string) => void): HTMLElement {
   const menu = el('div', { class: 'ndcms-insert__menu' });
   const filter = el('input', { type: 'search', placeholder: 'Find a block type…', class: 'ndcms-input' }) as HTMLInputElement;
   const list = el('div', { class: 'ndcms-insert__list' });
@@ -216,7 +219,7 @@ function blockMenu(position: () => number, onPick: () => void): HTMLElement {
     let group = '';
     for (const t of insertTemplates.filter((x) => !term || x.label.toLowerCase().includes(term) || x.group.toLowerCase().includes(term))) {
       if (t.group !== group) { group = t.group; list.append(el('div', { class: 'ndcms-insert__group' }, group)); }
-      list.append(button(t.label, t.label, () => { onPick(); void insertTemplate(position(), t.id); }, 'ndcms-insert__item'));
+      list.append(button(t.label, t.label, () => { onPick(); if (pick) pick(t.id); else void insertTemplate(position(), t.id); }, 'ndcms-insert__item'));
     }
   };
   filter.addEventListener('input', draw);
@@ -239,7 +242,8 @@ function isDirty(): boolean {
 
 function orderChanged(): boolean {
   if (!state) return false;
-  const originals = state.blocks.map((b) => b.original);
+  // A joined block (a grid) stands for several file blocks in a row.
+  const originals = state.blocks.flatMap((b) => (b.original === null ? [null] : b.span ?? [b.original]));
   return originals.some((o, i) => o !== i) || originals.length !== state.originalCount;
 }
 
@@ -253,7 +257,7 @@ async function enterEditMode() {
     const { page, blocks, generated } = await api.blocks(cms.path);
     state = {
       page,
-      blocks: blocks.map(toEditorBlock),
+      blocks: mergeWrappers(blocks).map(toEditorBlock),
       frontMatter: structuredClone(page.frontMatter),
       frontMatterChanged: false,
       article,
@@ -288,9 +292,47 @@ function attachMetadataEditors() {
   }
 }
 
-function toEditorBlock(b: RenderedBlock): EditorBlock {
+function toEditorBlock(b: RenderedBlock & { span?: number[] }): EditorBlock {
   const rich = isRich(b.kind, b.source, b.html);
-  return { original: b.index, kind: b.kind, source: b.source, html: b.html, changed: false, rich };
+  return { original: b.index, span: b.span, kind: b.kind, source: b.source, html: b.html, changed: false, rich };
+}
+
+const wrapperOpen = /^<(div|section|article|aside)\b[^>]*\bmarkdown\b[^>]*>\s*$/;
+
+/** What a whole `<div … markdown>…</div>` block is: a card grid, a grid, or another section. */
+function wrapperKind(source: string): string | null {
+  const t = source.trim();
+  const open = /^<(div|section|article|aside)\b[^>]*\bmarkdown\b[^>]*>/.exec(t);
+  if (!open || !t.endsWith(`</${open[1]}>`)) return null;
+  if (/class="grid cards"/.test(open[0])) return 'cards';
+  if (/class="grid"/.test(open[0])) return 'grid';
+  return 'section';
+}
+
+/**
+ * Joins a `<div class="grid" markdown>` opening tag, the blocks inside it and its closing tag into
+ * one block, so a grid is moved, deleted and edited as a whole.
+ */
+function mergeWrappers<T extends { index: number; kind: string; source: string; html: string }>(blocks: T[]): (T & { span?: number[] })[] {
+  const out: (T & { span?: number[] })[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const open = wrapperOpen.exec(blocks[i].source.trim());
+    if (!open || blocks[i].kind !== 'html') { out.push(blocks[i]); continue; }
+    const tag = open[1];
+    let depth = 0;
+    let end = -1;
+    for (let j = i; j < blocks.length; j++) {
+      const src = blocks[j].source;
+      depth += (src.match(new RegExp(`<${tag}\\b`, 'g')) ?? []).length - (src.match(new RegExp(`</${tag}>`, 'g')) ?? []).length;
+      if (depth <= 0) { end = j; break; }
+    }
+    if (end < 0) { out.push(blocks[i]); continue; }
+    const parts = blocks.slice(i, end + 1);
+    const source = parts.map((b) => b.source).join('\n\n');
+    out.push({ ...blocks[i], source, html: parts.map((b) => b.html).join('\n'), kind: wrapperKind(source) ?? 'section', span: parts.map((b) => b.index) });
+    i = end;
+  }
+  return out;
 }
 
 async function exitEditMode(force = false) {
@@ -300,7 +342,7 @@ async function exitEditMode(force = false) {
   state.article.innerHTML = state.originalArticle;
   state = null;
   document.documentElement.classList.remove('ndcms-editing');
-  closePanel();
+  closeAllPanels();
   renderToolbar();
   if (reload) location.reload();
 }
@@ -449,7 +491,7 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
 const label = (kind: string) => ({
   paragraph: 'Text', heading: 'Heading', list: 'List', quote: 'Quote', table: 'Table', code: 'Code', html: 'HTML',
   hr: 'Divider', admonition: 'Admonition', tabs: 'Tabs', footnotes: 'Footnote', references: 'Link references',
-  abbreviations: 'Abbreviations', math: 'Math', figure: 'Image',
+  abbreviations: 'Abbreviations', math: 'Math', figure: 'Image', cards: 'Card grid', grid: 'Grid', section: 'Section', mixed: 'Blocks',
 } as Record<string, string>)[kind] ?? kind;
 
 function inserter(position: number): HTMLElement {
@@ -523,18 +565,7 @@ async function insert(position: number, markdown: string, openEditor = true) {
     if (openEditor) openBlockEditor(position);
     return;
   }
-  // Select the placeholder text so typing replaces it.
-  const content = block.content;
-  if (!content) return;
-  content.focus();
-  const target = content.querySelector('li, h1, h2, h3, h4, h5, h6, p, blockquote') ?? content;
-  const range = document.createRange();
-  range.selectNodeContents(target);
-  const box = target.querySelector('input[type="checkbox"]');
-  if (box) range.setStartAfter(box);
-  const sel = window.getSelection();
-  sel?.removeAllRanges();
-  sel?.addRange(range);
+  if (block.content) selectPlaceholder(block.content);
 }
 
 function move(index: number, delta: number) {
@@ -588,7 +619,7 @@ async function renderSource(block: EditorBlock) {
   const blocks = defs.length ? rendered.filter((b) => b.kind !== 'footnotes') : rendered;
   block.html = blocks.map((b) => b.html).join('\n');
   const kinds = blocks.map((b) => b.kind);
-  block.kind = kinds.length === 1 ? kinds[0] : kinds.length === 0 ? 'empty' : 'mixed';
+  block.kind = wrapperKind(block.source) ?? (kinds.length === 1 ? kinds[0] : kinds.length === 0 ? 'empty' : 'mixed');
   block.rich = kinds.length === 1 && isRich(block.kind, block.source, block.html);
 }
 
@@ -709,46 +740,63 @@ function wrapSelection(tag: string, target: HTMLElement) {
 
 // --- Side panel: block editors and page settings -------------------------------------------------
 
-let panel: HTMLElement | null = null;
+/** Open panels, newest last. A block inside a callout or tab opens its own panel on top. */
+const panels: { el: HTMLElement; flush: (() => void) | null }[] = [];
 
-let panelFlush: (() => void) | null = null;
-
+/** Closes the top panel (applying its last change) and shows the one under it. */
 function closePanel() {
-  const flush = panelFlush;
-  panelFlush = null;
-  flush?.();
-  panel?.remove();
-  panel = null;
+  const top = panels.pop();
+  if (!top) return;
+  top.flush?.();
+  top.el.remove();
+  const under = panels[panels.length - 1];
+  if (under) under.el.style.display = '';
+}
+
+function closeAllPanels() {
+  while (panels.length) closePanel();
 }
 
 /**
  * Opens the side panel. With `live`, every change in the panel is applied to the page after a
  * short pause, so there is no Apply step: the panel's last state is applied when it closes.
+ * A `nested` panel stacks on the open one and returns to it when done.
  */
-function openPanel(title: string, body: HTMLElement, actions: HTMLElement[], live?: () => void | Promise<void>) {
-  closePanel();
+function openPanel(title: string, body: HTMLElement, actions: HTMLElement[], live?: () => void | Promise<void>, nested = false) {
+  if (!nested) closeAllPanels();
+  const under = panels[panels.length - 1];
+  if (under) under.el.style.display = 'none';
   let timer = 0;
   const run = () => { clearTimeout(timer); timer = 0; void live?.(); };
   const schedule = () => { if (!live) return; clearTimeout(timer); timer = window.setTimeout(run, 450); };
-  const done = button('Done', live ? 'Changes show on the page as you type. Close the panel.' : 'Close', closePanel, 'ndcms-btn--primary');
-  panel = el('aside', { class: 'ndcms-panel', role: 'dialog', 'aria-label': title },
-    el('header', { class: 'ndcms-panel__head' }, el('h2', {}, title), button('✕', 'Close (Esc)', closePanel)),
+  const back = under ? (under.el.querySelector('h2')?.textContent ?? 'the previous panel') : '';
+  const done = button(under ? `‹ Back to ${back}` : 'Done', live ? 'Changes show on the page as you type. Close the panel.' : 'Close', closePanel, 'ndcms-btn--primary');
+  const root = el('aside', { class: `ndcms-panel${under ? ' ndcms-panel--nested' : ''}`, role: 'dialog', 'aria-label': title },
+    el('header', { class: 'ndcms-panel__head' },
+      ...(under ? [button('‹', `Back to ${back}`, closePanel, 'ndcms-panel__back')] : []),
+      el('h2', {}, title),
+      ...(under ? [el('span', { class: 'ndcms-muted ndcms-panel__crumb' }, `in ${back}`)] : []),
+      button('✕', under ? `Back to ${back} (Esc)` : 'Close (Esc)', closePanel)),
     el('div', { class: 'ndcms-panel__body' }, body),
     el('footer', { class: 'ndcms-panel__foot' }, ...(live ? [el('span', { class: 'ndcms-muted ndcms-live' }, '● Live'), ...actions, done] : actions)),
   );
+  const entry = { el: root, flush: null as (() => void) | null };
   if (live) {
     for (const type of ['input', 'change']) body.addEventListener(type, schedule);
     // Buttons such as "Add tab" or "Remove" change the form without an input event.
     body.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('button')) setTimeout(schedule); }, true);
-    panelFlush = () => { if (timer) run(); };
+    entry.flush = () => { if (timer) run(); };
   }
-  panel.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePanel(); });
-  document.body.append(panel);
-  panel.querySelector<HTMLElement>('input, textarea, select')?.focus();
+  root.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePanel(); } });
+  panels.push(entry);
+  document.body.append(root);
+  root.querySelector<HTMLElement>('input, textarea, select')?.focus();
 }
 
+/** A labelled form row. Only a single control goes in a <label>: a click anywhere in a label
+ * presses its first button, which would open menus inside a block list. */
 const field = (labelText: string, control: HTMLElement, hint?: string) =>
-  el('label', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, labelText), control, ...(hint ? [el('small', { class: 'ndcms-muted' }, hint)] : []));
+  el(/^(INPUT|SELECT|TEXTAREA)$/.test(control.tagName) ? 'label' : 'div', { class: 'ndcms-field' }, el('span', { class: 'ndcms-field__label' }, labelText), control, ...(hint ? [el('small', { class: 'ndcms-muted' }, hint)] : []));
 
 const textarea = (value: string, rows = 10, code = true) => {
   const t = el('textarea', { class: `ndcms-input${code ? ' ndcms-input--code' : ''}`, rows: String(rows), spellcheck: code ? 'false' : 'true' }) as HTMLTextAreaElement;
@@ -786,7 +834,7 @@ function openBlockEditor(index: number, forceSource = false) {
   let seq = 0;
   /** Puts new markdown into the block and redraws just that block. */
   const apply = async (source: string, close = false) => {
-    if (close) closePanel();
+      if (close) closePanel();
     if (source.trim() === block.source.trim()) return;
     block.source = source;
     block.changed = true;
@@ -804,30 +852,69 @@ function openBlockEditor(index: number, forceSource = false) {
     const fresh = renderBlock(block, i);
     if (old?.isConnected) { old.replaceWith(fresh); markActive(); refreshThemeWidgets(fresh); updateStatus(); } else renderBlocks();
   };
+  editBlock({
+    source: block.source, kind: block.kind, nested: false,
+    apply: (md) => apply(md),
+    toSource: () => { closePanel(); openBlockEditor(index, true); },
+  }, forceSource);
+}
+
+/** What a block editor works on: a block of the page, or a block inside a callout, tab or card. */
+interface EditCtx {
+  source: string;
+  kind: string;
+  apply: (md: string) => Promise<void>;
+  /** Reopens the block in the markdown editor. */
+  toSource: () => void;
+  /** Opened from another panel: it stacks on top, and Done goes back to that panel. */
+  nested: boolean;
+}
+
+/** Opens the form that fits a block's markdown, or its markdown source. */
+function editBlock(ctx: EditCtx, forceSource = false) {
+  if (!state) return;
+  const s = state;
+  const apply = ctx.apply;
   const live = (compute: () => string) => () => apply(compute());
 
-  const imageBlock = !forceSource ? parseImageBlock(block.source) : null;
+  const imageBlock = !forceSource ? parseImageBlock(ctx.source) : null;
   if (imageBlock) {
-    openImageEditor(index, imageBlock, (md) => apply(md));
+    openImageEditor(ctx, imageBlock);
     return;
   }
-  const image = !forceSource ? parseImageMarkdown(block.source, s.page.path) : null;
+  const image = !forceSource ? parseImageMarkdown(ctx.source, s.page.path) : null;
   if (image) {
-    void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked), true); });
+    void openImagePicker(s.page.path, image).then((picked) => { if (picked) void apply(imageMarkdown(picked)); });
     return;
   }
-  const table = !forceSource && block.kind === 'table' ? parseTable(block.source) : null;
+  const cards = !forceSource ? parseCardGrid(ctx.source) : null;
+  if (cards) {
+    openCardGridEditor(ctx, cards);
+    return;
+  }
+  const grid = !forceSource && !cards ? parsePlainGrid(ctx.source) : null;
+  if (grid) {
+    const body = blockList(grid.body, s.page.path);
+    openPanel('Grid', el('div', {},
+      el('p', { class: 'ndcms-muted' }, 'Each block below is one cell of the grid. The cells line up in columns as the screen allows.'),
+      field('Cells', body.root),
+    ), [
+      button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+    ], live(() => `${grid.open}\n\n${body.value()}\n\n</div>`), ctx.nested);
+    return;
+  }
+  const table = !forceSource && ctx.kind === 'table' ? parseTable(ctx.source) : null;
   if (table) {
     const editor = tableEditor(table);
     openPanel('Table', editor.root, [
-      button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-    ], live(() => formatTable(editor.value())));
+      button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+    ], live(() => formatTable(editor.value())), ctx.nested);
     return;
   }
 
-  const admonition = !forceSource ? parseAdmonition(block.source) : null;
-  const fence = !forceSource && !admonition ? parseFence(block.source) : null;
-  const tabs = !forceSource && !admonition && !fence ? parseTabs(block.source) : null;
+  const admonition = !forceSource ? parseAdmonition(ctx.source) : null;
+  const fence = !forceSource && !admonition ? parseFence(ctx.source) : null;
+  const tabs = !forceSource && !admonition && !fence ? parseTabs(ctx.source) : null;
 
   if (admonition) {
     const type = admonitionTypePicker(admonition.type);
@@ -835,7 +922,7 @@ function openBlockEditor(index: number, forceSource = false) {
     const title = input(admonition.title ?? '', 'Leave empty for the default title');
     const noTitle = el('input', { type: 'checkbox' }) as HTMLInputElement;
     noTitle.checked = admonition.title === '';
-    const body = richArea(admonition.body, s.page.path);
+    const body = blockList(admonition.body, s.page.path);
     openPanel('Callout box', el('div', {},
       field('Type', type.root),
       field('Style', style, '!!! always open · ??? collapsed · ???+ collapsible, open'),
@@ -843,16 +930,16 @@ function openBlockEditor(index: number, forceSource = false) {
       el('label', { class: 'ndcms-check' }, noTitle, ' Hide the title bar'),
       field('Content', body.root),
     ), [
-      button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
+      button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
     ], live(() => formatAdmonition({
       marker: style.value as '!!!', type: type.value(), extra: admonition.extra,
       title: noTitle.checked ? '' : title.value.trim() ? title.value : null, body: body.value(),
-    })));
+    })), ctx.nested);
     return;
   }
 
   if (fence && fence.lang === 'mermaid') {
-    openMermaidEditor(index, fence, (md) => apply(md));
+    openMermaidEditor(ctx, fence);
     return;
   }
 
@@ -871,8 +958,8 @@ function openBlockEditor(index: number, forceSource = false) {
       field('Options', options, 'title, linenums, hl_lines and other fence options'),
       field('Code', code),
     ), [
-      button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-    ], live(() => formatFence({ fence: fence.fence, lang: lang.value.trim(), options: options.value.trim(), code: code.value })));
+      button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+    ], live(() => formatFence({ fence: fence.fence, lang: lang.value.trim(), options: options.value.trim(), code: code.value })), ctx.nested);
     return;
   }
 
@@ -880,7 +967,7 @@ function openBlockEditor(index: number, forceSource = false) {
     const list = el('div', { class: 'ndcms-tabs-editor' });
     const rows: { title: HTMLInputElement; body: RichArea; selected: boolean }[] = [];
     const addRow = (t: { title: string; body: string; selected: boolean }) => {
-      const row = { title: input(t.title, 'Tab title'), body: richArea(t.body, s.page.path), selected: t.selected };
+      const row = { title: input(t.title, 'Tab title'), body: blockList(t.body, s.page.path), selected: t.selected };
       rows.push(row);
       const box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, 'Tab'), field('Title', row.title), field('Content', row.body.root),
         button('Remove tab', 'Remove this tab', () => { rows.splice(rows.indexOf(row), 1); box.remove(); }, 'ndcms-btn--danger'));
@@ -888,21 +975,21 @@ function openBlockEditor(index: number, forceSource = false) {
     };
     tabs.forEach(addRow);
     openPanel('Content tabs', el('div', {}, list, button('+ Add tab', 'Add another tab', () => addRow({ title: 'New tab', body: 'Content.', selected: false }))), [
-      button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-    ], live(() => formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value(), selected: r.selected })))));
+      button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+    ], live(() => formatTabs(rows.map((r) => ({ title: r.title.value, body: r.body.value(), selected: r.selected })))), ctx.nested);
     return;
   }
 
-  const link = !forceSource ? parseLinkBlock(block.source) : null;
+  const link = !forceSource ? parseLinkBlock(ctx.source) : null;
   if (link) {
-    openLinkEditor(index, link, (md) => apply(md));
+    openLinkEditor(ctx, link);
     return;
   }
 
-  const source = textarea(block.source, 18);
-  openPanel(`${label(block.kind)} · markdown`, el('div', {},
+  const source = textarea(ctx.source, 18);
+  openPanel(`${label(ctx.kind)} · markdown`, el('div', {},
     field('Markdown', source, 'Any Netdocs markdown works here: admonitions, tabs, attr lists, icons, macros… Changes show on the page as you type.'),
-  ), [], live(() => source.value));
+  ), [], live(() => source.value), ctx.nested);
 }
 
 // --- Callout types -------------------------------------------------------------------------------
@@ -969,7 +1056,8 @@ function formatMermaid(d: ReturnType<typeof parseMermaid>): string {
   return (lines.length ? `---\n${lines.join('\n')}\n---\n` : '') + d.body.replace(/^\n+/, '');
 }
 
-function openMermaidEditor(index: number, fence: ReturnType<typeof parseFence> & object, apply: (md: string) => Promise<void>) {
+function openMermaidEditor(ctx: EditCtx, fence: ReturnType<typeof parseFence> & object) {
+  const apply = ctx.apply;
   const d = parseMermaid(fence.code);
   const title = input(d.title, 'Shown above the diagram (optional)');
   const theme = select(d.theme, ['', 'default', 'neutral', 'dark', 'forest', 'base']);
@@ -979,15 +1067,166 @@ function openMermaidEditor(index: number, fence: ReturnType<typeof parseFence> &
   look.querySelector('option[value="handDrawn"]')!.textContent = 'Hand-drawn';
   const code = textarea(d.body, 16);
   const kinds: [string, string][] = [
-    ['flowchart TD\n    A[Start] --> B{Choice}\n    B -->|Yes| C[Do it]\n    B -->|No| D[Skip]', 'Flowchart'],
-    ['sequenceDiagram\n    Alice->>Bob: Hello\n    Bob-->>Alice: Hi!', 'Sequence'],
-    ['classDiagram\n    Animal <|-- Dog\n    Animal : +name', 'Class'],
-    ['stateDiagram-v2\n    [*] --> Idle\n    Idle --> Busy\n    Busy --> Idle', 'State'],
-    ['erDiagram\n    CUSTOMER ||--o{ ORDER : places', 'Entity relationship'],
-    ['gantt\n    dateFormat YYYY-MM-DD\n    section Build\n    Panels :a1, 2026-01-01, 7d\n    Wiring :after a1, 5d', 'Gantt'],
-    ['pie\n    "Solar" : 60\n    "Grid" : 40', 'Pie'],
-    ['mindmap\n  root((Project))\n    Power\n    Network', 'Mind map'],
-    ['timeline\n    2025 : Planning\n    2026 : Build', 'Timeline'],
+    [`flowchart TD
+    A([Request comes in]) --> B{Signed in?}
+    B -->|No| C[Show sign-in page]
+    C --> B
+    B -->|Yes| D{Cached?}
+    D -->|Yes| E[(Cache)]
+    D -->|No| F[Build the page]
+    F --> G[(Database)]
+    F --> E
+    E --> H([Send response])
+    subgraph Server
+        D
+        F
+    end`, 'Flowchart'],
+    [`sequenceDiagram
+    autonumber
+    actor User
+    participant App
+    participant API
+    participant DB as Database
+    User->>App: Open dashboard
+    App->>API: GET /stats
+    activate API
+    API->>DB: Query last 24h
+    DB-->>API: Rows
+    alt cache is fresh
+        API-->>App: Cached stats
+    else cache is stale
+        API->>API: Recalculate
+        API-->>App: New stats
+    end
+    deactivate API
+    App-->>User: Render charts
+    Note over App,API: Refreshes every 60 seconds`, 'Sequence'],
+    [`classDiagram
+    class Device {
+        +string name
+        +string ip
+        +ping() bool
+    }
+    class Switch {
+        +int ports
+        +vlans() list
+    }
+    class Server {
+        +int cores
+        +int ramGb
+        +reboot()
+    }
+    class Rack {
+        +string location
+        +add(Device d)
+    }
+    Device <|-- Switch
+    Device <|-- Server
+    Rack "1" o-- "*" Device : holds`, 'Class'],
+    [`stateDiagram-v2
+    [*] --> Idle
+    Idle --> Charging : solar > load
+    Idle --> Discharging : load > solar
+    Charging --> Full : battery 100%
+    Full --> Idle : sun sets
+    Discharging --> Low : battery < 20%
+    Low --> GridAssist : below 10%
+    GridAssist --> Idle : sun rises
+    state Charging {
+        [*] --> Bulk
+        Bulk --> Absorb
+        Absorb --> Float
+    }`, 'State'],
+    [`erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT ||--o{ LINE_ITEM : "appears in"
+    CUSTOMER {
+        int id PK
+        string name
+        string email
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        date placed
+    }
+    PRODUCT {
+        int id PK
+        string sku
+        decimal price
+    }`, 'Entity relationship'],
+    [`gantt
+    title Solar install
+    dateFormat YYYY-MM-DD
+    excludes weekends
+    section Planning
+    Site survey        :done,    s1, 2026-01-05, 3d
+    Permits            :active,  s2, after s1, 10d
+    section Build
+    Mount rails        :         b1, after s2, 2d
+    Panels             :         b2, after b1, 3d
+    Wiring and inverter:crit,    b3, after b2, 4d
+    section Finish
+    Inspection         :milestone, m1, after b3, 0d
+    Turn on            :         f1, after m1, 1d`, 'Gantt'],
+    [`pie showData
+    title Power use by room
+    "Server rack" : 42
+    "Kitchen" : 23
+    "HVAC" : 18
+    "Office" : 11
+    "Other" : 6`, 'Pie'],
+    [`mindmap
+  root((Homelab))
+    Network
+      Firewall
+      Core switch
+        10G uplinks
+      Wi-Fi
+    Compute
+      Hypervisors
+      Containers
+    Storage
+      NAS
+        ZFS pools
+      Backups
+    Power
+      UPS
+      Solar`, 'Mind map'],
+    [`timeline
+    title Homelab history
+    section Early days
+        2019 : First NAS
+             : Pi-hole
+        2020 : Rack and UPS
+    section Growth
+        2021 : 10G network
+        2022 : Hypervisor cluster
+    section Today
+        2024 : Solar power
+        2026 : Rebuilt on SFF PCs`, 'Timeline'],
+    [`gitGraph
+    commit id: "init"
+    branch feature
+    checkout feature
+    commit id: "add editor"
+    commit id: "tests"
+    checkout main
+    commit id: "hotfix"
+    merge feature tag: "v1.0"
+    commit id: "docs"`, 'Git graph'],
+    [`journey
+    title Publishing a page
+    section Write
+      Draft the text: 4: Author
+      Add images: 3: Author
+    section Review
+      Read it over: 4: Author, Editor
+      Fix links: 2: Editor
+    section Publish
+      Build the site: 5: Netdocs
+      Share it: 5: Author`, 'User journey'],
   ];
   const starter = select('', ['', ...kinds.map((k) => k[1])]);
   starter.querySelector('option[value=""]')!.textContent = 'Start from an example…';
@@ -1003,8 +1242,8 @@ function openMermaidEditor(index: number, fence: ReturnType<typeof parseFence> &
     starter,
     el('small', { class: 'ndcms-muted' }, 'Syntax help: ', el('a', { href: 'https://mermaid.js.org/intro/', target: '_blank', rel: 'noreferrer' }, 'mermaid.js.org ↗')),
   ), [
-    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-  ], () => apply(formatFence({ ...fence, code: formatMermaid({ ...d, title: title.value, theme: theme.value, look: look.value, body: code.value }) })));
+    button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+  ], () => apply(formatFence({ ...fence, code: formatMermaid({ ...d, title: title.value, theme: theme.value, look: look.value, body: code.value }) })), ctx.nested);
 }
 
 // --- Image blocks --------------------------------------------------------------------------------
@@ -1063,7 +1302,8 @@ function formatImageBlock(i: ImageBlock): string {
   return `^^^\n${md}\n^^^ ${i.caption.trim().replace(/\n/g, ' ')}`;
 }
 
-function openImageEditor(index: number, img: ImageBlock, apply: (md: string) => Promise<void>) {
+function openImageEditor(ctx: EditCtx, img: ImageBlock) {
+  const apply = ctx.apply;
   if (!state) return;
   const s = state;
   const cur = { ...img };
@@ -1115,8 +1355,8 @@ function openImageEditor(index: number, img: ImageBlock, apply: (md: string) => 
     el('label', { class: 'ndcms-check' }, newTab, ' Open in a new tab'),
     field('Other attributes', attrs, 'Attribute list for the image: classes (.shadow) and key=value pairs'),
   ), [
-    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-  ], () => apply(compute()));
+    button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+  ], () => apply(compute()), ctx.nested);
 }
 
 // --- Link blocks ---------------------------------------------------------------------------------
@@ -1147,7 +1387,8 @@ const attrParts = (attrs: string) => {
   return { target: target ? target.replace(/^target=["']?|["']$/g, '') : '', rest: parts.filter((p) => p !== target).join(' ') };
 };
 
-function openLinkEditor(index: number, link: LinkBlock, apply: (md: string) => Promise<void>) {
+function openLinkEditor(ctx: EditCtx, link: LinkBlock) {
+  const apply = ctx.apply;
   if (!state) return;
   const s = state;
   const image = parseImageMarkdown(link.text, s.page.path);
@@ -1215,63 +1456,312 @@ function openLinkEditor(index: number, link: LinkBlock, apply: (md: string) => P
     field('Footnotes', notes.root, 'Footnote markers after the link, such as an affiliate disclosure'),
     missing,
   ), [
-    button('Edit source', 'Edit the raw markdown', () => openBlockEditor(index, true)),
-  ], () => apply(compute()));
+    button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+  ], () => apply(compute()), ctx.nested);
 }
 
-// --- Rich text areas inside forms ----------------------------------------------------------------
+// --- Blocks inside callouts, tabs, cards and grids -----------------------------------------------
 
 interface RichArea { root: HTMLElement; value: () => string }
 
+interface NestedItem { source: string; kind: string; html: string; rich: boolean; content?: HTMLElement; renderedHtml?: string; seq?: number }
+
+/** Puts the cursor on a new block's placeholder text, so typing replaces it. */
+function selectPlaceholder(content: HTMLElement) {
+  content.focus();
+  const target = content.querySelector('li, h1, h2, h3, h4, h5, h6, p, blockquote') ?? content;
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  const box = target.querySelector('input[type="checkbox"]');
+  if (box) range.setStartAfter(box);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
 /**
- * Edits a piece of markdown (an admonition or tab body) visually when it only holds text-like
- * blocks, and as markdown otherwise. "Edit as markdown" switches over at any time.
+ * Edits the markdown inside a callout, tab, card or grid the way the page itself is edited: text
+ * is typed in place, any block can be added between the others, and code, tables, images, nested
+ * callouts and the rest open their own form on top of this panel. "Edit as markdown" switches the
+ * whole content to its source at any time.
  */
-function richArea(markdown: string, pagePath: string): RichArea {
-  const root = el('div', { class: 'ndcms-rich' });
-  const source = textarea(markdown, 8);
-  const editable = el('div', { class: 'ndcms-rich__text md-typeset', contenteditable: 'true', spellcheck: 'true' });
-  let mode: 'rich' | 'source' | 'loading' = 'loading';
-  let renderedHtml = '';
-  let original = markdown;
-  const toggle = button('Edit as markdown', 'Switch between visual and markdown editing', () => {
-    if (mode === 'rich') { source.value = current(); showSource(); }
-    else if (mode === 'source') void tryRich(source.value);
-  }, 'ndcms-btn--link');
-  const current = () => {
-    if (mode !== 'rich') return source.value;
-    if (editable.innerHTML === renderedHtml) return original;
-    return htmlToMarkdown(editable.innerHTML);
+function blockList(markdown: string, pagePath: string): RichArea {
+  const root = el('div', { class: 'ndcms-nested' });
+  const list = el('div', { class: 'ndcms-nested__list md-typeset' });
+  const source = textarea(markdown, 10);
+  let mode: 'loading' | 'blocks' | 'source' = 'loading';
+  let items: NestedItem[] = [];
+  const frontMatter = () => state?.frontMatter ?? {};
+  const changed = () => root.dispatchEvent(new Event('input', { bubbles: true }));
+
+  const sync = () => {
+    for (const it of items) {
+      if (!it.rich || !it.content || it.content.innerHTML === it.renderedHtml) continue;
+      it.source = htmlToMarkdown(it.content.innerHTML);
+      it.renderedHtml = it.content.innerHTML;
+    }
   };
-  const showSource = () => {
+  const value = () => {
+    if (mode === 'source') return source.value;
+    if (mode === 'loading') return markdown;
+    sync();
+    return items.map((i) => i.source.replace(/\s+$/, '')).filter((x) => x.trim()).join('\n\n');
+  };
+  const render = async (it: NestedItem) => {
+    const { blocks } = await api.renderBlocks(pagePath, it.source, frontMatter());
+    it.html = blocks.map((b) => b.html).join('\n');
+    it.kind = wrapperKind(it.source) ?? (blocks.length === 1 ? blocks[0].kind : blocks.length ? 'mixed' : 'empty');
+    it.rich = blocks.length === 1 && isRich(it.kind, it.source, it.html);
+  };
+
+  const edit = (it: NestedItem, forceSource = false) => {
+    sync();
+    editBlock({
+      source: it.source, kind: it.kind, nested: true,
+      apply: async (md) => {
+        if (md.trim() === it.source.trim()) return;
+        it.source = md;
+        // Tell the outer panel now, so closing both panels at once still saves this change.
+        changed();
+        const mine = it.seq = (it.seq ?? 0) + 1;
+        try { await render(it); } catch (e) { alertError(e); return; }
+        if (mine === it.seq && items.includes(it)) draw();
+      },
+      toSource: () => { closePanel(); edit(it, true); },
+    }, forceSource);
+  };
+
+  const add = async (at: number, id: string) => {
+    const t = insertTemplates.find((x) => x.id === id);
+    if (!t) return;
+    let md = t.markdown;
+    const isImage = id === 'image' || id === 'figure';
+    if (isImage) {
+      const picked = await openImagePicker(pagePath);
+      if (!picked) return;
+      md = imageMarkdown(picked);
+    }
+    const it: NestedItem = { source: md, kind: 'new', html: '', rich: false };
+    try { await render(it); } catch (e) { alertError(e); return; }
+    sync();
+    items.splice(at, 0, it);
+    draw();
+    changed();
+    if (it.rich && it.content) selectPlaceholder(it.content);
+    else if (!isImage) edit(it);
+  };
+
+  const move = (i: number, delta: number) => {
+    const j = i + delta;
+    if (j < 0 || j >= items.length) return;
+    sync();
+    [items[i], items[j]] = [items[j], items[i]];
+    draw();
+    changed();
+  };
+
+  const adder = (at: number, last = false) => {
+    const wrap = el('div', { class: `ndcms-insert ndcms-nested__insert${last ? ' ndcms-nested__insert--end' : ''}` });
+    const close = () => wrap.classList.remove('ndcms-insert--open');
+    const menu = blockMenu(() => at, close, (id) => void add(at, id));
+    const toggle = button(last ? '+ Add a block' : '+', 'Add a block here', () => {
+      const open = wrap.classList.toggle('ndcms-insert--open');
+      if (open) menu.querySelector<HTMLInputElement>('input')?.focus();
+    }, last ? 'ndcms-nested__add' : 'ndcms-insert__toggle');
+    wrap.append(...(last ? [] : [el('span', { class: 'ndcms-insert__line' })]), toggle, menu);
+    return wrap;
+  };
+
+  const itemEl = (it: NestedItem, i: number) => {
+    const content = el('div', { class: 'ndcms-nested__content' });
+    content.innerHTML = it.html || `<p class="ndcms-muted">(${label(it.kind)} with no visible output)</p>`;
+    content.querySelectorAll('a, button, input, label, summary').forEach((n) => n.setAttribute('tabindex', '-1'));
+    it.content = content;
+    const tools = el('div', { class: 'ndcms-nested__tools' }, el('span', { class: 'ndcms-block__kind' }, label(it.kind)));
+    if (!it.rich) tools.append(button('✎', 'Edit this block', () => edit(it)));
+    tools.append(
+      button('&lt;/&gt;', 'Edit the markdown source', () => edit(it, true)),
+      button('↑', 'Move up', () => move(i, -1)),
+      button('↓', 'Move down', () => move(i, 1)),
+      button('🗑', 'Remove this block', () => { sync(); items.splice(i, 1); draw(); changed(); }, 'ndcms-btn--danger'),
+    );
+    const wrap = el('div', { class: `ndcms-nested__item${it.rich ? '' : ' ndcms-nested__item--structured'}` }, tools, content);
+    if (it.rich) {
+      content.contentEditable = 'true';
+      content.spellcheck = true;
+      content.addEventListener('focus', () => showFormatBar(content, wrap));
+      content.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('a')) e.preventDefault(); });
+    } else {
+      wrap.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.ndcms-nested__tools')) return;
+        e.preventDefault();
+        edit(it);
+      });
+    }
+    it.renderedHtml = content.innerHTML;
+    return wrap;
+  };
+
+  const toggle = button('Edit as markdown', 'Switch between visual and markdown editing', () => {
+    if (mode === 'blocks') { source.value = value(); showSource(); } else if (mode === 'source') void load(source.value);
+  }, 'ndcms-btn--link');
+
+  function draw() {
+    sync();
+    list.replaceChildren();
+    items.forEach((it, i) => list.append(adder(i), itemEl(it, i)));
+    list.append(adder(items.length, true));
+    refreshThemeWidgets(list);
+  }
+  function showSource() {
     mode = 'source';
     toggle.textContent = 'Edit visually';
     root.replaceChildren(source, toggle);
-  };
-  const tryRich = async (md: string) => {
+  }
+  async function load(md: string) {
     try {
-      const { blocks } = await api.renderBlocks(pagePath, md, state?.frontMatter ?? {});
-      const safe = blocks.every((b) => isRich(b.kind, b.source, b.html));
-      if (!safe) {
-        showSource();
-        root.append(el('small', { class: 'ndcms-muted' }, ' This content has blocks that are edited as markdown.'));
-        return;
-      }
-      editable.innerHTML = blocks.length ? blocks.map((b) => b.html).join('\n') : '<p><br></p>';
-      renderedHtml = editable.innerHTML;
-      original = md;
-      mode = 'rich';
+      const { blocks } = await api.renderBlocks(pagePath, md, frontMatter());
+      items = mergeWrappers(blocks).map((b) => ({ source: b.source, kind: b.kind, html: b.html, rich: isRich(b.kind, b.source, b.html) }));
+      mode = 'blocks';
       toggle.textContent = 'Edit as markdown';
-      root.replaceChildren(editable, toggle);
+      root.replaceChildren(list, toggle);
+      draw();
     } catch {
       showSource();
     }
-  };
-  editable.addEventListener('focus', () => showFormatBar(editable, root));
-  editable.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('a')) e.preventDefault(); });
+  }
   root.append(el('span', { class: 'ndcms-muted' }, 'Loading…'));
-  void tryRich(markdown);
-  return { root, value: current };
+  void load(markdown);
+  return { root, value };
+}
+
+// --- Grids and card grids ------------------------------------------------------------------------
+
+interface Card {
+  icon: string; large: boolean; iconAttrs: string; title: string; strong: string; rule: boolean;
+  body: string; linkIcon: string; linkText: string; url: string;
+}
+
+/** Turns `material-clock-fast` into the picker's `material/clock-fast`. */
+const iconFromShortcode = (code: string) =>
+  code.startsWith('fontawesome-') ? code.replace(/^fontawesome-([^-]+)-/, 'fontawesome/$1/') : code.replace('-', '/');
+const shortcodeFromIcon = (name: string) => `:${name.replace(/\//g, '-')}:`;
+
+/** `<div class="grid cards" markdown>` with a list where each item is one card. */
+function parseCardGrid(source: string): { open: string; cards: Card[] } | null {
+  const m = /^(<div\s+class="grid cards"[^>]*>)[ \t]*\n([\s\S]*?)\n?<\/div>\s*$/.exec(source.trim());
+  if (!m) return null;
+  const raw: string[][] = [];
+  let width = 4;
+  for (const line of m[2].split('\n')) {
+    const start = /^[-*+]( +)(.*)$/.exec(line);
+    if (start) { width = 1 + start[1].length; raw.push([start[2]]); continue; }
+    if (!raw.length) { if (line.trim()) return null; continue; }
+    if (line.trim() && !/^\s/.test(line)) return null;
+    raw[raw.length - 1].push(line.replace(new RegExp(`^ {1,${width}}`), ''));
+  }
+  return { open: m[1], cards: raw.map(parseCard) };
+}
+
+function parseCard(lines: string[]): Card {
+  const head = /^(?::([\w-]+):)?(\{[^}]*\})?\s*(.*)$/.exec(lines[0].trim())!;
+  const t = /^(\*\*|__)(.*)\1$/.exec(head[3].trim());
+  let rest = lines.slice(1).join('\n').replace(/^\s*\n/, '');
+  let rule = false;
+  if (/^---\s*(\n|$)/.test(rest)) { rule = true; rest = rest.replace(/^---\s*\n?/, ''); }
+  const paras = rest.trim().split(/\n\s*\n/);
+  const link = /^\[(?::([\w-]+):\s*)?([^\]]*)\]\(\s*([^)\s]+)\s*\)$/.exec(paras[paras.length - 1]?.trim() ?? '');
+  if (link) paras.pop();
+  const attrs = head[2] ?? '';
+  return {
+    icon: head[1] ? iconFromShortcode(head[1]) : '',
+    large: /\.lg\b/.test(attrs), iconAttrs: attrs.replace(/^\{|\}$/g, '').replace(/\.lg\b|\.middle\b/g, '').trim(),
+    title: t ? t[2] : head[3].trim(), strong: t ? t[1] : '__', rule,
+    body: paras.join('\n\n').trim(),
+    linkIcon: link?.[1] ? iconFromShortcode(link[1]) : '', linkText: link?.[2] ?? '', url: link?.[3] ?? '',
+  };
+}
+
+function formatCard(c: Card): string {
+  const attrs = [c.large ? '.lg .middle' : '', c.iconAttrs].filter(Boolean).join(' ');
+  const icon = c.icon ? shortcodeFromIcon(c.icon) + (attrs ? `{ ${attrs} }` : '') + ' ' : '';
+  const title = c.title.trim() ? `${c.strong}${c.title.trim()}${c.strong}` : '';
+  const parts: string[] = [];
+  if (c.rule) parts.push('---');
+  if (c.body.trim()) parts.push(c.body.trim());
+  if (c.url.trim()) parts.push(`[${c.linkIcon ? shortcodeFromIcon(c.linkIcon) + ' ' : ''}${c.linkText.trim() || c.url.trim()}](${c.url.trim()})`);
+  const indent = (s: string) => s.split('\n').map((l) => (l.trim() ? '    ' + l : '')).join('\n');
+  return `-   ${(icon + title).trim()}` + (parts.length ? '\n\n' + parts.map(indent).join('\n\n') : '');
+}
+
+function formatCardGrid(open: string, cards: Card[]): string {
+  return `${open}\n\n${cards.map(formatCard).join('\n\n')}\n\n</div>`;
+}
+
+/** A plain `<div class="grid" markdown>`: each block inside is one cell. */
+function parsePlainGrid(source: string): { open: string; body: string } | null {
+  const m = /^(<div\s+class="grid"[^>]*>)[ \t]*\n([\s\S]*?)\n?<\/div>\s*$/.exec(source.trim());
+  return m ? { open: m[1], body: m[2].trim() } : null;
+}
+
+function openCardGridEditor(ctx: EditCtx, grid: { open: string; cards: Card[] }) {
+  if (!state) return;
+  const s = state;
+  const list = el('div', { class: 'ndcms-cards-editor' });
+  type Row = { card: Card; icon: ReturnType<typeof iconInput>; large: HTMLInputElement; title: HTMLInputElement; rule: HTMLInputElement; body: RichArea; linkIcon: ReturnType<typeof iconInput>; linkText: HTMLInputElement; url: HTMLInputElement; box: HTMLElement };
+  const rows: Row[] = [];
+  const check = (on: boolean) => { const c = el('input', { type: 'checkbox' }) as HTMLInputElement; c.checked = on; return c; };
+  const redraw = () => {
+    rows.forEach((r, i) => { r.box.querySelector('legend')!.textContent = `Card ${i + 1}`; });
+    list.replaceChildren(...rows.map((r) => r.box));
+  };
+  const addRow = (card: Card, at = rows.length) => {
+    const row = {
+      card, icon: iconInput(card.icon), large: check(card.large), title: input(card.title, 'Card title'), rule: check(card.rule),
+      body: blockList(card.body, s.page.path), linkIcon: iconInput(card.linkIcon), linkText: input(card.linkText, 'e.g. Read more'),
+      url: input(card.url, 'Empty: no link'),
+    } as Row;
+    const browse = button('Browse…', 'Link to a page, a file or a URL', async () => {
+      const chosen = await openLinkPicker(s.page.path, row.url.value);
+      if (chosen) { row.url.value = chosen; row.url.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
+    const shift = (d: number) => {
+      const i = rows.indexOf(row), j = i + d;
+      if (j < 0 || j >= rows.length) return;
+      [rows[i], rows[j]] = [rows[j], rows[i]];
+      redraw();
+    };
+    row.box = el('fieldset', { class: 'ndcms-tab ndcms-card' },
+      el('legend', {}, 'Card'),
+      el('div', { class: 'ndcms-card__tools' },
+        button('↑', 'Move this card up', () => shift(-1)),
+        button('↓', 'Move this card down', () => shift(1)),
+        button('⧉', 'Duplicate this card', () => addRow({ ...currentCard(row) }, rows.indexOf(row) + 1)),
+        button('🗑', 'Remove this card', () => { rows.splice(rows.indexOf(row), 1); redraw(); }, 'ndcms-btn--danger')),
+      el('div', { class: 'ndcms-grid2' }, field('Icon', row.icon.root), el('label', { class: 'ndcms-check ndcms-card__large' }, row.large, ' Large icon')),
+      field('Title', row.title),
+      el('label', { class: 'ndcms-check' }, row.rule, ' Line under the title'),
+      field('Text', row.body.root),
+      el('div', { class: 'ndcms-section-title' }, 'Link at the bottom'),
+      field('Address', el('div', { class: 'ndcms-row' }, row.url, browse)),
+      el('div', { class: 'ndcms-grid2' }, field('Link text', row.linkText), field('Link icon', row.linkIcon.root)),
+    );
+    rows.splice(at, 0, row);
+    redraw();
+  };
+  const currentCard = (r: Row): Card => ({
+    ...r.card, icon: r.icon.value(), large: r.large.checked, title: r.title.value, rule: r.rule.checked,
+    body: r.body.value(), linkIcon: r.linkIcon.value(), linkText: r.linkText.value, url: r.url.value,
+  });
+  grid.cards.forEach((c) => addRow(c));
+  const blank: Card = { icon: 'material/star', large: true, iconAttrs: '', title: 'New card', strong: '__', rule: true, body: 'Card text.', linkIcon: 'octicons/arrow-right-24', linkText: '', url: '' };
+  openPanel('Card grid', el('div', {},
+    el('p', { class: 'ndcms-muted' }, 'Cards sit side by side and wrap to new rows on smaller screens.'),
+    list,
+    button('+ Add card', 'Add another card', () => addRow({ ...blank })),
+  ), [
+    button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
+  ], () => ctx.apply(formatCardGrid(grid.open, rows.map(currentCard))), ctx.nested);
 }
 
 // --- Tables -------------------------------------------------------------------------------------
@@ -1584,9 +2074,11 @@ function iconInput(value: string) {
     if (chosen === null) return;
     current = chosen;
     void draw();
+    root.dispatchEvent(new Event('change', { bubbles: true }));
   });
   void draw();
-  return { root: el('div', { class: 'ndcms-row ndcms-icon-field' }, preview, name, pick), value: () => current };
+  const root = el('div', { class: 'ndcms-row ndcms-icon-field' }, preview, name, pick);
+  return { root, value: () => current };
 }
 
 /** A tag-style input with suggestions from the site's existing terms. */
@@ -1626,18 +2118,18 @@ function chipInput(initial: string[], suggestions: string[]) {
 
 async function save(overwrite = false) {
   if (!state) return;
-  closePanel();
+  closeAllPanels();
   syncRichBlocks();
   if (!isDirty() && !overwrite) { updateStatus('Nothing to save'); return; }
   const s = state;
   // Overwriting sends every block's text, since the file's own blocks may have moved.
-  const edits = s.blocks.map((b) => (!overwrite && b.original !== null && !b.changed ? { keep: b.original } : { source: b.source }));
+  const edits = s.blocks.flatMap((b) => (!overwrite && b.original !== null && !b.changed ? (b.span ?? [b.original]).map((keep): { keep?: number; source?: string } => ({ keep })) : [{ source: b.source }]));
   updateStatus('Saving…');
   try {
     const result = await api.saveBlocks(s.page.path, overwrite ? null : s.page.hash, edits, s.frontMatterChanged || overwrite ? s.frontMatter : null);
     if (state !== s) return;
     s.page = result.page;
-    s.blocks = result.blocks.map(toEditorBlock);
+    s.blocks = mergeWrappers(result.blocks).map(toEditorBlock);
     s.originalCount = result.blocks.length;
     s.frontMatter = structuredClone(result.page.frontMatter);
     s.frontMatterChanged = false;

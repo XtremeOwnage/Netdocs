@@ -7,6 +7,7 @@ import { api, cms, ApiError, type FrontMatter, type GeneratedInfo, type Json, ty
 import {
   admonitionTypes, codeLanguages, formatAdmonition, formatFence, formatTabs, htmlToMarkdown, insertTemplates,
   needsSourceEditing, parseAdmonition, parseFence, parseTabs, richKinds,
+  formatTimeline, parseTimeline, type Timeline, type TimelineExclusion, type TimelineItem,
 } from '../shared/markdown';
 import { imageMarkdown, openIconPicker, openImagePicker, openLinkPicker, pageTemplates, parseImageMarkdown } from '../shared/pickers';
 
@@ -945,6 +946,12 @@ function editBlock(ctx: EditCtx, forceSource = false) {
     return;
   }
 
+  const timeline = fence && fence.lang === 'timeline' ? parseTimeline(fence.code) : null;
+  if (fence && timeline) {
+    openTimelineEditor(ctx, fence, timeline);
+    return;
+  }
+
   if (fence) {
     const lang = input(fence.lang, 'Start typing: python, yaml, bash, mermaid…');
     const langList = 'ndcms-langs';
@@ -1764,6 +1771,236 @@ function openCardGridEditor(ctx: EditCtx, grid: { open: string; cards: Card[] })
   ), [
     button('Edit source', 'Edit the raw markdown', () => ctx.toSource()),
   ], () => ctx.apply(formatCardGrid(grid.open, rows.map(currentCard))), ctx.nested);
+}
+
+// --- Timeline plugin ----------------------------------------------------------------------------
+
+const identifier = '[A-Za-z_][A-Za-z0-9_]*';
+
+/** Sets an item's key, leaving it out when it is empty or the default and wasn't written before. */
+function setItem(item: TimelineItem, original: TimelineItem, key: string, value: string, fallback = '') {
+  if (value === '' || (value === fallback && !(key in original))) delete item[key];
+  else item[key] = value;
+}
+
+function openTimelineEditor(ctx: EditCtx, fence: ReturnType<typeof parseFence> & object, timeline: Timeline) {
+  const check = (on: boolean, text: string) => {
+    const c = el('input', { type: 'checkbox' }) as HTMLInputElement;
+    c.checked = on;
+    return { box: c, root: el('label', { class: 'ndcms-check' }, c, ` ${text}`) };
+  };
+  const number = (value: string, placeholder = '0') => {
+    const i = input(value, placeholder);
+    i.type = 'number';
+    i.min = '0';
+    i.step = '1';
+    return i;
+  };
+  const dayType = (value: string) => {
+    const s = select(value || 'all', ['all', 'weekdays']);
+    s.querySelector('option[value="all"]')!.textContent = 'Every day';
+    s.querySelector('option[value="weekdays"]')!.textContent = 'Weekdays only';
+    return s;
+  };
+  const nameInput = (value: string) => {
+    const i = input(value, 'e.g. start');
+    i.pattern = identifier;
+    i.title = 'Letters, digits and _, not starting with a digit. Later dates refer to it by this name.';
+    return i;
+  };
+  const tools = (onMove: (d: number) => void, onRemove: () => void, what: string) => el('div', { class: 'ndcms-card__tools' },
+    button('↑', `Move this ${what} up`, () => onMove(-1)),
+    button('↓', `Move this ${what} down`, () => onMove(1)),
+    button('🗑', `Remove this ${what}`, onRemove, 'ndcms-btn--danger'));
+  const move = <T,>(rows: T[], row: T, d: number) => {
+    const i = rows.indexOf(row), j = i + d;
+    if (j < 0 || j >= rows.length) return false;
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+    return true;
+  };
+
+  // Settings
+  const st = timeline.settings;
+  const title = input(st.title ?? '', 'Shown above the diagram (optional)');
+  const dateFormat = input(st.date_format ?? '', 'MM/DD/YYYY');
+  const displayFormat = input(st.display_date_format ?? '', 'dddd MMM dd, yyyy');
+  const summary = check(st.show_summary !== 'false', 'Show the table of exact dates under the diagram');
+  const editEx = check(st.edit_exclusions === 'true', 'Let readers add and remove excluded dates on the page');
+  const authored = () => dateFormat.value.trim() || 'MM/DD/YYYY';
+
+  // Exclusions
+  type ExRow = { from: HTMLInputElement; to: HTMLInputElement; box: HTMLElement };
+  const exRows: ExRow[] = [];
+  const exList = el('div', { class: 'ndcms-timeline__exclusions' });
+  const addEx = (e: TimelineExclusion) => {
+    const row = { from: input(e.from, authored()), to: input(e.to, 'Optional: last day of a range') } as ExRow;
+    row.box = el('div', { class: 'ndcms-row' }, row.from, el('span', { class: 'ndcms-muted' }, 'to'), row.to,
+      button('🗑', 'Remove this date', () => { exRows.splice(exRows.indexOf(row), 1); row.box.remove(); }, 'ndcms-btn--danger'));
+    exRows.push(row);
+    exList.append(row.box);
+  };
+  timeline.exclusions.forEach(addEx);
+
+  // Start dates (inputs)
+  type InRow = { item: TimelineItem; name: HTMLInputElement; label: HTMLInputElement; def: HTMLInputElement; type: HTMLSelectElement; duration: HTMLInputElement; editable: ReturnType<typeof check>; box: HTMLElement };
+  const inRows: InRow[] = [];
+  const inList = el('div', {});
+  // Computed dates (outputs)
+  type OutRow = { item: TimelineItem; name: HTMLInputElement; label: HTMLInputElement; ref: HTMLSelectElement; op: HTMLSelectElement; count: HTMLInputElement; raw: HTMLInputElement | null; type: HTMLSelectElement; duration: HTMLInputElement; box: HTMLElement };
+  const outRows: OutRow[] = [];
+  const outList = el('div', {});
+
+  /** Each computed date can start from a start date or an earlier computed date. */
+  const refreshRefs = () => {
+    const names = inRows.map((r) => r.name.value.trim()).filter(Boolean);
+    outRows.forEach((r, i) => {
+      const current = r.ref.value;
+      const options = [...names, ...outRows.slice(0, i).map((o) => o.name.value.trim()).filter(Boolean)];
+      r.ref.replaceChildren(...options.map((n) => el('option', { value: n }, n)));
+      if (current && !options.includes(current)) r.ref.append(el('option', { value: current }, `${current} (not defined above)`));
+      r.ref.value = current || options[options.length - 1] || '';
+    });
+  };
+  const redraw = () => {
+    inRows.forEach((r, i) => { r.box.querySelector('legend')!.textContent = `Start date ${i + 1}`; });
+    outRows.forEach((r, i) => { r.box.querySelector('legend')!.textContent = `Date ${i + 1}`; });
+    inList.replaceChildren(...inRows.map((r) => r.box));
+    outList.replaceChildren(...outRows.map((r) => r.box));
+    refreshRefs();
+  };
+
+  const addIn = (item: TimelineItem, at = inRows.length) => {
+    const row = {
+      item, name: nameInput(item.name ?? ''), label: input(item.label ?? '', 'Defaults to the name'),
+      def: input(item.default ?? '', authored()), type: dayType(item.type ?? ''), duration: number(item.duration ?? ''),
+      editable: check(item.editable !== 'false', 'Readers can change this date on the page'),
+    } as InRow;
+    row.box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, 'Start date'),
+      tools((d) => { if (move(inRows, row, d)) redraw(); }, () => { inRows.splice(inRows.indexOf(row), 1); redraw(); }, 'start date'),
+      el('div', { class: 'ndcms-grid2' }, field('Name', row.name), field('Label', row.label)),
+      el('div', { class: 'ndcms-grid2' }, field('Date', row.def, `Written as ${authored()}`), field('Lasts (days)', row.duration)),
+      field('Days that count', row.type, 'Which days count toward Lasts'),
+      row.editable.root);
+    inRows.splice(at, 0, row);
+    redraw();
+  };
+
+  const exprPattern = new RegExp(`^\\s*(${identifier})\\s*(?:([+-])\\s*(\\d+))?\\s*$`);
+  const addOut = (item: TimelineItem, at = outRows.length) => {
+    const m = exprPattern.exec(item.expr ?? '');
+    const ref = el('select', { class: 'ndcms-input' }) as HTMLSelectElement;
+    if (m) ref.append(el('option', { value: m[1] }, m[1]));
+    const op = select(m?.[2] ?? '+', ['+', '-']);
+    op.querySelector('option[value="+"]')!.textContent = 'plus';
+    op.querySelector('option[value="-"]')!.textContent = 'minus';
+    const row = {
+      item, name: nameInput(item.name ?? ''), label: input(item.label ?? '', 'Defaults to the name'),
+      ref, op, count: number(m?.[3] ?? '0'), raw: m || !item.expr ? null : input(item.expr, 'start + 5'),
+      type: dayType(item.type ?? ''), duration: number(item.duration ?? ''),
+    } as OutRow;
+    const when = row.raw
+      ? field('Starts on', row.raw, 'A name, optionally plus or minus a number of days: start + 5')
+      : field('Starts on', el('div', { class: 'ndcms-row ndcms-timeline__expr' }, row.ref, row.op, row.count, el('span', { class: 'ndcms-muted' }, 'days')),
+        'Counted in the days chosen below, skipping excluded dates.');
+    row.box = el('fieldset', { class: 'ndcms-tab' }, el('legend', {}, 'Date'),
+      tools((d) => { if (move(outRows, row, d)) redraw(); }, () => { outRows.splice(outRows.indexOf(row), 1); redraw(); }, 'date'),
+      el('div', { class: 'ndcms-grid2' }, field('Name', row.name), field('Label', row.label)),
+      when,
+      el('div', { class: 'ndcms-grid2' }, field('Days that count', row.type), field('Lasts (days)', row.duration)));
+    outRows.splice(at, 0, row);
+    redraw();
+  };
+
+  timeline.inputs.forEach((i) => addIn(i));
+  timeline.outputs.forEach((o) => addOut(o));
+
+  const value = (): string => {
+    const settings: Record<string, string> = { ...st };
+    const put = (key: string, v: string, fallback: string) => {
+      if (v === '' || (v === fallback && !(key in st))) delete settings[key];
+      else settings[key] = v;
+    };
+    put('title', title.value.trim(), '');
+    put('date_format', dateFormat.value.trim(), '');
+    put('display_date_format', displayFormat.value.trim(), '');
+    put('show_summary', String(summary.box.checked), 'true');
+    put('edit_exclusions', String(editEx.box.checked), 'false');
+    const inputs = inRows.map((r) => {
+      const item = { ...r.item };
+      setItem(item, r.item, 'name', r.name.value.trim());
+      setItem(item, r.item, 'label', r.label.value.trim());
+      setItem(item, r.item, 'default', r.def.value.trim());
+      setItem(item, r.item, 'type', r.type.value, 'all');
+      setItem(item, r.item, 'duration', r.duration.value.trim(), '0');
+      setItem(item, r.item, 'editable', String(r.editable.box.checked), 'true');
+      return item;
+    });
+    const outputs = outRows.map((r) => {
+      const item = { ...r.item };
+      const n = Number(r.count.value) || 0;
+      const expr = r.raw ? r.raw.value.trim() : n ? `${r.ref.value} ${r.op.value} ${n}` : r.ref.value;
+      setItem(item, r.item, 'name', r.name.value.trim());
+      setItem(item, r.item, 'label', r.label.value.trim());
+      setItem(item, r.item, 'type', r.type.value, 'all');
+      setItem(item, r.item, 'expr', expr);
+      setItem(item, r.item, 'duration', r.duration.value.trim(), '0');
+      return item;
+    });
+    const exclusions = exRows.map((r) => {
+      const from = r.from.value.trim(), to = r.to.value.trim();
+      return from ? { from, to } : { from: to, to: '' };
+    }).filter((e) => e.from);
+    return formatFence({ ...fence, code: formatTimeline({ settings, exclusions, inputs, outputs }) });
+  };
+
+  const body = el('div', { class: 'ndcms-timeline' },
+    el('p', { class: 'ndcms-muted' }, 'Start dates are date pickers readers can change. Every other date is counted from a start date or an earlier date, and the diagram redraws as readers change them.'),
+    field('Title', title),
+    el('div', { class: 'ndcms-grid2' },
+      field('Date format', dateFormat, 'How dates are written in this block'),
+      field('Display format', displayFormat, 'How dates are shown to readers')),
+    summary.root,
+    el('div', { class: 'ndcms-section-title' }, 'Start dates'),
+    inList,
+    button('+ Add start date', 'Add a date readers pick', () => addIn({ name: `start${inRows.length + 1}`, default: '' })),
+    el('div', { class: 'ndcms-section-title' }, 'Dates'),
+    outList,
+    button('+ Add date', 'Add a date counted from an earlier one', () => {
+      const last = outRows[outRows.length - 1]?.name.value.trim() || inRows[inRows.length - 1]?.name.value.trim() || 'start';
+      addOut({ name: `step${outRows.length + 1}`, label: 'New step', type: 'weekdays', expr: `${last} + 1`, duration: '1' });
+    }),
+    el('div', { class: 'ndcms-section-title' }, 'Excluded dates'),
+    el('p', { class: 'ndcms-muted' }, 'Holidays and other days that never count. Enter a second date for a range.'),
+    exList,
+    button('+ Add excluded date', 'Add a holiday or a range of days', () => addEx({ from: '', to: '' })),
+    editEx.root,
+  );
+  // Renaming a date keeps the dates counted from it pointing at it.
+  body.addEventListener('focusin', (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.matches('input[pattern]')) t.dataset.prev = t.value.trim();
+  });
+  body.addEventListener('input', (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.matches('input[pattern]')) {
+      const prev = t.dataset.prev ?? '', next = t.value.trim();
+      if (prev && next && prev !== next) {
+        for (const r of outRows) {
+          if (r.ref.value !== prev) continue;
+          r.ref.append(el('option', { value: next }, next));
+          r.ref.value = next;
+        }
+      }
+      t.dataset.prev = next;
+      refreshRefs();
+    }
+    if (e.target === dateFormat) {
+      for (const r of [...inRows.map((x) => x.def), ...exRows.map((x) => x.from)]) r.placeholder = authored();
+    }
+  });
+  openPanel('Timeline', body, [
+    button('Edit source', 'Edit the raw YAML', () => ctx.toSource()),
+  ], () => ctx.apply(value()), ctx.nested);
 }
 
 // --- Tables -------------------------------------------------------------------------------------

@@ -175,6 +175,7 @@ export const insertTemplates: InsertTemplate[] = [
   { id: 'code', group: 'Code', label: 'Code block', markdown: '```python title="example.py"\nprint("Hello")\n```' },
   { id: 'code-lines', group: 'Code', label: 'Code with line numbers', markdown: '```python linenums="1" hl_lines="2"\nfirst = 1\nsecond = 2\n```' },
   { id: 'mermaid', group: 'Code', label: 'Mermaid diagram', markdown: '```mermaid\ngraph LR\n  A[Start] --> B{Choice}\n  B -->|Yes| C[Done]\n  B -->|No| A\n```' },
+  { id: 'timeline', group: 'Code', label: 'Timeline (timeline plugin)', markdown: '```timeline\ntitle: Project plan\ninputs:\n  - name: start\n    label: Project start\n    default: 01/04/2027\noutputs:\n  - name: kickoff\n    label: Kick-off meeting\n    type: weekdays\n    expr: start + 1\n    duration: 1\n  - name: build\n    label: Build\n    type: weekdays\n    expr: kickoff + 1\n    duration: 10\n```' },
   { id: 'math', group: 'Code', label: 'Math block', markdown: '$$\nE = mc^2\n$$' },
   { id: 'footnote', group: 'Extras', label: 'Footnote definition', markdown: '[^1]: The footnote text.' },
   { id: 'abbr', group: 'Extras', label: 'Abbreviation', markdown: '*[HTML]: HyperText Markup Language' },
@@ -264,3 +265,145 @@ export const codeLanguages: [string, string][] = [
   ['http', 'HTTP'], ['csv', 'CSV'], ['jinja', 'Jinja / templates'], ['twig', 'Twig'], ['handlebars', 'Handlebars'],
   ['vim', 'Vim script'], ['awk', 'AWK'], ['mermaid', 'Mermaid diagram'],
 ];
+
+// --- Timeline plugin blocks ----------------------------------------------------------------------
+
+/** One `inputs[]` or `outputs[]` entry. Keys are kept in their written order, unknown ones too. */
+export type TimelineItem = Record<string, string>;
+/** One `exclusions[]` entry: a single date (`to` empty) or an inclusive range. */
+export interface TimelineExclusion { from: string; to: string }
+/** A ```` ```timeline ```` block. Top-level values are strings; empty means the key is left out. */
+export interface Timeline {
+  settings: Record<string, string>;
+  exclusions: TimelineExclusion[];
+  inputs: TimelineItem[];
+  outputs: TimelineItem[];
+}
+
+export const timelineSettings = ['title', 'date_format', 'show_summary', 'display_date_format', 'edit_exclusions'];
+const timelineLists = ['exclusions', 'inputs', 'outputs'];
+
+function yamlScalar(raw: string): string {
+  let v = raw.trim();
+  if (v.startsWith('"')) {
+    const end = v.lastIndexOf('"');
+    try { return JSON.parse(v.slice(0, end + 1)) as string; } catch { return v.slice(1, end); }
+  }
+  if (v.startsWith("'")) return v.slice(1, v.lastIndexOf("'")).replace(/''/g, "'");
+  const hash = v.search(/\s#/);
+  if (hash >= 0) v = v.slice(0, hash).trim();
+  return v === '~' || v === 'null' ? '' : v;
+}
+
+function yamlValue(v: string): string {
+  if (v === '' || /^[\s]|[\s]$|^[-?:,[\]{}#&*!|>'"%@`]|: |\s#|^(true|false|yes|no|on|off|null|~)$/i.test(v) || /[,[\]{}]/.test(v)) return JSON.stringify(v);
+  return v;
+}
+
+/** `{ from: a, to: b }`, or null when the text is not a flow map of plain keys. */
+function flowMap(text: string): Record<string, string> | null {
+  const m = /^\{(.*)\}\s*(#.*)?$/.exec(text.trim());
+  if (!m) return null;
+  const map: Record<string, string> = {};
+  for (const part of m[1].split(',')) {
+    if (!part.trim()) continue;
+    const kv = /^\s*([\w-]+)\s*:\s*(.*)$/.exec(part);
+    if (!kv) return null;
+    map[kv[1]] = yamlScalar(kv[2]);
+  }
+  return map;
+}
+
+/**
+ * Parses the YAML of a timeline block, or returns null for anything this form can't edit without
+ * losing it (other top-level keys, nested values, multi-line strings). Comments are not kept.
+ */
+export function parseTimeline(code: string): Timeline | null {
+  const t: Timeline = { settings: {}, exclusions: [], inputs: [], outputs: [] };
+  let list: string | null = null;
+  let item: TimelineItem | null = null;
+  let itemIndent = 0;
+  for (const rawLine of code.split('\n')) {
+    const line = rawLine.replace(/\s+$/, '');
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const indent = line.length - line.trimStart().length;
+    if (indent === 0) {
+      const m = /^([\w-]+):\s*(.*)$/.exec(line);
+      if (!m) return null;
+      const [, key, rest] = m;
+      item = null;
+      if (timelineLists.includes(key)) {
+        const v = yamlScalar(rest);
+        if (v && v !== '[]') return null;
+        list = key;
+        continue;
+      }
+      if (!timelineSettings.includes(key) || /^[|>[{]/.test(rest.trim())) return null;
+      list = null;
+      t.settings[key] = yamlScalar(rest);
+      continue;
+    }
+    if (!list) return null;
+    const dash = /^(\s*)-\s+(.*)$/.exec(line);
+    if (dash) {
+      const body = dash[2];
+      itemIndent = dash[1].length + 2;
+      if (list === 'exclusions') {
+        item = null;
+        const fm = flowMap(body);
+        if (fm) {
+          if (Object.keys(fm).some((k) => k !== 'from' && k !== 'to')) return null;
+          t.exclusions.push({ from: fm.from ?? '', to: fm.to ?? '' });
+          continue;
+        }
+        const kv = /^(from|to):\s*(.*)$/.exec(body);
+        if (kv) {
+          const ex = { from: '', to: '' };
+          ex[kv[1] as 'from' | 'to'] = yamlScalar(kv[2]);
+          t.exclusions.push(ex);
+          item = ex as unknown as TimelineItem;
+          continue;
+        }
+        if (/^[[{|>]/.test(body)) return null;
+        t.exclusions.push({ from: yamlScalar(body), to: '' });
+        continue;
+      }
+      const fm = flowMap(body);
+      item = {};
+      (list === 'inputs' ? t.inputs : t.outputs).push(item);
+      if (fm) { Object.assign(item, fm); item = null; continue; }
+      const kv = /^([\w-]+):\s*(.*)$/.exec(body);
+      if (!kv || /^[|>[{]/.test(kv[2].trim())) return null;
+      item[kv[1]] = yamlScalar(kv[2]);
+      continue;
+    }
+    const kv = /^\s+([\w-]+):\s*(.*)$/.exec(line);
+    if (!item || !kv || indent !== itemIndent || /^[|>[{]/.test(kv[2].trim())) return null;
+    if (list === 'exclusions' && kv[1] !== 'from' && kv[1] !== 'to') return null;
+    item[kv[1]] = yamlScalar(kv[2]);
+  }
+  return t;
+}
+
+export function formatTimeline(t: Timeline): string {
+  const lines: string[] = [];
+  for (const key of timelineSettings) {
+    const v = t.settings[key];
+    if (v !== undefined && v !== '') lines.push(`${key}: ${key === 'show_summary' || key === 'edit_exclusions' ? v : yamlValue(v)}`);
+  }
+  if (t.exclusions.length) {
+    lines.push('exclusions:');
+    for (const e of t.exclusions) {
+      lines.push(e.to.trim() ? `  - { from: ${yamlValue(e.from.trim())}, to: ${yamlValue(e.to.trim())} }` : `  - ${yamlValue(e.from.trim())}`);
+    }
+  }
+  for (const [key, items] of [['inputs', t.inputs], ['outputs', t.outputs]] as const) {
+    lines.push(`${key}:`);
+    for (const item of items) {
+      const entries = Object.entries(item).filter(([, v]) => v !== '');
+      if (!entries.length) continue;
+      entries.forEach(([k, v], i) => lines.push(`${i ? '    ' : '  - '}${k}: ${k === 'editable' || k === 'duration' ? v : yamlValue(v)}`));
+    }
+  }
+  return lines.join('\n');
+}

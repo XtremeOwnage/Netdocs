@@ -387,3 +387,10 @@ html.ndcms-editing .ndcms-meta__btn { display: inline-block; }
 .ndcms-card__tools { position: absolute; top: -4px; right: 8px; display: flex; gap: 2px; background: var(--ndcms-bg); }
 .ndcms-card__tools .ndcms-btn { padding: 0 6px; font-size: 12px; }
 .ndcms-card__large { align-self: end; padding-bottom: 8px; }
+
+/* Timeline plugin form */
+.ndcms-timeline .ndcms-input:invalid { border-color: #e53935; }
+.ndcms-timeline__expr > select:first-child { flex: 2; min-width: 110px; width: auto; }
+.ndcms-timeline__expr > select:nth-child(2) { flex: 0 0 auto; width: auto; }
+.ndcms-timeline__expr > input { flex: 0 0 80px; width: 80px; min-width: 0; }
+.ndcms-timeline__exclusions .ndcms-row { margin-bottom: 6px; }

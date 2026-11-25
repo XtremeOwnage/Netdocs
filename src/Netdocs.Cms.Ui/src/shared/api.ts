@@ -53,7 +53,7 @@ export interface MediaItem {
 export interface WebpResult { from: string; to: string; oldSize: number; newSize: number; updatedPages: number; error: string | null }
 
 export interface GitFile { path: string; index: string; workTree: string; originalPath: string | null }
-export interface GitStatus { isRepository: boolean; branch: string | null; upstream: string | null; ahead: number; behind: number; files: GitFile[] }
+export interface GitStatus { isRepository: boolean; branch: string | null; upstream: string | null; ahead: number; behind: number; files: GitFile[]; pushTo?: string | null }
 export interface GitCommit { hash: string; author: string; date: string; subject: string }
 export interface GitResult { ok: boolean; output: string }
 

@@ -8,7 +8,8 @@ namespace Netdocs.Core.Cms;
 /// <param name="WorkTree">Unstaged state letter.</param>
 public sealed record GitFileStatus(string Path, string Index, string WorkTree, string? OriginalPath);
 
-public sealed record GitStatus(bool IsRepository, string? Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<GitFileStatus> Files);
+/// <param name="PushTo">Where Push sends the branch, as remote/branch.</param>
+public sealed record GitStatus(bool IsRepository, string? Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<GitFileStatus> Files, string? PushTo = null);
 
 public sealed record GitCommit(string Hash, string Author, string Date, string Subject);
 
@@ -70,7 +71,8 @@ public sealed class GitService(CmsWorkspace workspace)
             if (x is "R" or "C") original = i + 1 < entries.Length ? entries[++i] : null;
             files.Add(new GitFileStatus(path, x, y, original));
         }
-        return new GitStatus(true, branch, upstream, ahead, behind, files);
+        var pushTo = branch is null ? null : $"{await PushRemoteAsync(branch, ct)}/{branch}";
+        return new GitStatus(true, branch, upstream, ahead, behind, files, pushTo);
     }
 
     private static (string?, string?, int, int) ParseBranch(string header)
@@ -182,7 +184,8 @@ public sealed class GitService(CmsWorkspace workspace)
     public Task<GitResult> CheckoutAsync(string branch, bool create, CancellationToken ct)
     {
         ValidateRef(branch);
-        return RunChecked(create ? ["checkout", "-b", branch] : ["checkout", branch], ct);
+        // --no-track: a new branch should not track the current branch's upstream.
+        return RunChecked(create ? ["checkout", "--no-track", "-b", branch] : ["checkout", branch], ct);
     }
 
     public Task<GitResult> PullAsync(CancellationToken ct) => RunChecked(["pull", "--ff-only"], ct);
@@ -191,10 +194,27 @@ public sealed class GitService(CmsWorkspace workspace)
     {
         var status = await StatusAsync(ct);
         if (status.Branch is null) throw new CmsException("Not on a branch.");
-        return status.Upstream is null
-            ? await RunChecked(["push", "-u", "origin", status.Branch], ct)
-            : await RunChecked(["push"], ct);
+        var remote = await PushRemoteAsync(status.Branch, ct);
+        // Push to <remote>/<branch>; a plain push fails when the upstream has another name.
+        return status.Upstream == $"{remote}/{status.Branch}"
+            ? await RunChecked(["push"], ct)
+            : await RunChecked(["push", "-u", remote, status.Branch], ct);
     }
+
+    /// <summary>The remote a branch pushes to.</summary>
+    private async Task<string> PushRemoteAsync(string branch, CancellationToken ct)
+    {
+        foreach (var key in new[] { $"branch.{branch}.pushRemote", "remote.pushDefault", $"branch.{branch}.remote" })
+        {
+            var r = await RunAsync(["config", "--get", key], ct);
+            var name = r.Output.Trim();
+            if (r.Ok && name.Length > 0 && name != ".") return name;
+        }
+        var remotes = await RunAsync(["remote"], ct);
+        var list = remotes.Ok ? remotes.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : [];
+        return list.Contains("origin") || list.Length == 0 ? "origin" : list[0];
+    }
+
 
     public Task<GitResult> FetchAsync(CancellationToken ct) => RunChecked(["fetch", "--prune"], ct);
 

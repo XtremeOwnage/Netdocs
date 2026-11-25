@@ -532,3 +532,91 @@ public class CmsPluginServiceTests : IDisposable
         Assert.Throws<CmsException>(() => _plugins.SaveAuthors([new("bad id", "x", "", "")]));
     }
 }
+
+public sealed class CmsGitPushTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "netdocs-git-" + Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    private static string Git(string dir, params string[] args)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("git") { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        psi.Environment["GIT_AUTHOR_NAME"] = psi.Environment["GIT_COMMITTER_NAME"] = "Test";
+        psi.Environment["GIT_AUTHOR_EMAIL"] = psi.Environment["GIT_COMMITTER_EMAIL"] = "test@example.com";
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+        p.WaitForExit();
+        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)}: {output}");
+        return output.Trim();
+    }
+
+    /// <summary>A site in a clone of a bare remote, on main, with one commit pushed.</summary>
+    private GitService Setup(out string site, out string remote)
+    {
+        remote = Path.Combine(_root, "remote.git");
+        site = Path.Combine(_root, "site");
+        Directory.CreateDirectory(Path.Combine(site, "docs"));
+        Git(_root, "init", "-q", "--bare", "-b", "main", remote);
+        Git(site, "init", "-q", "-b", "main");
+        Git(site, "remote", "add", "origin", remote);
+        File.WriteAllText(Path.Combine(site, "appsettings.json"), """{ "Netdocs": { "siteName": "Test" } }""");
+        File.WriteAllText(Path.Combine(site, "docs", "index.md"), "# Home\n");
+        Git(site, "add", "-A");
+        Git(site, "commit", "-q", "-m", "init");
+        Git(site, "push", "-q", "-u", "origin", "main");
+        var config = Path.Combine(site, "appsettings.json");
+        return new GitService(new CmsWorkspace(config, Configuration.JsonConfigLoader.Load(config)));
+    }
+
+    [Fact]
+    public async Task Push_from_a_branch_that_tracks_main_creates_a_branch_of_the_same_name()
+    {
+        if (!GitAvailable()) return;
+        var git = Setup(out var site, out var remote);
+        Git(site, "checkout", "-q", "-b", "post/x", "origin/main");
+        File.AppendAllText(Path.Combine(site, "docs", "index.md"), "More.\n");
+        Git(site, "commit", "-q", "-am", "edit");
+        Assert.Equal("origin/main", (await git.StatusAsync(default)).Upstream);
+        Assert.Equal("origin/post/x", (await git.StatusAsync(default)).PushTo);
+
+        var result = await git.PushAsync(default);
+
+        Assert.True(result.Ok, result.Output);
+        Assert.Equal(Git(site, "rev-parse", "HEAD"), Git(remote, "rev-parse", "refs/heads/post/x"));
+        Assert.NotEqual(Git(site, "rev-parse", "HEAD"), Git(remote, "rev-parse", "refs/heads/main"));
+        var status = await git.StatusAsync(default);
+        Assert.Equal("origin/post/x", status.Upstream);
+        Assert.Equal(0, status.Ahead);
+    }
+
+    [Fact]
+    public async Task New_branches_do_not_track_the_current_upstream()
+    {
+        if (!GitAvailable()) return;
+        var git = Setup(out var site, out _);
+        Git(site, "config", "branch.autoSetupMerge", "always");
+
+        var result = await git.CheckoutAsync("post/y", create: true, default);
+
+        Assert.True(result.Ok, result.Output);
+        Assert.Null((await git.StatusAsync(default)).Upstream);
+        Assert.True((await git.PushAsync(default)).Ok);
+        Assert.Equal("origin/post/y", (await git.StatusAsync(default)).Upstream);
+    }
+
+    private static bool GitAvailable()
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", "--version") { RedirectStandardOutput = true });
+            p!.WaitForExit();
+            return p.ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception) { return false; }
+    }
+}

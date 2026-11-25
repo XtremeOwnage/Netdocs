@@ -118,7 +118,11 @@ export function GitScreen() {
           {s.upstream && <span class="muted small">{s.ahead} ahead · {s.behind} behind {s.upstream}</span>}
           <button class="btn" disabled={busy} title="Download new commits from the remote without changing your files" onClick={() => void act(() => api.gitFetch(), 'Fetched')}>Fetch</button>
           <button class="btn" disabled={busy} title="Download and apply new commits from the remote (fast-forward only)" onClick={() => void act(() => api.gitPull(), 'Pulled')}>Pull</button>
-          <button class="btn" disabled={busy} title="Upload your commits to the remote" onClick={() => { if (confirmAction(`Push ${s.branch} to ${s.upstream ?? 'origin'}?`)) void act(() => api.gitPush(), 'Pushed'); }}>Push{s.ahead ? ` (${s.ahead})` : ''}</button>
+          <button class="btn" disabled={busy} title={`Upload your commits to ${s.pushTo ?? 'the remote'}`} onClick={() => {
+            const target = s.pushTo ?? `origin/${s.branch}`;
+            const fresh = s.upstream !== target;
+            if (confirmAction(fresh ? `Push ${s.branch} to ${target} and set it as the upstream?` : `Push ${s.branch} to ${target}?`)) void act(() => api.gitPush(), `Pushed to ${target}`);
+          }}>Push{s.ahead ? ` (${s.ahead})` : ''}</button>
           <button class="btn btn--ghost" title="Check git again for changes" onClick={refresh}>⟳ Refresh</button>
         </div>
       </header>

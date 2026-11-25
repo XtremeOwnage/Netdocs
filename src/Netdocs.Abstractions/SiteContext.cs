@@ -12,6 +12,13 @@ public sealed class BuildOptions
     public bool Clean { get; init; }
     public bool NoCache { get; init; }
 
+    /// <summary>
+    /// Keep pages whose front matter sets <c>draft: true</c>. Off for <c>build</c> / <c>deploy</c> /
+    /// <c>watch</c> (drafts never reach the published site); on for <c>serve</c> so authors can
+    /// preview them. Overridden with <c>--drafts</c> / <c>--no-drafts</c>.
+    /// </summary>
+    public bool IncludeDrafts { get; init; }
+
     public IReadOnlyDictionary<string, string?> Environment { get; init; }
         = new Dictionary<string, string?>();
 

@@ -102,6 +102,8 @@ the numbers are comparable run to run rather than skewed by cache hits.
 | `--no-cache` | | Ignore the incremental render cache and re-render every page. |
 | `--strict` | | Treat build warnings (including [validation](validation.md) problems, plugin/template errors) as failures. |
 | `--prod` | `--production` | Production build (enables prod-only plugins such as social cards). |
+| `--drafts` | | Include pages with `draft: true` in a `build`, `deploy` or `watch` (they are left out by default). |
+| `--no-drafts` | | `serve`: hide pages with `draft: true`, to preview the site exactly as it will publish. |
 | `--verbose` | `-v` | Verbose (Trace) logging. |
 | `--remote <name>` | | `watch`: git remote to poll (default `origin`). |
 | `--branch <name>` | | `watch`: branch to track (default the current branch). |

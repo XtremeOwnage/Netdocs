@@ -182,6 +182,8 @@ public static class CliApp
             Strict = opts.Strict || IsTruthy(System.Environment.GetEnvironmentVariable("MKDOCS_STRICT")),
             Clean = opts.Clean || !serve,
             NoCache = opts.NoCache,
+            // Drafts show while previewing (serve / CMS) and never in a build, unless overridden.
+            IncludeDrafts = opts.Drafts ?? serve,
             Environment = env,
         };
         return (config, buildOptions);
@@ -349,6 +351,8 @@ public static class CliApp
                 case "--interval" when i + 1 < args.Length && int.TryParse(args[i + 1], out var iv): opts.Interval = iv; i++; break;
                 case "--once": opts.Once = true; break;
                 case "--deploy": opts.Deploy = true; break;
+                case "--drafts": opts.Drafts = true; break;
+                case "--no-drafts": opts.Drafts = false; break;
                 case "--strict": opts.Strict = true; break;
                 case "--prod" or "--production": opts.Production = true; break;
                 case "--verbose" or "-v": opts.Verbose = true; break;
@@ -385,6 +389,8 @@ public static class CliApp
                   --no-cms          Serve without the local CMS and in-page editor (serve)
                   --strict          Treat warnings (and plugin/template errors) as failures
                   --prod            Production build (enables prod-only plugins)
+                  --drafts          Include 'draft: true' pages (default for serve only)
+                  --no-drafts       Hide 'draft: true' pages, even in serve
                   --deploy          After 'build', publish to the configured deploy target
                   --remote <name>   Git remote to watch (watch; default origin)
                   --branch <name>   Git branch to track (watch; default current branch)
@@ -428,6 +434,8 @@ internal sealed class CliOptions
     public int Interval { get; set; } = 30;
     public bool Once { get; set; }
     public bool Deploy { get; set; }
+    /// <summary>Null = the command's default (drafts on for serve, off otherwise).</summary>
+    public bool? Drafts { get; set; }
     public bool Strict { get; set; }
     public bool Production { get; set; }
     public bool Verbose { get; set; }

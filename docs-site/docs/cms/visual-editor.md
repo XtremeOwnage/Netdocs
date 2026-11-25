@@ -39,6 +39,7 @@ Click any paragraph, heading, list or quote and type. Selecting text brings up a
   them again.
 - **🔗 Link** opens a picker that lists your pages, or takes any web address.
 - **☺ Icon** opens the icon browser (below).
+- In a list, Tab or ⇥ indents an item, and Shift+Tab or ⇤ outdents it.
 - Task list boxes can be ticked right on the page.
 
 ### Icons

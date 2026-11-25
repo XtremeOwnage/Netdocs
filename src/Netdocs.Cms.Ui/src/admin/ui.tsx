@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Annotation, EditorState, type Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -11,6 +11,8 @@ import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 
 const prefersDark = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+
+const fromOutside = Annotation.define<boolean>();
 
 export function CodeEditor(props: {
   value: string;
@@ -23,6 +25,9 @@ export function CodeEditor(props: {
   const view = useRef<EditorView | null>(null);
   const latest = useRef(props);
   latest.current = props;
+  // Texts the editor reported that no render has caught up with yet. Renders can lag behind
+  // typing; one of these values coming back is not an outside change.
+  const emitted = useRef<string[]>([]);
 
   useEffect(() => {
     const lang: Extension = props.language === 'json' ? json() : props.language === 'html' ? html() : markdown();
@@ -31,7 +36,12 @@ export function CodeEditor(props: {
       lang,
       EditorView.lineWrapping,
       keymap.of([indentWithTab, { key: 'Mod-s', preventDefault: true, run: () => { latest.current.onSave?.(); return true; } }]),
-      EditorView.updateListener.of((u) => { if (u.docChanged) latest.current.onChange(u.state.doc.toString()); }),
+      EditorView.updateListener.of((u) => {
+        if (!u.docChanged || u.transactions.some((t) => t.annotation(fromOutside))) return;
+        const text = u.state.doc.toString();
+        if (emitted.current.push(text) > 200) emitted.current.shift();
+        latest.current.onChange(text);
+      }),
       EditorView.theme({ '&': { height: props.height ?? '100%' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }),
     ];
     if (prefersDark()) extensions.push(oneDark);
@@ -42,8 +52,12 @@ export function CodeEditor(props: {
   // Replace the document when the value changes from outside (e.g. after a reload).
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== props.value)
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value } });
+    if (!v) return;
+    const echo = emitted.current.lastIndexOf(props.value);
+    if (echo >= 0) { emitted.current.splice(0, echo + 1); return; }
+    emitted.current = [];
+    if (v.state.doc.toString() !== props.value)
+      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, annotations: fromOutside.of(true) });
   }, [props.value]);
 
   return <div class="code-editor" ref={host} />;

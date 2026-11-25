@@ -39,8 +39,6 @@ Click any paragraph, heading, list or quote and type. Selecting text brings up a
   them again.
 - **🔗 Link** opens a picker that lists your pages, or takes any web address.
 - **☺ Icon** opens the icon browser (below).
-- In a list, **Tab** or **⇥** moves an item one level in, under the item above it. **Shift+Tab** or
-  **⇤** moves it back out.
 - Task list boxes can be ticked right on the page.
 
 ### Icons

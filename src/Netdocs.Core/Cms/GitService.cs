@@ -8,7 +8,7 @@ namespace Netdocs.Core.Cms;
 /// <param name="WorkTree">Unstaged state letter.</param>
 public sealed record GitFileStatus(string Path, string Index, string WorkTree, string? OriginalPath);
 
-/// <param name="PushTo">Where Push sends the branch (`remote/branch`): always a branch of the same name.</param>
+/// <param name="PushTo">Where Push sends the branch, as remote/branch.</param>
 public sealed record GitStatus(bool IsRepository, string? Branch, string? Upstream, int Ahead, int Behind, IReadOnlyList<GitFileStatus> Files, string? PushTo = null);
 
 public sealed record GitCommit(string Hash, string Author, string Date, string Subject);
@@ -184,8 +184,7 @@ public sealed class GitService(CmsWorkspace workspace)
     public Task<GitResult> CheckoutAsync(string branch, bool create, CancellationToken ct)
     {
         ValidateRef(branch);
-        // A new branch starts from the current commit without tracking the current branch's
-        // upstream (for example origin/main): its first push creates a branch of the same name.
+        // --no-track: a new branch should not track the current branch's upstream.
         return RunChecked(create ? ["checkout", "--no-track", "-b", branch] : ["checkout", branch], ct);
     }
 
@@ -196,15 +195,13 @@ public sealed class GitService(CmsWorkspace workspace)
         var status = await StatusAsync(ct);
         if (status.Branch is null) throw new CmsException("Not on a branch.");
         var remote = await PushRemoteAsync(status.Branch, ct);
-        // Push to the branch of the same name. A branch made from origin/main tracks main, and a
-        // plain `git push` refuses that (push.default=simple) rather than pushing to main; this
-        // creates or updates origin/<branch> and makes it the upstream instead.
+        // Push to <remote>/<branch>; a plain push fails when the upstream has another name.
         return status.Upstream == $"{remote}/{status.Branch}"
             ? await RunChecked(["push"], ct)
             : await RunChecked(["push", "-u", remote, status.Branch], ct);
     }
 
-    /// <summary>The remote a branch pushes to: its configured remote, else origin, else the only one.</summary>
+    /// <summary>The remote a branch pushes to.</summary>
     private async Task<string> PushRemoteAsync(string branch, CancellationToken ct)
     {
         foreach (var key in new[] { $"branch.{branch}.pushRemote", "remote.pushDefault", $"branch.{branch}.remote" })

@@ -494,7 +494,6 @@ function renderBlock(block: EditorBlock, index: number): HTMLElement {
     content.contentEditable = 'true';
     content.spellcheck = true;
     content.addEventListener('focus', () => showFormatBar(content));
-    listKeys(content);
     content.addEventListener('input', () => {
       wrapper.classList.add('ndcms-block--changed');
       updateStatus('Unsaved changes');
@@ -683,64 +682,6 @@ function refreshThemeWidgets(root: HTMLElement) {
 
 let formatBar: HTMLElement | null = null;
 
-/** Tab and Shift+Tab indent and outdent the list item the cursor is in. */
-function listKeys(target: HTMLElement) {
-  target.addEventListener('keydown', (e) => {
-    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (indentListItem(target, e.shiftKey)) e.preventDefault();
-  });
-}
-
-/**
- * Moves the list item at the cursor one level in (into a list under the item above it) or out
- * (after its parent item, taking the items below it along as its own sub-list). Returns false
- * when the cursor is not in a list item, so Tab keeps its usual meaning there.
- */
-function indentListItem(target: HTMLElement, outdent: boolean): boolean {
-  const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return false;
-  const range = sel.getRangeAt(0);
-  const start = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
-  const li = start?.closest('li');
-  if (!li || !target.contains(li)) return false;
-  const list = li.parentElement!;
-  const saved = { sc: range.startContainer, so: range.startOffset, ec: range.endContainer, eo: range.endOffset };
-  if (!outdent) {
-    const prev = li.previousElementSibling;
-    if (!prev || prev.tagName !== 'LI') return true;
-    let sub = prev.lastElementChild;
-    if (!sub || (sub.tagName !== 'UL' && sub.tagName !== 'OL')) {
-      sub = document.createElement(list.tagName.toLowerCase());
-      prev.append(sub);
-    }
-    sub.append(li);
-  } else {
-    const parentLi = list.parentElement;
-    if (!parentLi || parentLi.tagName !== 'LI' || !target.contains(parentLi)) return true;
-    const rest: Element[] = [];
-    for (let n = li.nextElementSibling; n; n = n.nextElementSibling) rest.push(n);
-    if (rest.length) {
-      let sub = li.lastElementChild;
-      if (!sub || (sub.tagName !== 'UL' && sub.tagName !== 'OL')) {
-        sub = document.createElement(list.tagName.toLowerCase());
-        li.append(sub);
-      }
-      sub.append(...rest);
-    }
-    parentLi.after(li);
-    if (!list.children.length) list.remove();
-  }
-  try {
-    const r = document.createRange();
-    r.setStart(saved.sc, saved.so);
-    r.setEnd(saved.ec, saved.eo);
-    sel.removeAllRanges();
-    sel.addRange(r);
-  } catch { /* the cursor stays where the browser put it */ }
-  target.dispatchEvent(new Event('input', { bubbles: true }));
-  return true;
-}
-
 function showFormatBar(target: HTMLElement, host: Element | null = target.closest('.ndcms-block')) {
   formatBar?.remove();
   const exec = (cmd: string, value?: string) => { target.focus(); document.execCommand(cmd, false, value); target.dispatchEvent(new Event('input')); };
@@ -794,8 +735,6 @@ function showFormatBar(target: HTMLElement, host: Element | null = target.closes
     }),
     button('•', 'Bulleted list', () => exec('insertUnorderedList')),
     button('1.', 'Numbered list', () => exec('insertOrderedList')),
-    button('⇥', 'Indent list item (Tab)', () => { target.focus(); indentListItem(target, false); }),
-    button('⇤', 'Outdent list item (Shift+Tab)', () => { target.focus(); indentListItem(target, true); }),
     ...[2, 3, 4, 5, 6].map((n) => button('H' + n, `Heading ${n}`, () => exec('formatBlock', 'h' + n), 'ndcms-format__h')),
     button('¶', 'Paragraph', () => exec('formatBlock', 'p')),
     button('⌫', 'Clear formatting', () => exec('removeFormat')),
@@ -1883,7 +1822,6 @@ function blockList(markdown: string, pagePath: string): RichArea {
       content.contentEditable = 'true';
       content.spellcheck = true;
       content.addEventListener('focus', () => showFormatBar(content, wrap));
-      listKeys(content);
       content.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('a')) e.preventDefault(); });
     } else {
       wrap.addEventListener('click', (e) => {

@@ -121,7 +121,7 @@ export function GitScreen() {
           <button class="btn" disabled={busy} title={`Upload your commits to ${s.pushTo ?? 'the remote'}`} onClick={() => {
             const target = s.pushTo ?? `origin/${s.branch}`;
             const fresh = s.upstream !== target;
-            if (confirmAction(fresh ? `Push ${s.branch} to ${target}? This creates or updates that branch on the remote and makes it this branch's upstream.` : `Push ${s.branch} to ${target}?`)) void act(() => api.gitPush(), `Pushed to ${target}`);
+            if (confirmAction(fresh ? `Push ${s.branch} to ${target} and set it as the upstream?` : `Push ${s.branch} to ${target}?`)) void act(() => api.gitPush(), `Pushed to ${target}`);
           }}>Push{s.ahead ? ` (${s.ahead})` : ''}</button>
           <button class="btn btn--ghost" title="Check git again for changes" onClick={refresh}>⟳ Refresh</button>
         </div>

@@ -578,7 +578,6 @@ public sealed class CmsGitPushTests : IDisposable
     {
         if (!GitAvailable()) return;
         var git = Setup(out var site, out var remote);
-        // What `git checkout -b post/x origin/main` (or an editor's "new branch from origin/main") does.
         Git(site, "checkout", "-q", "-b", "post/x", "origin/main");
         File.AppendAllText(Path.Combine(site, "docs", "index.md"), "More.\n");
         Git(site, "commit", "-q", "-am", "edit");

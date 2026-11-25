@@ -92,6 +92,24 @@ matching entry in your `nav` configuration — a config `nav` title always wins 
 | `tags` | List of tags; collected by the [tags plugin](../plugins/tags.md). |
 | `template` | Render the page with a different theme template. |
 | `hide` | List of theme chrome to drop from the page — `toc`, `nav`, `path`. See below. |
+| `draft` | `true` keeps the page out of the built site: no HTML output, and absent from the navigation, blog listings, tags, RSS feeds, search and the sitemap. See below. |
+
+## Drafts
+
+```yaml
+---
+title: Work in progress
+draft: true
+---
+```
+
+A page with `draft: true` is left out of `netdocs build`, `deploy` and `watch`, so it never
+reaches the published site, its navigation, blog index, tag pages, feeds or search. Links to it
+from other pages are reported like any other broken link.
+
+`netdocs serve` (and the local CMS) still shows drafts, so you can preview them while writing.
+Pass `--no-drafts` to `serve` to see the site exactly as it will publish, or `--drafts` to
+`build` to include them in a one-off build. Remove the key, or set `draft: false`, to publish.
 
 ## Hiding theme chrome
 

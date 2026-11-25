@@ -73,9 +73,24 @@ public sealed class BuildEngine(
             pages = site.Pages.ToList();
         }
 
-        // 3. Navigation filters (file-filter, shadow tags).
+        // 3. Navigation filters (drafts, file-filter, shadow tags).
         using (Measure("3. navigation filters"))
         {
+            // `draft: true` pages are dropped before anything else sees them, so they are absent
+            // from the output, nav, blog listings, tags, feeds, search and the sitemap. This runs
+            // after the import hooks so federated pages that are drafts are dropped too.
+            var drafts = pages.Count(DraftPages.IsDraft);
+            if (drafts > 0)
+            {
+                if (options.IncludeDrafts)
+                    _log.LogInformation("Including {Count} draft page(s) (draft: true)", drafts);
+                else
+                {
+                    pages = pages.Where(p => !DraftPages.IsDraft(p)).ToList();
+                    _log.LogInformation("Skipped {Count} draft page(s) (draft: true); pass --drafts to build them", drafts);
+                }
+            }
+
             var beforeFilter = pages.Count;
             pages = pages.Where(p => host.NavigationFilters.All(f => f.ShouldInclude(p, site))).ToList();
             _log.LogDebug("Navigation filters kept {Kept}/{Total} pages", pages.Count, beforeFilter);

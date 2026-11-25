@@ -267,6 +267,9 @@ public interface INavigationFilter
 }
 ```
 
+For example, a filter that hides pages by a front-matter key (Netdocs already does this for
+`draft: true` itself, see [drafts](../reference/page-metadata.md#drafts)):
+
 ```csharp
 public sealed class DraftFilter : IPlugin, INavigationFilter
 {
